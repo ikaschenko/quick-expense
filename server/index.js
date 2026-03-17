@@ -4,7 +4,6 @@ import fs from "node:fs";
 import path from "node:path";
 import express from "express";
 import session from "express-session";
-import FileStoreFactory from "session-file-store";
 import {
   buildGoogleAuthorizationUrl,
   exchangeAuthorizationCode,
@@ -21,6 +20,7 @@ import {
   validateSpreadsheet,
 } from "./google-sheets.js";
 import { getUserRecord, updateUserRecord } from "./store.js";
+import { createSessionStore } from "./session-store.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? 3001);
@@ -50,14 +50,15 @@ validateStartupEnv();
 
 fs.mkdirSync(sessionDir, { recursive: true });
 
-const FileStore = FileStoreFactory(session);
-
 app.use(express.json());
 app.use(
   session({
-    store: new FileStore({
+    store: createSessionStore({
       path: sessionDir,
-      retries: 0,
+      fileExtension: ".sess",
+      retries: 2,
+      minTimeout: 40,
+      maxTimeout: 120,
     }),
     secret: process.env.SESSION_SECRET,
     resave: false,
