@@ -71,19 +71,6 @@ export function SetupPage(): JSX.Element {
             </button>
           </div>
         </form>
-        {success ? (
-          <div className="button-row">
-            <button className="primary-button" onClick={() => navigate("/home")} type="button">
-              Go to main menu
-            </button>
-            <button className="secondary-button" onClick={() => navigate("/add")} type="button">
-              Open Add
-            </button>
-            <button className="secondary-button" onClick={() => navigate("/search")} type="button">
-              Open Search
-            </button>
-          </div>
-        ) : null}
         {isSaving ? <LoadingBlock label="Validating spreadsheet…" /> : null}
       </section>
     </Layout>
