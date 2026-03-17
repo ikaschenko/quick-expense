@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { Layout } from "../components/Layout";
 import { StatusBanner } from "../components/StatusBanner";
+import { FEEDBACK_FORM_URL } from "../constants/feedback";
 
 export function LoginPage(): JSX.Element {
   const auth = useAuth();
@@ -25,12 +26,25 @@ export function LoginPage(): JSX.Element {
         </p>
         {callbackError ? <StatusBanner variant="error" message={callbackError} /> : null}
         {auth.error ? <StatusBanner variant="error" message={auth.error} /> : null}
-        <button className="primary-button" onClick={auth.signIn} type="button">
-          Sign in with Google
-        </button>
+        <div className="hero-actions">
+          <button className="primary-button" onClick={auth.signIn} type="button">
+            Sign in with Google
+          </button>
+          <a
+            className="secondary-button"
+            href={FEEDBACK_FORM_URL}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Share feedback
+          </a>
+        </div>
         <p className="muted small">
           Google authentication happens on the backend, so your signed-in account and
           spreadsheet setup can be remembered across visits.
+        </p>
+        <p className="muted small feedback-note">
+          If sign-in or setup is confusing, you can open the short feedback form without logging in.
         </p>
       </section>
     </Layout>

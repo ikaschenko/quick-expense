@@ -82,9 +82,11 @@ button {
 
 .topbar-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
   align-items: center;
   justify-self: end;
+  justify-content: flex-end;
 }
 
 .brand {
@@ -196,6 +198,10 @@ button {
   will-change: transform;
 }
 
+.topbar-link-button {
+  min-width: 0;
+}
+
 .primary-button {
   background: linear-gradient(180deg, #3b82f6 0%, var(--primary-base) 100%);
   color: #ffffff;
@@ -273,6 +279,17 @@ button {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.feedback-note {
+  margin-top: 0.5rem;
 }
 
 .search-actions {
@@ -591,11 +608,13 @@ button {
   }
 
   .topbar {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: 1fr;
     align-items: start;
   }
 
   .topbar-actions {
+    justify-self: stretch;
+    justify-content: flex-start;
     align-self: start;
   }
 
@@ -603,12 +622,17 @@ button {
     display: inline-block;
   }
 
+  .hero-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .page-container {
     width: min(100% - 1rem, 100%);
   }
 
   .home-menu-button {
-    width: 50%;
-    min-width: 160px;
+    width: 100%;
+    min-width: 0;
   }
 }
