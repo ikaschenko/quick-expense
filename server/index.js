@@ -23,6 +23,8 @@ import { getUserRecord, updateUserRecord } from "./store.js";
 import { createSessionStore } from "./session-store.js";
 
 const app = express();
+app.set("trust proxy", 1);
+
 const port = Number(process.env.PORT ?? 3001);
 const sessionDir = path.resolve(process.cwd(), "config", "sessions");
 
@@ -340,6 +342,14 @@ app.post("/api/expenses", requireAuthenticatedUser, async (req, res) => {
     res.status(400).json({ message: (error).message });
   }
 });
+
+if (process.env.NODE_ENV === "production") {
+  const distPath = path.resolve(process.cwd(), "dist");
+  app.use(express.static(distPath));
+  app.get("*", (_req, res) => {
+    res.sendFile(path.join(distPath, "index.html"));
+  });
+}
 
 app.listen(port, () => {
   console.log(`QuickExpense backend listening on http://localhost:${port}`);
