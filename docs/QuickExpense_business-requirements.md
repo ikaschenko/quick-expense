@@ -2,15 +2,21 @@
 
 This document describes Business Requirements for the software application.
 
+
+
+TODO: update this file - remove automatic currency conversion from the v1, it's manual input instead. 
+
+TODO: update this file - replace backend-less approach with a minimal backend approach.
+
+
+
 # 1\. VISION
 
 Small web application or site to manage own/family expenses, supporting key use cases:
 
-1) submit an expense record (Add)
-
-2) view last N entered records (Tail)
-
-3) and search through the archive of expenses (Search)
+1. submit an expense record (Add)
+2. view last N entered records (Tail)
+3. and search through the archive of expenses (Search)
 
 Key problem to solve: ability to record expenses on-the-go as a time saver, without spending time on collecting receipts and processing at the end of the month. The data should be finally stored in a shared google spreadsheet (hereinafter called 'database') so that it could be easily detachable from the application and e.g. exported/analyzed.
 
@@ -18,11 +24,11 @@ Another expected gain: being able to find information in expenses log without a 
 
 Important notes: for v1 the following things are intentionally excluded
 
-- No edit existing record functionality.
-- No delete functionality.
-- No export feature.
-- No reporting/aggregation.
-- No audit trail.
+* No edit existing record functionality.
+* No delete functionality.
+* No export feature.
+* No reporting/aggregation.
+* No audit trail.
 
 # 2\. FUNCTIONAL REQUIREMENTS
 
@@ -48,24 +54,24 @@ How long should login session persist? Keep the session as long as possible. Onl
 
 Should access be revalidated on every Add/Tail/Search action? Validate spreadsheet access:
 
-- On Setup
-- On each write (Add)
-- On each load (Search)
+* On Setup
+* On each write (Add)
+* On each load (Search)
 
 If access revoked → show blocking error and redirect to Setup.
 
 Technical background for the Security aspect of this application:
 
-- OAuth 2.0 Authorization Code Flow with PKCE must be used.
-- No refresh tokens stored in browser storage.
-- Access tokens stored in memory only.
-- Silent reauthentication should be attempted while Google session is active.
-- If token renewal fails → user must login again.
-- Maximum logical session duration: 24 hours.
+* OAuth 2.0 Authorization Code Flow with PKCE must be used.
+* No refresh tokens stored in browser storage.
+* Access tokens stored in memory only.
+* Silent reauthentication should be attempted while Google session is active.
+* If token renewal fails → user must login again.
+* Maximum logical session duration: 24 hours.
 
-The application must request the minimal required Google OAuth scopes:  
+The application must request the minimal required Google OAuth scopes:
 
-- <https://www.googleapis.com/auth/spreadsheets> (read/write access to spreadsheets)  
+* [https://www.googleapis.com/auth/spreadsheets](https://www.googleapis.com/auth/spreadsheets) (read/write access to spreadsheets)  
 No broader Google Drive scopes should be requested.  
 Principle of least privilege must be applied.
 
@@ -155,22 +161,22 @@ Can multiple currency fields be filled simultaneously? Answer: Allow multiple cu
 
 Currency conversion: Here are key cases:
 
-- If a non-USD field is being filled, perform automatic conversion into USD and fill the USD field.
-- If a USD field is being filled, no any automatic conversion for any of remaining fields (non-USD).
+* If a non-USD field is being filled, perform automatic conversion into USD and fill the USD field.
+* If a USD field is being filled, no any automatic conversion for any of remaining fields (non-USD).
 
 For the conversion of currency, here are key guidelines:
 
-- Currency conversion rates must be retrieved from either a) European Central Bank public API or b) free currency conversion API (<https://freecurrencyapi.com/>) - depending which option is easier to implement (less code).
-- Conversion must be based on the rate valid for the expense Date field.
-- If historical rate for selected date is unavailable, conversion must fail with validation error.
-- Converted USD value must be rounded to 2 decimal places.
-- Exchange rate source failures must block Save operation.
+* Currency conversion rates must be retrieved from either a) European Central Bank public API or b) free currency conversion API ([https://freecurrencyapi.com/](https://freecurrencyapi.com/)) - depending which option is easier to implement (less code).
+* Conversion must be based on the rate valid for the expense Date field.
+* If historical rate for selected date is unavailable, conversion must fail with validation error.
+* Converted USD value must be rounded to 2 decimal places.
+* Exchange rate source failures must block Save operation.
 
 What format for currency fields? Answer:
 
-- Decimal numbers allowed.
-- Dot as decimal separator.
-- Negative values are allowed (for example, when a user sold some item via ebay, so this is a profit instead of expense).
+* Decimal numbers allowed.
+* Dot as decimal separator.
+* Negative values are allowed (for example, when a user sold some item via ebay, so this is a profit instead of expense).
 
 What if identical record is submitted twice? Answer: No duplicate detection in v1. Each Save appends a new row.
 
@@ -192,9 +198,9 @@ On Back - return to a previous screen.
 
 For operations like Tail and Search - upon clicking appropriate buttons on main screen, the application should check if the dataset is loaded from back-end. Key rules:
 
-- If never loaded (or invalidated a previously loaded data) - then automatically load a fresh dataset.
-- If dataset is already loaded in memory and has not been invalidated (by Add or Reload), the application must reuse the in-memory dataset without performing another API call.
-- If dataset is not loaded or was invalidated, a fresh dataset must be retrieved before proceeding.
+* If never loaded (or invalidated a previously loaded data) - then automatically load a fresh dataset.
+* If dataset is already loaded in memory and has not been invalidated (by Add or Reload), the application must reuse the in-memory dataset without performing another API call.
+* If dataset is not loaded or was invalidated, a fresh dataset must be retrieved before proceeding.
 
 Loaded dataset remains valid only within the current browser session and until a successful Add operation or manual Reload.  
 External modifications in the spreadsheet by other users are not automatically detected unless Reload is triggered.  
@@ -220,8 +226,8 @@ In terms of a displaying on a client device, if no space on the screen - standar
 
 Available buttons on this screen:
 
-- "Back" - to return to a previous screen.
-- "Reload" - for on-demand refresh of data from backend. What exactly does Reload refresh? Answer: Reload should a) Re-fetch spreadsheet, b) Rebuild distinct values lists, c) Clear in-memory cache.
+* "Back" - to return to a previous screen.
+* "Reload" - for on-demand refresh of data from backend. What exactly does Reload refresh? Answer: Reload should a) Re-fetch spreadsheet, b) Rebuild distinct values lists, c) Clear in-memory cache.
 
 ## 2.6 Search for expenses (Search)
 
@@ -251,8 +257,8 @@ If any records are found - show a table with records, with the same columns/name
 
 Why only category and comment searchable? Answer: Version 1 supports only:
 
-- Category (multi-select exact match)
-- Comment (substring match, case-insensitive)
+* Category (multi-select exact match)
+* Comment (substring match, case-insensitive)
 
 Future versions may extend filters.
 
@@ -266,9 +272,9 @@ No sorting, only sequential display of found items according to their position i
 
 Available buttons on this screen:
 
-- "Back" - persist filter values during session only, then return to a previous screen.
-- "Clear" - clear entered values (if any), remain on the current screen.
-- "Reload" - for on-demand refresh of data from backend. What exactly does Reload refresh? Answer: Reload should a) Re-fetch spreadsheet, b) Rebuild distinct values lists, c) Clear in-memory cache.
+* "Back" - persist filter values during session only, then return to a previous screen.
+* "Clear" - clear entered values (if any), remain on the current screen.
+* "Reload" - for on-demand refresh of data from backend. What exactly does Reload refresh? Answer: Reload should a) Re-fetch spreadsheet, b) Rebuild distinct values lists, c) Clear in-memory cache.
 
 # 3\. NON FUNCTIONAL REQUIREMENTS
 
@@ -286,26 +292,26 @@ c) iOS (via web app)
 
 What are expected error categories? Answer: standard error responses for:
 
-- Authentication error
-- Authorization error
-- Spreadsheet not found
-- Network failure
-- Validation error (e.g. invalid number format, wrong headers in the file)
-- Unexpected server error
+* Authentication error
+* Authorization error
+* Spreadsheet not found
+* Network failure
+* Validation error (e.g. invalid number format, wrong headers in the file)
+* Unexpected server error
 
 ## 3.3 Concurrency
 
 What if multiple users write simultaneously? Answer:
 
-- Rely on Google Sheets API append operation.
-- No manual row indexing.
-- Use atomic append endpoint.
+* Rely on Google Sheets API append operation.
+* No manual row indexing.
+* Use atomic append endpoint.
 
 Google API Quotas and Rate Limits (Architectural Risk)
 
-- Is there any expected maximum number of users? Answer: Up to 10 per each provided google spreadsheet.
-- Is this intended for private family usage only? Answer: mostly yes (at least for V1 mvp).
-- In case of any exceeded limits (e.g. per-user and per-project quota) - show an error message explaining the problem and suggestion.
+* Is there any expected maximum number of users? Answer: Up to 10 per each provided google spreadsheet.
+* Is this intended for private family usage only? Answer: mostly yes (at least for V1 mvp).
+* In case of any exceeded limits (e.g. per-user and per-project quota) - show an error message explaining the problem and suggestion.
 
 ## 3.4 Hosting Environment
 
