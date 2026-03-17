@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Receipt paper with torn bottom edge -->
+  <path d="M12 4 h40 v50 l-5-3.5-5 3.5-5-3.5-5 3.5-5-3.5-5 3.5-5-3.5-5 3.5 V4z"
+        fill="#ffffff" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"/>
+  <!-- Dollar sign — large, centered on the sheet -->
+  <text x="32" y="44" font-family="Arial, sans-serif" font-weight="700" font-size="40"
+        fill="#9db3da" text-anchor="middle">$</text>
+</svg>
