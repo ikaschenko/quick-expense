@@ -359,7 +359,7 @@ export function AddExpensePage(): JSX.Element {
         EUR: manualFxRates.EUR,
       });
       setActiveNonUsdCurrency(submittedNonUsdCurrency);
-      setHasManuallySelectedCurrency(false);
+      setHasManuallySelectedCurrency(true);
       setErrors({});
       setFxErrors({});
       setSuccess("Expense saved successfully.");

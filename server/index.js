@@ -66,11 +66,21 @@ app.use(
     cookie: {
       httpOnly: true,
       sameSite: "lax",
-      secure: false,
+      secure: process.env.FRONTEND_BASE_URL?.startsWith("https"),
       maxAge: 30 * 24 * 60 * 60 * 1000,
     },
   }),
 );
+
+app.use((req, res, next) => {
+  if (["POST", "PUT", "DELETE"].includes(req.method)) {
+    if (req.headers["x-requested-with"] !== "fetch") {
+      res.status(403).json({ message: "Forbidden." });
+      return;
+    }
+  }
+  next();
+});
 
 function getUserSession(req) {
   return req.session.userEmail ? { email: req.session.userEmail } : null;

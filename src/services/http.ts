@@ -5,6 +5,7 @@ export async function requestJson<T>(input: string, init?: RequestInit): Promise
     credentials: "include",
     ...init,
     headers: {
+      "X-Requested-With": "fetch",
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
       ...(init?.headers ?? {}),
     },
@@ -42,6 +43,7 @@ export async function requestNoContent(input: string, init?: RequestInit): Promi
     credentials: "include",
     ...init,
     headers: {
+      "X-Requested-With": "fetch",
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
       ...(init?.headers ?? {}),
     },
