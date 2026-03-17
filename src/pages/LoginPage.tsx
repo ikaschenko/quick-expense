@@ -3,7 +3,6 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { Layout } from "../components/Layout";
 import { StatusBanner } from "../components/StatusBanner";
-import { FEEDBACK_FORM_URL } from "../constants/feedback";
 
 export function LoginPage(): JSX.Element {
   const auth = useAuth();
@@ -30,14 +29,6 @@ export function LoginPage(): JSX.Element {
           <button className="primary-button" onClick={auth.signIn} type="button">
             Sign in with Google
           </button>
-          <a
-            className="secondary-button"
-            href={FEEDBACK_FORM_URL}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Share feedback
-          </a>
         </div>
         <p className="muted small">
           Google authentication happens on the backend, so your signed-in account and
