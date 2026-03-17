@@ -1,6 +1,14 @@
 import { Link } from "react-router-dom";
+import { Settings, CirclePlus, ListEnd, Search } from "lucide-react";
 import { Layout } from "../components/Layout";
 import { useConfig } from "../contexts/ConfigContext";
+
+const MENU_ICONS: Record<string, React.ReactNode> = {
+  Setup: <Settings size={20} aria-hidden />,
+  Add: <CirclePlus size={20} aria-hidden />,
+  Tail: <ListEnd size={20} aria-hidden />,
+  Search: <Search size={20} aria-hidden />,
+};
 
 type MenuActionProps = {
   label: string;
@@ -9,6 +17,7 @@ type MenuActionProps = {
 };
 
 function MenuAction({ label, to, unavailableReason }: MenuActionProps): JSX.Element {
+  const icon = MENU_ICONS[label];
   if (!to) {
     return (
       <span
@@ -16,6 +25,7 @@ function MenuAction({ label, to, unavailableReason }: MenuActionProps): JSX.Elem
         className="primary-button home-menu-button menu-action-disabled"
         title={unavailableReason}
       >
+        {icon}
         {label}
       </span>
     );
@@ -23,6 +33,7 @@ function MenuAction({ label, to, unavailableReason }: MenuActionProps): JSX.Elem
 
   return (
     <Link className="primary-button home-menu-button" to={to}>
+      {icon}
       {label}
     </Link>
   );
