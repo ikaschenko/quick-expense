@@ -22,11 +22,11 @@ function toBase64Url(value) {
 }
 
 export function getGoogleClientId() {
-  return process.env.GOOGLE_CLIENT_ID ?? process.env.VITE_GOOGLE_CLIENT_ID ?? "";
+  return process.env.GOOGLE_CLIENT_ID?.trim() ?? process.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? "";
 }
 
 export function getFrontendBaseUrl() {
-  return process.env.FRONTEND_BASE_URL ?? "http://localhost:5173";
+  return requireEnv("FRONTEND_BASE_URL");
 }
 
 export function createPkcePair() {

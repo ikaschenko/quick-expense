@@ -10,6 +10,7 @@ import {
   exchangeAuthorizationCode,
   fetchGoogleUserInfo,
   getFrontendBaseUrl,
+  getGoogleClientId,
   createPkcePair,
   refreshAccessToken,
 } from "./google-client.js";
@@ -25,6 +26,28 @@ const app = express();
 const port = Number(process.env.PORT ?? 3001);
 const sessionDir = path.resolve(process.cwd(), "config", "sessions");
 
+function validateStartupEnv() {
+  const missing = [];
+
+  if (!getGoogleClientId()) {
+    missing.push("GOOGLE_CLIENT_ID");
+  }
+
+  ["GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI", "FRONTEND_BASE_URL", "SESSION_SECRET"].forEach(
+    (name) => {
+      if (!process.env[name]?.trim()) {
+        missing.push(name);
+      }
+    },
+  );
+
+  if (missing.length > 0) {
+    throw new Error(`Missing required environment variables: ${missing.join(", ")}`);
+  }
+}
+
+validateStartupEnv();
+
 fs.mkdirSync(sessionDir, { recursive: true });
 
 const FileStore = FileStoreFactory(session);
@@ -36,7 +59,7 @@ app.use(
       path: sessionDir,
       retries: 0,
     }),
-    secret: process.env.SESSION_SECRET ?? "quick-expense-local-dev-secret",
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {

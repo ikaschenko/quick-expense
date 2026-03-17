@@ -49,6 +49,7 @@ Notes:
 
 - `GOOGLE_REDIRECT_URI` must match the redirect URI configured in Google Cloud.
 - `FRONTEND_BASE_URL` should point to the frontend URL you use locally.
+- The backend validates required environment variables at startup and exits early if any are missing.
 - Do not commit real secrets to a public repository.
 
 ## Install dependencies

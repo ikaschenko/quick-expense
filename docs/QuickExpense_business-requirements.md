@@ -4,12 +4,6 @@ This document describes Business Requirements for the software application.
 
 
 
-TODO: update this file - remove automatic currency conversion from the v1, it's manual input instead. 
-
-TODO: update this file - replace backend-less approach with a minimal backend approach.
-
-
-
 # 1\. VISION
 
 Small web application or site to manage own/family expenses, supporting key use cases:
@@ -40,7 +34,7 @@ User should login to the app in order to use it. Google "social login" (like on 
 
 Without login, no option is available, but only the "sign in" button which should lead to a standard google "social login" where a user chooses a google account. There's no need in any "Sign up" because only existing google accounts should be used.
 
-After user signs in, on main screen there are 3 key buttons: Setup, Add, Search. For details how each button should work - see below in separate sections.
+After user signs in, on main screen there are 4 key buttons: Setup, Add, Tail, Search. For details how each button should work - see below in separate sections.
 
 Application is intended for any Google user who has access to the spreadsheet.
 
@@ -91,9 +85,9 @@ On clicking "Back" button - return to a previous screen without saving a link to
 
 Configuration is stored per authenticated user (linked to Google email). Each user may configure a different spreadsheet.
 
-Where is the configuration stored? Store a full link in client-side application storage (or cookies), no any back-end database in this project.
+Where is the configuration stored? Store a full link in a minimal backend runtime store associated with the authenticated email and protected by the server session.
 
-If a user - clears a browser storage, or uses another device - application should expect a re-configuration each time from that user.
+If a user clears browser storage but retains a valid server session, the configured spreadsheet may still be restored from the backend store. If a user signs in from another device, configuration availability depends on the deployed backend runtime data storage for that environment.
 
 If a user changes a spreadsheet link - perform a standard validation (see rules described in the below section).
 
@@ -138,8 +132,8 @@ The header row in the "Expenses" sheet must contain the following column names i
 Date  
 PLN  
 BYN  
-USD  
 EUR  
+USD  
 Category  
 WhoSpent  
 ForWhom  
@@ -157,20 +151,19 @@ What happens if the spreadsheet exists but has no correct header structure? Answ
 
 \- If sheet exists but headers mismatch → show blocking error and do not allow usage.
 
-Can multiple currency fields be filled simultaneously? Answer: Allow multiple currency fields per record.
+Can multiple currency fields be filled simultaneously? Answer: Allow USD together with at most one non-USD currency. Only one of PLN, BYN, or EUR may be filled at a time.
 
 Currency conversion: Here are key cases:
 
-* If a non-USD field is being filled, perform automatic conversion into USD and fill the USD field.
-* If a USD field is being filled, no any automatic conversion for any of remaining fields (non-USD).
+* If a non-USD field is being filled, the user may enter a manual USD conversion rate for that currency and the application derives the USD field from it.
+* If a USD field is being filled, no automatic conversion is performed for any non-USD field.
 
 For the conversion of currency, here are key guidelines:
 
-* Currency conversion rates must be retrieved from either a) European Central Bank public API or b) free currency conversion API ([https://freecurrencyapi.com/](https://freecurrencyapi.com/)) - depending which option is easier to implement (less code).
-* Conversion must be based on the rate valid for the expense Date field.
-* If historical rate for selected date is unavailable, conversion must fail with validation error.
+* Currency conversion rates are entered manually by the user in the Add flow.
+* No external exchange-rate API integration is required in v1.
 * Converted USD value must be rounded to 2 decimal places.
-* Exchange rate source failures must block Save operation.
+* Missing or invalid manual rate input must block Save when a non-USD amount is entered and USD is not entered directly.
 
 What format for currency fields? Answer:
 
@@ -264,7 +257,7 @@ Future versions may extend filters.
 
 Is search case-sensitive? Answer: Search must be case-insensitive.
 
-Should search be client-side or server-side? Answer: if it's possible from technical perspective, avoid any active back-end, do the search at client side i.e. send a full dataset to frontend. Every time the search is prepared (dataset loaded) - check the size of a response payload, and if exceeds allowed size (see in the separate section below) then show an error that the file is too big, deny search, allow only returning to previous screen and other functions. Assumptions: file less than the defined limit are acceptable for client devices (smartphones, pc web browser).
+Should search be client-side or server-side? Answer: Search is client-side after the backend loads the spreadsheet dataset through Google Sheets API. Every time the search dataset is prepared - check the size of a response payload, and if exceeds allowed size (see in the separate section below) then show an error that the file is too big, deny search, allow only returning to previous screen and other functions. Assumptions: files less than the defined limit are acceptable for client devices (smartphones, pc web browser).
 
 What if 100+ results found? Answer: show an information message "Too many records found", show only first 100, and show a total count of matching records. Allow user to return and refine conditions for a search. NO pagination in v1.
 
@@ -315,9 +308,9 @@ Google API Quotas and Rate Limits (Architectural Risk)
 
 ## 3.4 Hosting Environment
 
-This application (at least V1) is the pure front-end (plus Google spreadsheet as a backend storage only).
+This application (at least V1) uses a minimal backend for OAuth, server-side session handling, and Google Sheets API communication.
 
-Frontend should be able to directly call Sheets API.
+Frontend should call the backend API rather than calling Google Sheets directly.
 
 ## 3.5 Scalability
 
