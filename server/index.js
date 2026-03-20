@@ -271,6 +271,15 @@ app.post("/api/config", requireAuthenticatedUser, async (req, res) => {
   }
 });
 
+app.get("/api/auth/picker-config", requireAuthenticatedUser, async (req, res) => {
+  try {
+    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    res.json({ accessToken });
+  } catch (error) {
+    res.status(400).json({ message: (error).message });
+  }
+});
+
 app.delete("/api/config", requireAuthenticatedUser, async (req, res) => {
   await updateUserRecord(req.userRecord.email, (current) => ({
     ...current,

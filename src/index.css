@@ -329,6 +329,21 @@ button {
   opacity: 0.55;
 }
 
+.setup-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.setup-divider::before,
+.setup-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-soft);
+}
+
 .form-layout {
   display: grid;
   gap: 1rem;

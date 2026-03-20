@@ -47,4 +47,48 @@ interface Window {
       oauth2?: GoogleOAuth2Namespace;
     };
   };
+  gapi: {
+    load: (api: string, callback: () => void) => void;
+  };
+}
+
+declare namespace google.picker {
+  enum ViewId {
+    SPREADSHEETS = "spreadsheets",
+  }
+
+  enum Action {
+    PICKED = "picked",
+    CANCEL = "cancel",
+  }
+
+  interface DocumentObject {
+    id: string;
+    name: string;
+    url: string;
+    mimeType: string;
+  }
+
+  interface ResponseObject {
+    action: string;
+    docs?: DocumentObject[];
+  }
+
+  class DocsView {
+    constructor(viewId: ViewId);
+    setIncludeFolders(include: boolean): DocsView;
+    setSelectFolderEnabled(enabled: boolean): DocsView;
+  }
+
+  class Picker {
+    setVisible(visible: boolean): Picker;
+  }
+
+  class PickerBuilder {
+    addView(view: DocsView): PickerBuilder;
+    setOAuthToken(token: string): PickerBuilder;
+    setDeveloperKey(key: string): PickerBuilder;
+    setCallback(callback: (data: ResponseObject) => void): PickerBuilder;
+    build(): Picker;
+  }
 }

@@ -5,7 +5,7 @@ QuickExpense is a small web app for recording personal or family expenses into a
 The app is optimized for quick entry from a phone or desktop browser and supports four main flows:
 
 - Google sign-in
-- spreadsheet setup and validation
+- spreadsheet setup and validation (one-time action)
 - adding a new expense row
 - viewing the latest records or searching the loaded dataset
 

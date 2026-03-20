@@ -7,6 +7,10 @@ import {
 import { requestJson, requestNoContent } from "./http";
 
 export const googleSheetsService = {
+  async getPickerConfig(): Promise<{ accessToken: string }> {
+    return requestJson("/api/auth/picker-config");
+  },
+
   async getConfig(): Promise<SpreadsheetConfig | null> {
     const response = await requestJson<{ config: SpreadsheetConfig | null }>("/api/config");
     return response.config;
