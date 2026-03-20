@@ -38,6 +38,12 @@ export function Layout({ children }: PropsWithChildren): JSX.Element {
       </header>
 
       <main className="page-container">{children}</main>
+
+      <footer className="site-footer">
+        <a href="/privacy-policy.html" className="footer-link">Privacy Policy</a>
+        <span className="footer-sep" aria-hidden>·</span>
+        <a href="/terms-of-service.html" className="footer-link">Terms of Service</a>
+      </footer>
     </div>
   );
 }

@@ -103,6 +103,30 @@ button {
   margin: 1.5rem auto 2rem;
 }
 
+.site-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.footer-link {
+  color: #94a3b8;
+  text-decoration: none;
+}
+
+.footer-link:hover {
+  color: #cbd5e1;
+  text-decoration: underline;
+}
+
+.footer-sep {
+  color: #64748b;
+}
+
 .page-container:has(.home-menu-card) {
   flex: 1;
   display: grid;
