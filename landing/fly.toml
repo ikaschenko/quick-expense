@@ -1,0 +1,9 @@
+app = 'q-expense-landing'      
+primary_region = 'fra'
+
+[http_service]
+  internal_port = 80
+  force_https = true
+  auto_stop_machines = 'stop'   # free tier - stops when idle
+  auto_start_machines = true
+  min_machines_running = 0      # zero cost when no traffic
