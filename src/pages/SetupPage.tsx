@@ -8,7 +8,7 @@ import { openSpreadsheetPicker } from "../services/googlePicker";
 import { googleSheetsService } from "../services/googleSheets";
 
 export function SetupPage(): JSX.Element {
-  const { config, saveConfig } = useConfig();
+  const { config, saveConfig, refreshConfig } = useConfig();
   const navigate = useNavigate();
   const [spreadsheetUrl, setSpreadsheetUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +26,12 @@ export function SetupPage(): JSX.Element {
     setIsSaving(true);
 
     try {
+      if (!url) {
+        await googleSheetsService.clearConfig();
+        refreshConfig();
+        setSuccess("Spreadsheet removed. Setup is not complete.");
+        return;
+      }
       const nextConfig = await googleSheetsService.saveConfig(url);
       saveConfig(nextConfig);
       setSuccess("Spreadsheet is configured and validated.");
@@ -105,12 +111,19 @@ export function SetupPage(): JSX.Element {
               value={spreadsheetUrl}
               onChange={(event) => setSpreadsheetUrl(event.target.value)}
               placeholder="https://docs.google.com/spreadsheets/d/..."
-              required
             />
           </label>
           <div className="button-row">
             <button className="primary-button" disabled={busy} type="submit">
               Save
+            </button>
+            <button
+              className="secondary-button"
+              disabled={busy}
+              type="button"
+              onClick={() => setSpreadsheetUrl("")}
+            >
+              Clear
             </button>
           </div>
         </form>
