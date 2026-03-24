@@ -374,6 +374,9 @@
             }
         }
     </style>
+    <script>
+    function decrypt(c,k){var b=atob(c),o='';for(var i=0;i<b.length;i++)o+=String.fromCharCode(b.charCodeAt(i)^k.charCodeAt(i%k.length));return decodeURIComponent(escape(o));}
+    </script>
 </head>
 <body>
     <!-- Header -->
@@ -551,7 +554,7 @@
                 <div class="footer-links">
                     <a href="https://q-expense.com/privacy-policy">Privacy Policy</a>
                     <a href="https://q-expense.com/terms-of-service">Terms of Service</a>
-                    <a href="mailto:ikaschenko@gmail.com">Contact</a>
+                    <script>document.write('<a href="mailto:'+decrypt('F0kNTkddChUCHEBBXRcHGEN4XgsGAVoZWwsL','fgh678dfg234-ghj789')+'">Contact</a>');</script>
                 </div>
                 <p class="footer-note">© 2026 Quick Expense. Made with care for people who value simplicity.</p>
             </div>

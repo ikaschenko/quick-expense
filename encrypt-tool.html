@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Encrypt / Decrypt Tool</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            background: #f0f2f5;
+            color: #333;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 32px;
+            color: #2c3e50;
+        }
+
+        .sections {
+            display: flex;
+            gap: 24px;
+            width: 100%;
+            max-width: 900px;
+            flex-wrap: wrap;
+        }
+
+        section {
+            flex: 1;
+            min-width: 300px;
+            background: #fff;
+            border-radius: 12px;
+            padding: 28px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+
+        h2 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid;
+        }
+
+        #encrypt-section h2 { color: #2980b9; border-color: #2980b9; }
+        #decrypt-section h2 { color: #27ae60; border-color: #27ae60; }
+
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            margin-bottom: 14px;
+        }
+
+        label {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        input[type="text"] {
+            padding: 9px 12px;
+            border: 1.5px solid #ddd;
+            border-radius: 7px;
+            font-size: 0.95rem;
+            transition: border-color 0.2s;
+            outline: none;
+            width: 100%;
+        }
+
+        input[type="text"]:focus { border-color: #3498db; }
+
+        .action-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 9px 22px;
+            border: none;
+            border-radius: 7px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.1s, opacity 0.2s;
+            white-space: nowrap;
+        }
+
+        button:active { transform: scale(0.97); }
+
+        #encrypt-section button { background: #2980b9; color: #fff; }
+        #encrypt-section button:hover { background: #2471a3; }
+        #decrypt-section button { background: #27ae60; color: #fff; }
+        #decrypt-section button:hover { background: #1e8449; }
+
+        .result {
+            flex: 1;
+            font-size: 0.9rem;
+            font-family: "Courier New", Courier, monospace;
+            word-break: break-all;
+            min-height: 1.4em;
+            color: #2c3e50;
+        }
+
+        .result.error { color: #c0392b; font-family: inherit; font-style: italic; }
+    </style>
+</head>
+<body>
+
+    <h1>Encrypt / Decrypt Tool</h1>
+
+    <div class="sections">
+
+        <section id="encrypt-section">
+            <h2>🔒 Encrypt</h2>
+            <div class="field">
+                <label for="enc-text">Text</label>
+                <input type="text" id="enc-text" placeholder="Enter text to encrypt">
+            </div>
+            <div class="field">
+                <label for="enc-key">Key</label>
+                <input type="text" id="enc-key" placeholder="Enter encryption key">
+            </div>
+            <div class="action-row">
+                <button onclick="runEncrypt()">Encrypt</button>
+                <span class="result" id="enc-result"></span>
+            </div>
+        </section>
+
+        <section id="decrypt-section">
+            <h2>🔓 Decrypt</h2>
+            <div class="field">
+                <label for="dec-text">Encrypted text</label>
+                <input type="text" id="dec-text" placeholder="Paste encrypted text here">
+            </div>
+            <div class="field">
+                <label for="dec-key">Key</label>
+                <input type="text" id="dec-key" placeholder="Enter encryption key">
+            </div>
+            <div class="action-row">
+                <button onclick="runDecrypt()">Decrypt</button>
+                <span class="result" id="dec-result"></span>
+            </div>
+        </section>
+
+    </div>
+
+    <script>
+        // ---------------------------------------------------------------------------
+        // Core cipher — XOR each character against the cycling key, Base64-safe I/O
+        // ---------------------------------------------------------------------------
+
+        /**
+         * Encrypt plain text with the given key.
+         * @param {string} text - Plain text to encrypt.
+         * @param {string} key  - Encryption key (any non-empty string).
+         * @returns {string} Base64-encoded cipher text.
+         */
+        function encrypt(text, key) {
+            const bytes = unescape(encodeURIComponent(text)); // UTF-8 → single-byte string
+            let xored = '';
+            for (let i = 0; i < bytes.length; i++) {
+                xored += String.fromCharCode(bytes.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+            }
+            return btoa(xored);
+        }
+
+        /**
+         * Decrypt a Base64 cipher text produced by encrypt().
+         * @param {string} cipherText - Base64-encoded cipher text.
+         * @param {string} key        - Encryption key used during encryption.
+         * @returns {string} Recovered plain text.
+         */
+        function decrypt(cipherText, key) {
+            const bytes = atob(cipherText);
+            let xored = '';
+            for (let i = 0; i < bytes.length; i++) {
+                xored += String.fromCharCode(bytes.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+            }
+            return decodeURIComponent(escape(xored)); // single-byte string → UTF-8
+        }
+
+        // ---------------------------------------------------------------------------
+        // UI handlers — read inputs, call pure functions, display results
+        // ---------------------------------------------------------------------------
+
+        function runEncrypt() {
+            const text = document.getElementById('enc-text').value;
+            const key  = document.getElementById('enc-key').value;
+            const el   = document.getElementById('enc-result');
+
+            if (!text || !key) {
+                el.textContent = 'Both fields are required.';
+                el.className = 'result error';
+                return;
+            }
+
+            try {
+                el.textContent = encrypt(text, key);
+                el.className   = 'result';
+            } catch (e) {
+                el.textContent = 'Encryption failed.';
+                el.className   = 'result error';
+            }
+        }
+
+        function runDecrypt() {
+            const text = document.getElementById('dec-text').value.trim();
+            const key  = document.getElementById('dec-key').value;
+            const el   = document.getElementById('dec-result');
+
+            if (!text || !key) {
+                el.textContent = 'Both fields are required.';
+                el.className = 'result error';
+                return;
+            }
+
+            try {
+                el.textContent = decrypt(text, key);
+                el.className   = 'result';
+            } catch (e) {
+                el.textContent = 'Decryption failed — check the key or input.';
+                el.className   = 'result error';
+            }
+        }
+
+        // Allow Enter key to trigger actions
+        document.getElementById('enc-key').addEventListener('keydown',  e => e.key === 'Enter' && runEncrypt());
+        document.getElementById('dec-key').addEventListener('keydown',  e => e.key === 'Enter' && runDecrypt());
+        document.getElementById('enc-text').addEventListener('keydown', e => e.key === 'Enter' && runEncrypt());
+        document.getElementById('dec-text').addEventListener('keydown', e => e.key === 'Enter' && runDecrypt());
+    </script>
+
+</body>
+</html>

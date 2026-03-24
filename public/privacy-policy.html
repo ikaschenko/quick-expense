@@ -58,6 +58,9 @@
             text-decoration: underline;
         }
     </style>
+    <script>
+    function decrypt(c,k){var b=atob(c),o='';for(var i=0;i<b.length;i++)o+=String.fromCharCode(b.charCodeAt(i)^k.charCodeAt(i%k.length));return decodeURIComponent(escape(o));}
+    </script>
 </head>
 <body>
     <h1>Privacy Policy</h1>
@@ -66,7 +69,7 @@
     
     <p>Welcome to Quick Expense ("we," "our," or "us"). This Privacy Policy explains how we collect, use, disclose, and protect your information when you use our web application available at <a href="https://app.q-expense.com">https://app.q-expense.com</a> and our website at <a href="https://q-expense.com">https://q-expense.com</a> (collectively, the "Service").</p>
     
-    <p>Quick Expense is operated by Ivan Kaschenko, an individual based in Poland. We are committed to protecting your privacy and ensuring transparency about our data practices.</p>
+    <p>Quick Expense is operated by <script>document.write(decrypt('LRBXWVcuWEsAHlBaDwk','df67we98cv54'));</script>, an individual based in Poland. We are committed to protecting your privacy and ensuring transparency about our data practices.</p>
     
     <div class="important">
         <strong>Important:</strong> By using our Service, you agree to the collection and use of information in accordance with this Privacy Policy. If you do not agree with this Privacy Policy, please do not use our Service.
@@ -209,8 +212,8 @@
     
     <div class="contact-info">
         <p>If you have any questions, concerns, or requests regarding this Privacy Policy or our data practices, please contact us:</p>
-        <p><strong>Data Controller:</strong> Ivan Kaschenko</p>
-        <p><strong>Email:</strong> <a href="mailto:ikaschenko@gmail.com">ikaschenko@gmail.com</a></p>
+        <p><strong>Data Controller:</strong> <script>document.write(decrypt('LRBXWVcuWEsAHlBaDwk','df67we98cv54'));</script></p>
+        <p><strong>Email:</strong> <script>var _e=decrypt('F0kNTkddChUCHEBBXRcHGEN4XgsGAVoZWwsL','fgh678dfg234-ghj789');document.write('<a href="mailto:'+_e+'">'+_e+'</a>');</script></p>
         <p><strong>Location:</strong> Poland</p>
         <p><strong>Website:</strong> <a href="https://q-expense.com">https://q-expense.com</a></p>
     </div>
