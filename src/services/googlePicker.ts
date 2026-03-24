@@ -31,17 +31,30 @@ export interface PickerResult {
   name: string;
 }
 
-export async function openSpreadsheetPicker(accessToken: string): Promise<PickerResult | null> {
+export async function openSpreadsheetPicker(accessToken: string, apiKey: string, appId: string): Promise<PickerResult | null> {
   await ensurePickerLoaded();
 
   return new Promise((resolve) => {
-    const view = new google.picker.DocsView(google.picker.ViewId.SPREADSHEETS)
+    const myDriveView = new google.picker.DocsView(google.picker.ViewId.SPREADSHEETS)
       .setIncludeFolders(true)
-      .setSelectFolderEnabled(false);
+      .setSelectFolderEnabled(false)
+      .setMode(google.picker.DocsViewMode.LIST)
+      .setParent("root");
+
+    const sharedDriveView = new google.picker.DocsView(google.picker.ViewId.SPREADSHEETS)
+      .setIncludeFolders(true)
+      .setSelectFolderEnabled(false)
+      .setMode(google.picker.DocsViewMode.LIST)
+      .setEnableDrives(true);
 
     new google.picker.PickerBuilder()
-      .addView(view)
+      .addView(myDriveView)
+      .addView(sharedDriveView)
+      .enableFeature(google.picker.Feature.SUPPORT_DRIVES)
       .setOAuthToken(accessToken)
+      .setDeveloperKey(apiKey)
+      .setAppId(appId)
+      .setOrigin(window.location.origin)
       .setCallback((data: google.picker.ResponseObject) => {
         if (data.action === google.picker.Action.PICKED && data.docs?.length) {
           const doc = data.docs[0];

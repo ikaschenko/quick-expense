@@ -40,7 +40,7 @@ export function buildGoogleAuthorizationUrl({ state, codeChallenge }) {
     client_id: getGoogleClientId(),
     redirect_uri: requireEnv("GOOGLE_REDIRECT_URI"),
     response_type: "code",
-    scope: "openid email https://www.googleapis.com/auth/drive.file",
+    scope: "openid email https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly",
     access_type: "offline",
     prompt: "consent",
     include_granted_scopes: "true",

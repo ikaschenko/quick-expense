@@ -57,6 +57,18 @@ declare namespace google.picker {
     SPREADSHEETS = "spreadsheets",
   }
 
+  enum DocsViewMode {
+    GRID = "grid",
+    LIST = "list",
+  }
+
+  enum Feature {
+    MINE_ONLY = "mine",
+    NAV_HIDDEN = "nav",
+    SIMPLE_UPLOAD_ENABLED = "simpleupload",
+    SUPPORT_DRIVES = "supdrives",
+  }
+
   enum Action {
     PICKED = "picked",
     CANCEL = "cancel",
@@ -78,6 +90,9 @@ declare namespace google.picker {
     constructor(viewId: ViewId);
     setIncludeFolders(include: boolean): DocsView;
     setSelectFolderEnabled(enabled: boolean): DocsView;
+    setMode(mode: DocsViewMode): DocsView;
+    setParent(id: string): DocsView;
+    setEnableDrives(enabled: boolean): DocsView;
   }
 
   class Picker {
@@ -88,6 +103,9 @@ declare namespace google.picker {
     addView(view: DocsView): PickerBuilder;
     setOAuthToken(token: string): PickerBuilder;
     setDeveloperKey(key: string): PickerBuilder;
+    setAppId(appId: string): PickerBuilder;
+    setOrigin(origin: string): PickerBuilder;
+    enableFeature(feature: Feature): PickerBuilder;
     setCallback(callback: (data: ResponseObject) => void): PickerBuilder;
     build(): Picker;
   }

@@ -53,8 +53,8 @@ export function SetupPage(): JSX.Element {
     setIsPicking(true);
 
     try {
-      const { accessToken } = await googleSheetsService.getPickerConfig();
-      const result = await openSpreadsheetPicker(accessToken);
+      const { accessToken, apiKey, appId } = await googleSheetsService.getPickerConfig();
+      const result = await openSpreadsheetPicker(accessToken, apiKey, appId);
       if (!result) return;
 
       setSpreadsheetUrl(result.spreadsheetUrl);

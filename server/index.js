@@ -35,7 +35,7 @@ function validateStartupEnv() {
     missing.push("GOOGLE_CLIENT_ID");
   }
 
-  ["GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI", "FRONTEND_BASE_URL", "SESSION_SECRET"].forEach(
+  ["GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI", "GOOGLE_API_KEY", "FRONTEND_BASE_URL", "SESSION_SECRET"].forEach(
     (name) => {
       if (!process.env[name]?.trim()) {
         missing.push(name);
@@ -274,7 +274,8 @@ app.post("/api/config", requireAuthenticatedUser, async (req, res) => {
 app.get("/api/auth/picker-config", requireAuthenticatedUser, async (req, res) => {
   try {
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    res.json({ accessToken });
+    const appId = getGoogleClientId().split("-")[0];
+    res.json({ accessToken, apiKey: process.env.GOOGLE_API_KEY, appId });
   } catch (error) {
     res.status(400).json({ message: (error).message });
   }
