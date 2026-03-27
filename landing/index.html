@@ -137,7 +137,7 @@
 
         .features-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            grid-template-columns: repeat(2, 1fr);
             gap: 40px;
             margin-bottom: 40px;
         }
@@ -229,7 +229,7 @@
 
         .benefits-list {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(2, 1fr);
             gap: 30px;
             margin-top: 40px;
         }
@@ -362,11 +362,6 @@
                 font-size: 28px;
             }
 
-            .header-content {
-                flex-direction: column;
-                gap: 20px;
-            }
-
             .features-grid,
             .steps,
             .benefits-list {
@@ -379,19 +374,6 @@
     </script>
 </head>
 <body>
-    <!-- Header -->
-    <header>
-        <div class="container">
-            <div class="header-content">
-                <div class="logo">
-                    <div class="logo-icon">⚡</div>
-                    Quick Expense
-                </div>
-                <a href="https://app.q-expense.com" class="header-cta">Get Started</a>
-            </div>
-        </div>
-    </header>
-
     <!-- Hero Section -->
     <section class="hero">
         <div class="container">
@@ -408,21 +390,9 @@
             <h2 class="section-title">Why Quick Expense?</h2>
             <div class="features-grid">
                 <div class="feature-card">
-                    <div class="feature-icon">⚡</div>
-                    <h3>Lightning Fast</h3>
-                    <p>Log expenses in seconds from your smartphone. No complicated forms, no waiting. Just quick entry and you're done.</p>
-                </div>
-
-                <div class="feature-card">
                     <div class="feature-icon">📱</div>
                     <h3>Mobile First</h3>
                     <p>Designed for on-the-go use. Works perfectly on smartphones, tablets, and desktop. Access anywhere, anytime.</p>
-                </div>
-
-                <div class="feature-card">
-                    <div class="feature-icon">🔍</div>
-                    <h3>Smart Search</h3>
-                    <p>Find any expense instantly without a PC. Search through your entire history right from your phone.</p>
                 </div>
 
                 <div class="feature-card">
@@ -502,14 +472,6 @@
                 </div>
 
                 <div class="benefit">
-                    <div class="benefit-icon">⏱️</div>
-                    <div class="benefit-content">
-                        <h4>No Time Wasted</h4>
-                        <p>Stop collecting receipts and processing them monthly. Log expenses immediately when they happen.</p>
-                    </div>
-                </div>
-
-                <div class="benefit">
                     <div class="benefit-icon">🔌</div>
                     <div class="benefit-content">
                         <h4>Export-Ready</h4>
@@ -517,23 +479,6 @@
                     </div>
                 </div>
 
-                <div class="benefit">
-                    <div class="benefit-icon">🚀</div>
-                    <div class="benefit-content">
-                        <h4>No Learning Curve</h4>
-                        <p>If you've used a smartphone, you can use Quick Expense. Intuitive interface, zero training needed.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Screenshots Section -->
-    <section class="screenshots">
-        <div class="container">
-            <h2 class="section-title">See It In Action</h2>
-            <div class="screenshot-placeholder">
-                <p>📸 Screenshots coming soon</p>
             </div>
         </div>
     </section>
