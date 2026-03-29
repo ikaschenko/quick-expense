@@ -1,21 +1,21 @@
-# Deploy main app when anything outside /landing changes
+# Deploy landing page when anything in /landing changes
 # See https://fly.io/docs/app-guides/continuous-deployment-with-github-actions/
 
-name: Deploy Main App
+name: Deploy Landing Page
 on:
   push:
     branches:
       - main
-    paths-ignore:
+    paths:
       - 'landing/**'
 jobs:
   deploy:
-    name: Deploy main app
+    name: Deploy landing page
     runs-on: ubuntu-latest
-    concurrency: deploy-main-app
+    concurrency: deploy-landing
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --remote-only
+      - run: flyctl deploy --remote-only --config landing/fly.toml
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
