@@ -155,16 +155,29 @@
             box-shadow: 0 8px 25px rgba(0,0,0,0.12);
         }
 
+        .feature-card .feature-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
         .feature-icon {
             font-size: 48px;
-            margin-bottom: 20px;
             color: #3498db;
+            flex-shrink: 0;
         }
 
         .feature-card h3 {
             font-size: 22px;
             color: #2c3e50;
-            margin-bottom: 15px;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 480px) {
+            .feature-card h3 {
+                white-space: normal;
+            }
         }
 
         .feature-card p {
@@ -380,7 +393,7 @@
             <h1>Track Expenses On The Go</h1>
             <p class="subtitle">Simple, fast, and always at your fingertips. Your data, your spreadsheet, your control.</p>
             <a href="https://app.q-expense.com" class="hero-cta">Get Started - It's Free</a>
-            <p class="hero-note">No credit card required • Sign in with Google • Start in 2 minutes</p>
+            <p class="hero-note">Sign in with Google • Start in 2 minutes</p>
         </div>
     </section>
 
@@ -390,27 +403,35 @@
             <h2 class="section-title">Why Quick Expense?</h2>
             <div class="features-grid">
                 <div class="feature-card">
-                    <div class="feature-icon">📱</div>
-                    <h3>Mobile First</h3>
-                    <p>Designed for on-the-go use. Works perfectly on smartphones, tablets, and desktop. Access anywhere, anytime.</p>
+                    <div class="feature-header">
+                        <div class="feature-icon">📱</div>
+                        <h3>Mobile First</h3>
+                    </div>
+                    <p>Designed for <strong>on-the-go</strong> use. Works perfectly on smartphones, tablets, and desktop. Access anywhere, anytime.</p>
                 </div>
 
                 <div class="feature-card">
-                    <div class="feature-icon">📊</div>
-                    <h3>Your Data, Your Spreadsheet</h3>
-                    <p>All data lives in your own Google Spreadsheet. Full control, easy export, analyze with your favorite tools.</p>
+                    <div class="feature-header">
+                        <div class="feature-icon">📊</div>
+                        <h3>You Own Your Data</h3>
+                    </div>
+                    <p>All data lives in <strong>your</strong> own Google Spreadsheet. Full control, easy export, analyze with your favorite tools.</p>
                 </div>
 
                 <div class="feature-card">
-                    <div class="feature-icon">🎯</div>
-                    <h3>Minimalist UI</h3>
+                    <div class="feature-header">
+                        <div class="feature-icon">🎯</div>
+                        <h3>Minimalist UI</h3>
+                    </div>
                     <p>No clutter, no distractions. Only the features you need: Add, View, Search. Simple and focused.</p>
                 </div>
 
                 <div class="feature-card">
-                    <div class="feature-icon">🆓</div>
-                    <h3>100% Free</h3>
-                    <p>No subscriptions, no premium tiers, no hidden costs. Completely free for personal and family use.</p>
+                    <div class="feature-header">
+                        <div class="feature-icon">🆓</div>
+                        <h3>100% Free</h3>
+                    </div>
+                    <p>No subscriptions, no premium tiers, no ads, no hidden costs. Completely free for personal and family use.</p>
                 </div>
             </div>
         </div>
