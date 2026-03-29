@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Quick Expense - Simple, fast expense tracking on the go. Store your data in your own Google Spreadsheet. Free, minimalist, and always accessible.">
-    <meta name="keywords" content="expense tracker, expense management, Google Sheets, personal finance, family budget, free expense app">
-    <title>Quick Expense - Track Expenses On The Go</title>
+    <meta name="description" content="Quick Expense - Simple, fast expense tracking on the go. Store your data in your own Google Spreadsheet. Free, minimalist, and always accessible." data-i18n-attr="content:meta.description">
+    <meta name="keywords" content="expense tracker, expense management, Google Sheets, personal finance, family budget, free expense app" data-i18n-attr="content:meta.keywords">
+    <title data-i18n="meta.title">Quick Expense - Track Expenses On The Go</title>
     <style>
         * {
             margin: 0;
@@ -361,6 +361,46 @@
             margin-top: 20px;
         }
 
+        /* Language Switcher */
+        .lang-switcher {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 1000;
+            display: flex;
+            gap: 0;
+            background: rgba(255,255,255,0.15);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.25);
+        }
+
+        .lang-switcher button {
+            background: transparent;
+            color: rgba(255,255,255,0.8);
+            border: none;
+            padding: 8px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+            font-family: inherit;
+            letter-spacing: 0.5px;
+        }
+
+        .lang-switcher button:hover {
+            background: rgba(255,255,255,0.15);
+            color: white;
+        }
+
+        .lang-switcher button.active {
+            background: white;
+            color: #2c3e50;
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             .hero h1 {
@@ -387,51 +427,54 @@
     </script>
 </head>
 <body>
+    <!-- Language Switcher -->
+    <div class="lang-switcher" aria-label="Language selector"></div>
+
     <!-- Hero Section -->
     <section class="hero">
         <div class="container">
-            <h1>Track Expenses On The Go</h1>
-            <p class="subtitle">Simple, fast, and always at your fingertips. Your data, your spreadsheet, your control.</p>
-            <a href="https://app.q-expense.com" class="hero-cta">Get Started - It's Free</a>
-            <p class="hero-note">Sign in with Google • Start in 2 minutes</p>
+            <h1 data-i18n="hero.title">Track Expenses On The Go</h1>
+            <p class="subtitle" data-i18n="hero.subtitle">Simple, fast, and always at your fingertips. Your data, your spreadsheet, your control.</p>
+            <a href="https://app.q-expense.com" class="hero-cta" data-i18n="hero.cta">Get Started - It's Free</a>
+            <p class="hero-note" data-i18n="hero.note">Sign in with Google • Start in 2 minutes</p>
         </div>
     </section>
 
     <!-- Features Section -->
     <section class="features">
         <div class="container">
-            <h2 class="section-title">Why Quick Expense?</h2>
+            <h2 class="section-title" data-i18n="features.title">Why Quick Expense?</h2>
             <div class="features-grid">
                 <div class="feature-card">
                     <div class="feature-header">
                         <div class="feature-icon">📱</div>
-                        <h3>Mobile First</h3>
+                        <h3 data-i18n="features.mobile.title">Mobile First</h3>
                     </div>
-                    <p>Designed for <strong>on-the-go</strong> use. Works perfectly on smartphones, tablets, and desktop. Access anywhere, anytime.</p>
+                    <p data-i18n-html="features.mobile.desc">Designed for <strong>on-the-go</strong> use. Works perfectly on smartphones, tablets, and desktop. Access anywhere, anytime.</p>
                 </div>
 
                 <div class="feature-card">
                     <div class="feature-header">
                         <div class="feature-icon">📊</div>
-                        <h3>You Own Your Data</h3>
+                        <h3 data-i18n="features.data.title">You Own Your Data</h3>
                     </div>
-                    <p>All data lives in <strong>your</strong> own Google Spreadsheet. Full control, easy export, analyze with your favorite tools.</p>
+                    <p data-i18n-html="features.data.desc">All data lives in <strong>your</strong> own Google Spreadsheet. Full control, easy export, analyze with your favorite tools.</p>
                 </div>
 
                 <div class="feature-card">
                     <div class="feature-header">
                         <div class="feature-icon">🎯</div>
-                        <h3>Minimalist UI</h3>
+                        <h3 data-i18n="features.ui.title">Minimalist UI</h3>
                     </div>
-                    <p>No clutter, no distractions. Only the features you need: Add, View, Search. Simple and focused.</p>
+                    <p data-i18n="features.ui.desc">No clutter, no distractions. Only the features you need: Add, View, Search. Simple and focused.</p>
                 </div>
 
                 <div class="feature-card">
                     <div class="feature-header">
                         <div class="feature-icon">🆓</div>
-                        <h3>100% Free</h3>
+                        <h3 data-i18n="features.free.title">100% Free</h3>
                     </div>
-                    <p>No subscriptions, no premium tiers, no ads, no hidden costs. Completely free for personal and family use.</p>
+                    <p data-i18n="features.free.desc">No subscriptions, no premium tiers, no ads, no hidden costs. Completely free for personal and family use.</p>
                 </div>
             </div>
         </div>
@@ -440,24 +483,24 @@
     <!-- How It Works -->
     <section class="how-it-works">
         <div class="container">
-            <h2 class="section-title">Get Started in 3 Simple Steps</h2>
+            <h2 class="section-title" data-i18n="steps.title">Get Started in 3 Simple Steps</h2>
             <div class="steps">
                 <div class="step">
                     <div class="step-number">1</div>
-                    <h3>Sign In with Google</h3>
-                    <p>Use your existing Google account. No registration forms, no passwords to remember.</p>
+                    <h3 data-i18n="steps.signin.title">Sign In with Google</h3>
+                    <p data-i18n="steps.signin.desc">Use your existing Google account. No registration forms, no passwords to remember.</p>
                 </div>
 
                 <div class="step">
                     <div class="step-number">2</div>
-                    <h3>Connect Your Spreadsheet</h3>
-                    <p>Link to your Google Spreadsheet or create a new one. We'll guide you through the simple setup.</p>
+                    <h3 data-i18n="steps.connect.title">Connect Your Spreadsheet</h3>
+                    <p data-i18n="steps.connect.desc">Link to your Google Spreadsheet or create a new one. We'll guide you through the simple setup.</p>
                 </div>
 
                 <div class="step">
                     <div class="step-number">3</div>
-                    <h3>Start Tracking</h3>
-                    <p>Add expenses, search your history, and always stay in control of your spending.</p>
+                    <h3 data-i18n="steps.track.title">Start Tracking</h3>
+                    <p data-i18n="steps.track.desc">Add expenses, search your history, and always stay in control of your spending.</p>
                 </div>
             </div>
         </div>
@@ -466,37 +509,37 @@
     <!-- Why Choose Section -->
     <section class="why-choose">
         <div class="container">
-            <h2 class="section-title">Built for Real Life</h2>
+            <h2 class="section-title" data-i18n="benefits.title">Built for Real Life</h2>
             <div class="benefits-list">
                 <div class="benefit">
                     <div class="benefit-icon">💰</div>
                     <div class="benefit-content">
-                        <h4>Multi-Currency Support</h4>
-                        <p>Track expenses in PLN, USD, EUR, or BYN. Perfect for travelers and international families.</p>
+                        <h4 data-i18n="benefits.currency.title">Multi-Currency Support</h4>
+                        <p data-i18n="benefits.currency.desc">Track expenses in PLN, USD, EUR, or BYN. Perfect for travelers and international families.</p>
                     </div>
                 </div>
 
                 <div class="benefit">
                     <div class="benefit-icon">👨‍👩‍👧‍👦</div>
                     <div class="benefit-content">
-                        <h4>Family-Friendly</h4>
-                        <p>Multiple users can share the same spreadsheet. Track who spent what and for whom.</p>
+                        <h4 data-i18n="benefits.family.title">Family-Friendly</h4>
+                        <p data-i18n="benefits.family.desc">Multiple users can share the same spreadsheet. Track who spent what and for whom.</p>
                     </div>
                 </div>
 
                 <div class="benefit">
                     <div class="benefit-icon">🔒</div>
                     <div class="benefit-content">
-                        <h4>Secure & Private</h4>
-                        <p>Your data never leaves Google's secure infrastructure. We don't store your expense records.</p>
+                        <h4 data-i18n="benefits.secure.title">Secure & Private</h4>
+                        <p data-i18n="benefits.secure.desc">Your data never leaves Google's secure infrastructure. We don't store your expense records.</p>
                     </div>
                 </div>
 
                 <div class="benefit">
                     <div class="benefit-icon">🔌</div>
                     <div class="benefit-content">
-                        <h4>Export-Ready</h4>
-                        <p>Your data is already in Google Sheets. Export to Excel, CSV, or analyze with any tool you prefer.</p>
+                        <h4 data-i18n="benefits.export.title">Export-Ready</h4>
+                        <p data-i18n="benefits.export.desc">Your data is already in Google Sheets. Export to Excel, CSV, or analyze with any tool you prefer.</p>
                     </div>
                 </div>
 
@@ -507,9 +550,9 @@
     <!-- CTA Section -->
     <section class="cta-section">
         <div class="container">
-            <h2>Ready to Simplify Your Expense Tracking?</h2>
-            <p>Join users who've already ditched complicated expense apps for something better.</p>
-            <a href="https://app.q-expense.com" class="cta-button">Start Now - And Use For Free</a>
+            <h2 data-i18n="cta.title">Ready to Simplify Your Expense Tracking?</h2>
+            <p data-i18n="cta.desc">Join users who've already ditched complicated expense apps for something better.</p>
+            <a href="https://app.q-expense.com" class="cta-button" data-i18n="cta.button">Start Now - And Use For Free</a>
         </div>
     </section>
 
@@ -518,13 +561,16 @@
         <div class="container">
             <div class="footer-content">
                 <div class="footer-links">
-                    <a href="https://app.q-expense.com/privacy-policy.html">Privacy Policy</a>
-                    <a href="https://app.q-expense.com/terms-of-service.html">Terms of Service</a>
-                    <script>document.write('<a href="mailto:'+decrypt('F0kNTkddChUCHEBBXRcHGEN4XgsGAVoZWwsL','fgh678dfg234-ghj789')+'">Contact</a>');</script>
+                    <a href="https://app.q-expense.com/privacy-policy.html" data-i18n="footer.privacy">Privacy Policy</a>
+                    <a href="https://app.q-expense.com/terms-of-service.html" data-i18n="footer.terms">Terms of Service</a>
+                    <script>document.write('<a href="mailto:'+decrypt('F0kNTkddChUCHEBBXRcHGEN4XgsGAVoZWwsL','fgh678dfg234-ghj789')+'" data-i18n="footer.contact">Contact</a>');</script>
                 </div>
-                <p class="footer-note">© 2026 Quick Expense. Made with care for people who value simplicity.</p>
+                <p class="footer-note" data-i18n="footer.copyright">© 2026 Quick Expense. Made with care for people who value simplicity.</p>
             </div>
         </div>
     </footer>
+    <script src="lang/en.js"></script>
+    <script src="lang/es.js"></script>
+    <script src="lang/i18n.js"></script>
 </body>
 </html>
