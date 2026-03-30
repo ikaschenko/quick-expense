@@ -368,6 +368,80 @@ button {
   background: var(--border-soft);
 }
 
+.setup-options {
+  display: grid;
+  gap: 1rem;
+}
+
+.setup-option-panel {
+  border: 2px solid var(--border-soft);
+  border-radius: 14px;
+  padding: 1.1rem;
+  cursor: pointer;
+  transition: border-color 180ms ease, opacity 180ms ease;
+}
+
+.setup-option-active {
+  border-color: var(--primary-base);
+}
+
+.setup-option-inactive {
+  opacity: 0.5;
+}
+
+.setup-option-inactive .setup-option-body {
+  pointer-events: none;
+}
+
+.setup-option-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  margin-bottom: 0.75rem;
+}
+
+.setup-option-header input[type="radio"] {
+  accent-color: var(--primary-base);
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0;
+  cursor: pointer;
+}
+
+.setup-option-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.setup-option-body .setup-divider {
+  margin-top: 0;
+}
+
+.setup-instructions {
+  margin: 0;
+  padding-left: 1.4rem;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+
+.setup-instructions a {
+  color: var(--primary-base);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+@media (hover: hover) {
+  .setup-option-panel:hover:not(.setup-option-active) {
+    border-color: var(--border-strong);
+  }
+
+  .setup-instructions a:hover {
+    color: var(--primary-hover);
+  }
+}
+
 .form-layout {
   display: grid;
   gap: 1rem;
