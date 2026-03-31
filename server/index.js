@@ -1,9 +1,9 @@
 import "dotenv/config";
 import crypto from "node:crypto";
-import fs from "node:fs";
 import path from "node:path";
 import express from "express";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 import {
   buildGoogleAuthorizationUrl,
   exchangeAuthorizationCode,
@@ -19,14 +19,14 @@ import {
   parseSpreadsheetUrl,
   validateSpreadsheet,
 } from "./google-sheets.js";
-import { getUserRecord, updateUserRecord } from "./store.js";
-import { createSessionStore } from "./session-store.js";
+import { getUserRecord, updateUserRecord, saveFxRateBackup, getLatestFxRateBackup } from "./store.js";
+import pool from "./db.js";
 
+const PgSession = connectPgSimple(session);
 const app = express();
 app.set("trust proxy", 1);
 
 const port = Number(process.env.PORT ?? 3001);
-const sessionDir = path.resolve(process.cwd(), "config", "sessions");
 
 function validateStartupEnv() {
   const missing = [];
@@ -35,7 +35,7 @@ function validateStartupEnv() {
     missing.push("GOOGLE_CLIENT_ID");
   }
 
-  ["GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI", "GOOGLE_API_KEY", "FRONTEND_BASE_URL", "SESSION_SECRET"].forEach(
+  ["GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI", "GOOGLE_API_KEY", "FRONTEND_BASE_URL", "SESSION_SECRET", "DATABASE_URL"].forEach(
     (name) => {
       if (!process.env[name]?.trim()) {
         missing.push(name);
@@ -50,17 +50,13 @@ function validateStartupEnv() {
 
 validateStartupEnv();
 
-fs.mkdirSync(sessionDir, { recursive: true });
-
 app.use(express.json());
 app.use(
   session({
-    store: createSessionStore({
-      path: sessionDir,
-      fileExtension: ".sess",
-      retries: 2,
-      minTimeout: 40,
-      maxTimeout: 120,
+    store: new PgSession({
+      pool,
+      tableName: "sessions",
+      pruneSessionInterval: 60 * 15,
     }),
     secret: process.env.SESSION_SECRET,
     resave: false,
@@ -306,15 +302,8 @@ app.get("/api/expenses", requireAuthenticatedUser, async (req, res) => {
 });
 
 app.get("/api/fx-backup", requireAuthenticatedUser, async (req, res) => {
-  const backups = Array.isArray(req.userRecord.fxRateBackups) ? req.userRecord.fxRateBackups : [];
-  const latestBackup = backups.find(
-    (backup) =>
-      backup &&
-      typeof backup === "object" &&
-      (!backup.spreadsheetId || backup.spreadsheetId === req.userRecord.spreadsheetId),
-  ) ?? null;
-
-  res.json({ backup: latestBackup });
+  const backup = await getLatestFxRateBackup(req.userRecord.email, req.userRecord.spreadsheetId);
+  res.json({ backup });
 });
 
 app.post("/api/expenses", requireAuthenticatedUser, async (req, res) => {
@@ -334,17 +323,7 @@ app.post("/api/expenses", requireAuthenticatedUser, async (req, res) => {
     await appendExpenseRow(accessToken, req.userRecord.spreadsheetId, values);
 
     if (req.body?.fxRateBackup && typeof req.body.fxRateBackup === "object") {
-      await updateUserRecord(req.userRecord.email, (current) => ({
-        ...current,
-        fxRateBackups: [
-          {
-            ...req.body.fxRateBackup,
-            submittedAt: new Date().toISOString(),
-            spreadsheetId: current.spreadsheetId,
-          },
-          ...(current.fxRateBackups ?? []),
-        ].slice(0, 200),
-      }));
+      await saveFxRateBackup(req.userRecord.email, req.userRecord.spreadsheetId, req.body.fxRateBackup);
     }
 
     res.status(204).end();

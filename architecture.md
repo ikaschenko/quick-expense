@@ -63,9 +63,8 @@ quick-expense/
 ├── tsconfig.json              ← TypeScript config (covers src/ and tests/)
 ├── vite.config.ts             ← Vite + Vitest config, dev proxy /api → :3001
 │
-├── config/                    ← runtime data directory (mounted as persistent volume in prod)
-│   ├── runtime-data.json      ← user records store (see §7 Data Model)
-│   └── sessions/              ← express-session file-based session data (.sess files)
+├── config/                    ← runtime data directory (local dev only, not used in production)
+│   └── .gitkeep
 │
 ├── docs/
 │   └── QuickExpense_business-requirements.md
@@ -83,12 +82,16 @@ quick-expense/
 │   ├── privacy-policy.html    ← required for Google OAuth app verification
 │   └── terms-of-service.html  ← required for Google OAuth app verification
 │
+├── db/                        ← database schema and migration scripts
+│   ├── 001_initial_schema.sql ← initial PostgreSQL schema (users, fx_rate_backups, sessions)
+│   └── README.md              ← database setup instructions
+│
 ├── server/                    ← Express back-end (plain JS, ES modules)
 │   ├── index.js               ← app entry: routes, middleware, session setup
+│   ├── db.js                  ← PostgreSQL connection pool (pg.Pool)
 │   ├── google-client.js       ← Google OAuth helpers (PKCE, token exchange, refresh)
 │   ├── google-sheets.js       ← Google Sheets API operations (validate, load, append)
-│   ├── session-store.js       ← Resilient file-based session store with retry logic
-│   └── store.js               ← JSON-file-based user record persistence
+│   └── store.js               ← PostgreSQL-backed user record and FX backup persistence
 │
 ├── src/                       ← React SPA (TypeScript)
 │   ├── main.tsx               ← ReactDOM entry, BrowserRouter
@@ -134,8 +137,8 @@ quick-expense/
 │
 └── tests/                     ← Vitest test files
     ├── search.test.ts
-    ├── session-store.test.js
     ├── spreadsheet.test.ts
+    ├── store.test.js
     └── validation.test.ts
 ```
 
@@ -150,12 +153,13 @@ quick-expense/
 | Test runner | Vitest 4 + jsdom | `npm test` runs `vitest run` |
 | Icons | lucide-react | |
 | Back-end runtime | Node.js 20, Express 4 | ES modules (`"type": "module"` in package.json) |
-| Session management | express-session + session-file-store | File-based sessions in `config/sessions/` |
-| Data persistence | JSON file (`config/runtime-data.json`) | NOT a database — see §7 |
+| Session management | express-session + connect-pg-simple | PostgreSQL-backed sessions |
+| Data persistence | PostgreSQL (Supabase Free) | `users`, `fx_rate_backups`, `sessions` tables — see §7 |
+| Database driver | pg (node-postgres) | Connection via `DATABASE_URL` env var |
 | External API | Google Sheets API v4 | All CRUD on expense data |
 | Authentication | Google OAuth 2.0 (Authorization Code + PKCE) | Server-side flow |
 | Google Picker | Google Picker API | For spreadsheet selection in Setup |
-| Deployment | Fly.io (Docker) | Persistent volume for `config/` |
+| Deployment | Fly.io (Docker) | Stateless app container (no persistent volume) |
 | Landing page | Vanilla HTML/CSS/JS + nginx:alpine | Separate Fly.io app |
 
 ---
@@ -186,7 +190,7 @@ Browser                          Express Backend               Google
   │                                    │  { email }               │
   │                                    │◀─────────────────────────│
   │                                    │                          │
-  │  (stores tokens in runtime-data.json,                         │
+  │  (stores tokens in PostgreSQL `users` table,                  │
   │   sets session.userEmail)          │                          │
   │  302 Redirect to /home             │                          │
   │◀───────────────────────────────────│                          │
@@ -195,7 +199,7 @@ Browser                          Express Backend               Google
 ### 5.2 Key Security Details
 
 - **PKCE (S256):** Code verifier stored in server session, never exposed to the browser.
-- **Tokens never sent to the browser:** Access tokens and refresh tokens are stored server-side in `runtime-data.json`. The browser receives only an `httpOnly` session cookie.
+- **Tokens never sent to the browser:** Access tokens and refresh tokens are stored server-side in the PostgreSQL `users` table. The browser receives only an `httpOnly` session cookie.
 - **CSRF protection:** All mutating requests require an `X-Requested-With: fetch` header, checked by middleware.
 - **Token refresh:** `getAuthorizedAccessToken()` in `server/index.js` transparently refreshes expired access tokens using the stored refresh token before any Google API call.
 - **Session cookie:** `httpOnly`, `sameSite: lax`, `secure` when HTTPS, 30-day expiry.
@@ -211,7 +215,7 @@ Browser                          Express Backend               Google
 
 - `GET /api/auth/session` — front-end polls this on startup to check if a valid session exists.
 - `POST /api/auth/logout` — destroys the express-session.
-- Session files are stored on disk in `config/sessions/` using `ResilientFileStore`, which adds retry logic for transient filesystem errors (EPERM/EBUSY on Windows).
+- Session data is stored in the `sessions` table in PostgreSQL, managed by `connect-pg-simple`. Expired sessions are pruned automatically every 15 minutes.
 
 ---
 
@@ -240,51 +244,60 @@ All API routes are defined in `server/index.js`.
 
 ## 7. Data Model & Storage
 
-### 7.1 There Is No Database
+### 7.1 PostgreSQL Database (Supabase Free)
 
-The backend uses **two categories of file-based storage**, both inside the `config/` directory:
+The backend uses **PostgreSQL** (hosted on Supabase Free tier) for all server-side state. Schema scripts live in `db/`. The connection is managed via `server/db.js` using `pg.Pool` configured from the `DATABASE_URL` environment variable.
 
-#### a) User Records — `config/runtime-data.json`
+#### a) `users` Table
 
-A single JSON file managed by `server/store.js`. Structure:
+Stores authenticated user records: OAuth tokens, spreadsheet configuration, and activity timestamps.
 
-```json
-{
-  "users": {
-    "user@gmail.com": {
-      "email": "user@gmail.com",
-      "accessToken": "ya29.…",
-      "accessTokenExpiresAt": 1774356152459,
-      "refreshToken": "1//03fkd…",
-      "lastAuthenticatedAt": 1774352553459,
-      "lastActivityAt": 1774352553459,
-      "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/…/edit",
-      "spreadsheetId": "1An7oInOJ…",
-      "fxRateBackups": [
-        {
-          "expenseDate": "2026-03-17",
-          "rates": { "PLN": "3,72", "BYN": "2,93", "EUR": "1,16" },
-          "amounts": { "PLN": "", "BYN": "", "EUR": "17.66", "USD": "15.22" },
-          "submittedAt": "2026-03-17T12:41:32.747Z",
-          "spreadsheetId": "1An7oInOJ…"
-        }
-      ]
-    }
-  }
-}
-```
+| Column | Type | Constraints |
+|---|---|---|
+| `email` | TEXT | PRIMARY KEY |
+| `access_token` | TEXT | NOT NULL |
+| `access_token_expires_at` | BIGINT | NOT NULL |
+| `refresh_token` | TEXT | |
+| `spreadsheet_url` | TEXT | |
+| `spreadsheet_id` | TEXT | |
+| `last_authenticated_at` | BIGINT | NOT NULL |
+| `last_activity_at` | BIGINT | NOT NULL |
+| `created_at` | TIMESTAMPTZ | DEFAULT now() |
+| `updated_at` | TIMESTAMPTZ | DEFAULT now() |
 
-**What is stored per user:**
-- Google OAuth tokens (access + refresh) — used for Google Sheets API calls.
-- Spreadsheet configuration (URL and extracted ID).
-- FX rate backup history (last ≤200 entries) — so the Add form can pre-fill currency conversion rates from the most recent submission.
-- Timestamps for session management.
+- `email` is the natural primary key — used across sessions, API calls, and store lookups.
+- Token-related BIGINT fields store epoch milliseconds (matching `Date.now()` in JavaScript).
+- `created_at`/`updated_at` use TIMESTAMPTZ for operational observability.
 
-**Read/write pattern:** Every `getUserRecord()` / `updateUserRecord()` reads and rewrites the full JSON file. This is acceptable for the expected scale (≤10 users).
+#### b) `fx_rate_backups` Table
 
-#### b) Session Files — `config/sessions/*.sess`
+Stores FX rate conversion rates from expense submissions. One row per currency per submission (normalized from the previous JSONB approach). Used to pre-fill FX rates on the Add Expense form.
 
-Express session data serialized to individual `.sess` files by `session-file-store`. Managed by `ResilientFileStore` (in `server/session-store.js`) which wraps write operations with retry logic to handle transient OS-level file locking errors.
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | SERIAL | PRIMARY KEY |
+| `user_email` | TEXT | NOT NULL, FK → users(email) |
+| `spreadsheet_id` | TEXT | |
+| `expense_date` | DATE | NOT NULL |
+| `currency_code` | VARCHAR(3) | NOT NULL, CHECK length = 3 |
+| `fx_rate` | NUMERIC(12,6) | NOT NULL |
+| `submitted_at` | TIMESTAMPTZ | NOT NULL |
+
+- Index on `(user_email, spreadsheet_id, submitted_at DESC)` for efficient latest-backup lookup.
+- A single backup submission with rates for PLN and EUR creates 2 rows sharing the same `submitted_at` value.
+- Currency amounts are not stored (they are not read back by the frontend).
+
+#### c) `sessions` Table
+
+Managed automatically by `connect-pg-simple`. Stores express-session data.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `sid` | VARCHAR | PRIMARY KEY |
+| `sess` | JSON | NOT NULL |
+| `expire` | TIMESTAMPTZ(6) | NOT NULL, indexed |
+
+- Expired sessions are pruned automatically every 15 minutes by `connect-pg-simple`.
 
 ### 7.2 Expense Data — Google Spreadsheet
 
@@ -304,9 +317,9 @@ Required structure:
 - Load reads `Expenses!A:K`, maps rows to `ExpenseRecord` objects.
 - Dataset payload size is capped at **10 MB** (calculated as JSON byte size of all records). If exceeded, Tail/Search is denied.
 
-### 7.3 Deployment Volume
+### 7.3 Database Schema Management
 
-On Fly.io, the `config/` directory is backed by a **persistent volume** (defined in `fly.toml` as `[[mounts]]`). This ensures `runtime-data.json` and session files survive across deployments and restarts.
+Schema scripts are stored in `db/` as numbered SQL files (`001_initial_schema.sql`, etc.). Apply them in order against the target PostgreSQL instance. See `db/README.md` for setup instructions.
 
 ---
 
@@ -389,7 +402,7 @@ The `landing/` directory is a **completely independent static site** — no buil
 | `npm run dev:client` | Vite dev server only (port 5173) |
 | `npm run dev:server` | Express backend only (port 3001) |
 | `npm run build` | `tsc -b && vite build` → outputs to `dist/` |
-| `npm test` | `vitest run` (search, validation, spreadsheet, session-store tests) |
+| `npm test` | `vitest run` (search, validation, spreadsheet, store tests) |
 
 ### Development Proxy
 
@@ -405,6 +418,7 @@ In development, Vite proxies all `/api` requests to `http://localhost:3001` (con
 | `GOOGLE_API_KEY` | API key for Google Picker |
 | `FRONTEND_BASE_URL` | Base URL where the SPA is served (e.g. `http://localhost:5173`) |
 | `SESSION_SECRET` | Secret for express-session cookie signing |
+| `DATABASE_URL` | PostgreSQL connection string (e.g. `postgresql://user:pass@host:5432/db`) |
 
 The backend validates all required env vars at startup and fails fast if any are missing.
 
@@ -417,10 +431,11 @@ The backend validates all required env vars at startup and fails fast if any are
 - **Dockerfile:** Multi-stage: install all deps → `npm run build` → prune to production deps → run `node server/index.js`.
 - **Fly.io config (`fly.toml`):**
   - Region: `fra` (Frankfurt)
-  - Persistent volume `app_data` mounted at `/app/config` — preserves `runtime-data.json` and session files.
+  - No persistent volume — all state is in the PostgreSQL database (Supabase).
   - Single shared-cpu-1x VM (256 MB), always running (`auto_stop_machines = off`, `min_machines_running = 1`).
   - Forces HTTPS.
   - `NODE_ENV=production`, `PORT=3001`.
+  - `DATABASE_URL` set as a Fly.io secret.
 
 ### Landing Page (`q-expense-landing`)
 
@@ -431,7 +446,7 @@ The backend validates all required env vars at startup and fails fast if any are
 
 ## 12. Key Design Decisions & Constraints (v1)
 
-1. **No database** — user records and sessions are stored as files. Acceptable for ≤10 users.
+1. **PostgreSQL via Supabase Free** — user records, FX rate backups, and sessions are stored in a managed PostgreSQL database. The app container is stateless.
 2. **Expense data in Google Sheets only** — the app is a thin client over Google Sheets API. No expense data is cached or stored server-side.
 3. **Client-side search** — the full dataset is loaded into the browser. Capped at 10 MB JSON payload.
 4. **No edit/delete of existing records** — append-only by design (v1).

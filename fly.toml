@@ -12,10 +12,6 @@ primary_region = 'fra'
   NODE_ENV = 'production'
   PORT = '3001'
 
-[[mounts]]
-  source = 'app_data'
-  destination = '/app/config'
-
 [http_service]
   internal_port = 3001
   force_https = true

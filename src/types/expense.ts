@@ -58,9 +58,12 @@ export interface FxRateBackupPayload {
   };
 }
 
-export interface FxRateBackupRecord extends FxRateBackupPayload {
-  submittedAt: string;
-  spreadsheetId: string | null;
+export interface FxRateBackupRecord {
+  rates: {
+    PLN: string | null;
+    BYN: string | null;
+    EUR: string | null;
+  };
 }
 
 export interface SearchFilters {

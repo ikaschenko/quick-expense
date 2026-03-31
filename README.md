@@ -43,6 +43,7 @@ GOOGLE_REDIRECT_URI=http://localhost:3001/api/auth/callback
 FRONTEND_BASE_URL=http://localhost:5173
 PORT=3001
 SESSION_SECRET=replace-this-for-local-use
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/quickexpense
 ```
 
 Notes:
@@ -57,6 +58,10 @@ Notes:
 ```bash
 npm install
 ```
+
+## Database setup
+
+The backend requires a PostgreSQL database. For initial setup (installing PostgreSQL, creating the database, and running the schema) see [`db/README.md`](db/README.md).
 
 ## Run locally
 
