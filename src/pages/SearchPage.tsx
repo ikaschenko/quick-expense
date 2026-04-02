@@ -7,6 +7,7 @@ import { StatusBanner } from "../components/StatusBanner";
 import { useConfig } from "../contexts/ConfigContext";
 import { useDataset } from "../contexts/DatasetContext";
 import { filterExpenses } from "../utils/search";
+import { trackEvent } from "../services/analytics";
 
 export function SearchPage(): JSX.Element {
   const { config } = useConfig();
@@ -50,6 +51,7 @@ export function SearchPage(): JSX.Element {
             onSubmit={(event) => {
               event.preventDefault();
               setHasSearched(true);
+              trackEvent("search_performed", { result_count: outcome?.allMatches.length ?? 0 });
             }}
           >
             <div className="button-row search-actions">

@@ -18,6 +18,7 @@ import {
 import { getTodayLocalDate } from "../utils/date";
 import { expenseDraftToRowValues } from "../utils/spreadsheet";
 import { parseOptionalDecimal, parsePositiveDecimal, validateExpenseDraft } from "../utils/validation";
+import { trackEvent } from "../services/analytics";
 
 function createInitialDraft(defaultEmail: string): ExpenseDraft {
   return {
@@ -363,6 +364,7 @@ export function AddExpensePage(): JSX.Element {
       setErrors({});
       setFxErrors({});
       setSuccess("Expense saved successfully.");
+      trackEvent("expense_added", { currency: submittedNonUsdCurrency });
     } catch (submitError) {
       setError((submitError as Error).message);
     } finally {

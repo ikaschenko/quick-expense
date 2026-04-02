@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import { authApi } from "../services/authApi";
+import { identifyUser, resetUser, trackEvent } from "../services/analytics";
 import { AuthSession } from "../types/expense";
 
 type AuthStatus = "initializing" | "signed_out" | "signed_in";
@@ -35,6 +36,9 @@ export function AuthProvider({ children }: PropsWithChildren): JSX.Element {
       setSession(nextSession);
       setStatus(nextSession ? "signed_in" : "signed_out");
       setError(null);
+      if (nextSession) {
+        identifyUser(nextSession.email);
+      }
     } catch (sessionError) {
       setSession(null);
       setStatus("signed_out");
@@ -47,6 +51,7 @@ export function AuthProvider({ children }: PropsWithChildren): JSX.Element {
   }, []);
 
   const signIn = (): void => {
+    trackEvent("sign_in");
     authApi.startLogin();
   };
 
@@ -55,6 +60,8 @@ export function AuthProvider({ children }: PropsWithChildren): JSX.Element {
       setSession(null);
       setStatus("signed_out");
       setError(null);
+      resetUser();
+      trackEvent("sign_out");
     });
   };
 

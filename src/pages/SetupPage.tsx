@@ -6,6 +6,7 @@ import { StatusBanner } from "../components/StatusBanner";
 import { useConfig } from "../contexts/ConfigContext";
 import { openSpreadsheetPicker } from "../services/googlePicker";
 import { googleSheetsService } from "../services/googleSheets";
+import { trackEvent } from "../services/analytics";
 
 type SetupOption = "existing" | "new";
 
@@ -38,6 +39,7 @@ export function SetupPage(): JSX.Element {
       const nextConfig = await googleSheetsService.saveConfig(url);
       saveConfig(nextConfig);
       setSuccess("Spreadsheet is configured and validated.");
+      trackEvent("setup_saved");
     } catch (saveError) {
       setError((saveError as Error).message);
     } finally {

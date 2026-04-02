@@ -44,6 +44,8 @@ FRONTEND_BASE_URL=http://localhost:5173
 PORT=3001
 SESSION_SECRET=replace-this-for-local-use
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/quickexpense
+# Posthog analytics (leave blank to disable)
+VITE_POSTHOG_KEY=your-posthog-project-api-key
 ```
 
 Notes:
