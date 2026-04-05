@@ -7,6 +7,7 @@ import { useConfig } from "../contexts/ConfigContext";
 import { openSpreadsheetPicker } from "../services/googlePicker";
 import { googleSheetsService } from "../services/googleSheets";
 import { trackEvent } from "../services/analytics";
+import { AppError, HeaderDetails, SetupReport } from "../types/expense";
 
 type SetupOption = "existing" | "new";
 
@@ -15,7 +16,9 @@ export function SetupPage(): JSX.Element {
   const navigate = useNavigate();
   const [spreadsheetUrl, setSpreadsheetUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [headerDetails, setHeaderDetails] = useState<HeaderDetails | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [setupReport, setSetupReport] = useState<SetupReport | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isPicking, setIsPicking] = useState(false);
   const [activeOption, setActiveOption] = useState<SetupOption>("existing");
@@ -26,7 +29,9 @@ export function SetupPage(): JSX.Element {
 
   const saveSpreadsheet = async (url: string): Promise<void> => {
     setError(null);
+    setHeaderDetails(null);
     setSuccess(null);
+    setSetupReport(null);
     setIsSaving(true);
 
     try {
@@ -36,12 +41,16 @@ export function SetupPage(): JSX.Element {
         setSuccess("Spreadsheet removed. Setup is not complete.");
         return;
       }
-      const nextConfig = await googleSheetsService.saveConfig(url);
+      const { config: nextConfig, setupReport: report } = await googleSheetsService.saveConfig(url);
       saveConfig(nextConfig);
+      setSetupReport(report);
       setSuccess("Spreadsheet is configured and validated.");
       trackEvent("setup_saved");
     } catch (saveError) {
       setError((saveError as Error).message);
+      if (saveError instanceof AppError && saveError.headerDetails) {
+        setHeaderDetails(saveError.headerDetails);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -92,7 +101,56 @@ export function SetupPage(): JSX.Element {
           </div>
         </div>
         {error ? <StatusBanner variant="error" message={error} /> : null}
+        {headerDetails ? (
+          <div className="header-mismatch">
+            <table className="header-mismatch-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Expected</th>
+                  <th>Actual</th>
+                </tr>
+              </thead>
+              <tbody>
+                {headerDetails.expected.map((expected, i) => {
+                  const actual = headerDetails.actual[i] ?? "(missing)";
+                  const matches = expected === actual;
+                  return (
+                    <tr key={i} className={matches ? "" : "header-mismatch-row"}>
+                      <td>{i + 1}</td>
+                      <td>{expected}</td>
+                      <td>{actual}</td>
+                    </tr>
+                  );
+                })}
+                {headerDetails.actual.slice(headerDetails.expected.length).map((extra, i) => (
+                  <tr key={headerDetails.expected.length + i} className="header-mismatch-row">
+                    <td>{headerDetails.expected.length + i + 1}</td>
+                    <td>(none)</td>
+                    <td>{extra}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
         {success ? <StatusBanner variant="success" message={success} /> : null}
+        {setupReport ? (
+          <ul className="setup-report">
+            <li className="setup-report-item">
+              {setupReport.tabAction === "created"
+                ? "✓ Expenses tab created"
+                : "✓ Expenses tab found"}
+            </li>
+            <li className="setup-report-item">
+              {setupReport.headersAction === "created"
+                ? "✓ Column headers created automatically"
+                : setupReport.headersAction === "migrated"
+                  ? "✓ Columns migrated from legacy format"
+                  : "✓ Column headers valid"}
+            </li>
+          </ul>
+        ) : null}
 
         <div className="setup-options">
           {/* Option 1: Use Existing File */}

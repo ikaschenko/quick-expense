@@ -598,6 +598,49 @@ button {
   color: #1d4ed8;
 }
 
+.setup-report {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.setup-report-item {
+  color: #166534;
+  font-size: 0.9rem;
+}
+
+.header-mismatch {
+  margin: 0 0 1rem;
+  overflow-x: auto;
+}
+
+.header-mismatch-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.header-mismatch-table th,
+.header-mismatch-table td {
+  padding: 0.35rem 0.6rem;
+  border: 1px solid #e2e8f0;
+  text-align: left;
+}
+
+.header-mismatch-table th {
+  background: #f8fafc;
+  font-weight: 600;
+}
+
+.header-mismatch-row td {
+  background: #fee2e2;
+  color: #991b1b;
+  font-weight: 500;
+}
+
 .loading-block {
   display: inline-flex;
   align-items: center;

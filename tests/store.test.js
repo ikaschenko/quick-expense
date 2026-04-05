@@ -1,14 +1,20 @@
-import { vi, describe, it, expect, beforeEach } from "vitest";
-
+// @vitest-environment node
 const mockQuery = vi.fn();
 
 vi.mock("../server/db.js", () => ({
   default: { query: (...args) => mockQuery(...args) },
 }));
 
-const { getUserRecord, updateUserRecord, saveFxRateBackup, getLatestFxRateBackup } = await import(
-  "../server/store.js"
-);
+let getUserRecord;
+let updateUserRecord;
+let saveFxRateBackup;
+let getLatestFxRateBackup;
+
+beforeAll(async () => {
+  ({ getUserRecord, updateUserRecord, saveFxRateBackup, getLatestFxRateBackup } = await import(
+    "../server/store.js"
+  ));
+});
 
 beforeEach(() => {
   mockQuery.mockReset();

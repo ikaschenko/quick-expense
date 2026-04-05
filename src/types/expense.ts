@@ -37,6 +37,16 @@ export interface SpreadsheetConfig {
   sheetName: typeof SHEET_NAME;
 }
 
+export interface SetupReport {
+  tabAction: "created" | "found";
+  headersAction: "created" | "migrated" | "valid";
+}
+
+export interface HeaderDetails {
+  expected: string[];
+  actual: string[];
+}
+
 export interface ManualFxRates {
   PLN: string;
   BYN: string;
@@ -81,11 +91,13 @@ export type AppErrorKind =
 
 export class AppError extends Error {
   readonly kind: AppErrorKind;
+  readonly headerDetails?: HeaderDetails;
 
-  constructor(kind: AppErrorKind, message: string) {
+  constructor(kind: AppErrorKind, message: string, headerDetails?: HeaderDetails) {
     super(message);
     this.kind = kind;
     this.name = "AppError";
+    this.headerDetails = headerDetails;
   }
 }
 

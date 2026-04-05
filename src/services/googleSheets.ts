@@ -2,6 +2,7 @@ import {
   ExpenseRecord,
   FxRateBackupPayload,
   FxRateBackupRecord,
+  SetupReport,
   SpreadsheetConfig,
 } from "../types/expense";
 import { requestJson, requestNoContent } from "./http";
@@ -16,12 +17,11 @@ export const googleSheetsService = {
     return response.config;
   },
 
-  async saveConfig(spreadsheetUrl: string): Promise<SpreadsheetConfig> {
-    const response = await requestJson<{ config: SpreadsheetConfig }>("/api/config", {
+  async saveConfig(spreadsheetUrl: string): Promise<{ config: SpreadsheetConfig; setupReport: SetupReport }> {
+    return requestJson<{ config: SpreadsheetConfig; setupReport: SetupReport }>("/api/config", {
       method: "POST",
       body: JSON.stringify({ spreadsheetUrl }),
     });
-    return response.config;
   },
 
   async clearConfig(): Promise<void> {

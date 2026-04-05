@@ -97,7 +97,7 @@ Exact expected structure of the Google Spreadsheet is described below.
 
 File name = not defined, can be any.
 
-Single sheet = named "Expenses" (Version 1 supports exactly one predefined sheet named Expenses. Other sheets are ignored.)
+Single sheet = named "Expenses" (Version 1 supports exactly one predefined sheet named Expenses. Other sheets are ignored.) If the "Expenses" sheet does not exist in the spreadsheet, it is auto-created during Setup.
 
 First row = header, see below list of columns and their sequence/types.
 
@@ -147,9 +147,13 @@ Application validates header row on Setup. Also, re-validation should occur on e
 
 What happens if the spreadsheet exists but has no correct header structure? Answer: On Setup:
 
+\- If the "Expenses" sheet does not exist → auto-create it.
+
 \- If sheet is empty → auto-create header row.
 
-\- If sheet exists but headers mismatch → show blocking error and do not allow usage.
+\- If sheet exists but headers mismatch → show blocking error with expected vs. actual column comparison and do not allow usage.
+
+After a successful Setup validation, the application reports what actions were taken (e.g. "Expenses tab created", "Column headers created automatically", "Columns migrated from legacy format", or "Column headers valid"). If headers mismatch, the error includes a side-by-side table of expected vs. actual column names with mismatched columns highlighted.
 
 Can multiple currency fields be filled simultaneously? Answer: Allow USD together with at most one non-USD currency. Only one of PLN, BYN, or EUR may be filled at a time.
 

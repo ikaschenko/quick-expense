@@ -9,3 +9,4 @@ coverage
 *.tsbuildinfo
 config/runtime-data.json
 config/sessions
+config/service-account.json

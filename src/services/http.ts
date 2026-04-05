@@ -1,4 +1,4 @@
-import { AppError } from "../types/expense";
+import { AppError, HeaderDetails } from "../types/expense";
 
 export async function requestJson<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
@@ -13,11 +13,15 @@ export async function requestJson<T>(input: string, init?: RequestInit): Promise
 
   if (!response.ok) {
     let message = "Request failed.";
+    let headerDetails: HeaderDetails | undefined;
 
     try {
-      const payload = (await response.json()) as { message?: string };
+      const payload = (await response.json()) as { message?: string; headerDetails?: HeaderDetails };
       if (payload.message) {
         message = payload.message;
+      }
+      if (payload.headerDetails) {
+        headerDetails = payload.headerDetails;
       }
     } catch {
       // Ignore parse failure.
@@ -32,6 +36,7 @@ export async function requestJson<T>(input: string, init?: RequestInit): Promise
           ? "authorization"
           : "network",
       message,
+      headerDetails,
     );
   }
 

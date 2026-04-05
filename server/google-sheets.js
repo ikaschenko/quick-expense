@@ -104,6 +104,20 @@ async function getMetadata(accessToken, spreadsheetId) {
   );
 }
 
+async function addSheet(accessToken, spreadsheetId, title) {
+  await requestJson(
+    accessToken,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+    {
+      method: "POST",
+      headers: createHeaders(accessToken, true),
+      body: JSON.stringify({
+        requests: [{ addSheet: { properties: { title } } }],
+      }),
+    },
+  );
+}
+
 async function getValues(accessToken, spreadsheetId, range) {
   const payload = await requestJson(
     accessToken,
@@ -200,13 +214,16 @@ export function parseSpreadsheetUrl(url) {
 }
 
 export async function validateSpreadsheet(accessToken, spreadsheetId) {
+  const report = { tabAction: "found", headersAction: "valid" };
+
   const metadata = await getMetadata(accessToken, spreadsheetId);
   const hasExpenseSheet = metadata.sheets?.some(
     (sheet) => sheet.properties?.title === SHEET_NAME,
   );
 
   if (!hasExpenseSheet) {
-    throw new Error(`Spreadsheet must contain a sheet named "${SHEET_NAME}".`);
+    await addSheet(accessToken, spreadsheetId, SHEET_NAME);
+    report.tabAction = "created";
   }
 
   const headerRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!1:1`);
@@ -216,19 +233,28 @@ export async function validateSpreadsheet(accessToken, spreadsheetId) {
     await updateValues(accessToken, spreadsheetId, `${SHEET_NAME}!A1:K1`, [
       [...EXPENSE_HEADERS],
     ]);
-    return;
+    report.headersAction = "created";
+    return report;
   }
 
   if (validateLegacyHeaderRow(headerRow)) {
     await migrateLegacyColumnOrder(accessToken, spreadsheetId);
-    return;
+    report.headersAction = "migrated";
+    return report;
   }
 
   if (!validateHeaderRow(headerRow)) {
-    throw new Error(
+    const error = new Error(
       `The "${SHEET_NAME}" sheet header must match the required column names and order exactly.`,
     );
+    error.headerDetails = {
+      expected: [...EXPENSE_HEADERS],
+      actual: normalizeHeaders(headerRow),
+    };
+    throw error;
   }
+
+  return report;
 }
 
 export async function loadExpenses(accessToken, spreadsheetId) {

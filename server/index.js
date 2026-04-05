@@ -246,7 +246,7 @@ app.post("/api/config", requireAuthenticatedUser, async (req, res) => {
     }
 
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    await validateSpreadsheet(accessToken, spreadsheetId);
+    const setupReport = await validateSpreadsheet(accessToken, spreadsheetId);
 
     const updatedUser = await updateUserRecord(req.userRecord.email, (current) => ({
       ...current,
@@ -261,9 +261,14 @@ app.post("/api/config", requireAuthenticatedUser, async (req, res) => {
         spreadsheetUrl: updatedUser.spreadsheetUrl,
         sheetName: "Expenses",
       },
+      setupReport,
     });
   } catch (error) {
-    res.status(400).json({ message: (error).message });
+    const body = { message: (error).message };
+    if (error.headerDetails) {
+      body.headerDetails = error.headerDetails;
+    }
+    res.status(400).json(body);
   }
 });
 

@@ -27,10 +27,25 @@ If the `Expenses` sheet exists and the first row is empty, the app creates the h
 
 ## Prerequisites
 
-- Node.js 20+ recommended
+- Node.js 20 LTS (pinned for this repo)
 - npm
 - A Google Cloud OAuth client with Google Sheets access enabled
 - A Google account that can open and edit the target spreadsheet
+
+### Node version pinning
+
+This repository pins Node via `.nvmrc` and `package.json > engines`.
+
+- Preferred Node version: `20.19.0`
+- Supported range: `^20.19.0 || ^22.12.0`
+
+If you use nvm:
+
+```bash
+nvm use
+```
+
+Windows note: tests are expected to run from both PowerShell and Command Prompt on Windows 11.
 
 ## Environment variables
 
@@ -112,7 +127,22 @@ By default, `vite preview` serves the frontend on `http://localhost:4173`. If yo
 
 ```bash
 npm test
+npm run test:integration
 ```
+
+### Integration tests env setup
+
+Keep integration test variables in `.env` (gitignored):
+
+```env
+GOOGLE_SERVICE_ACCOUNT_KEY_FILE=config/service-account.json
+TEST_SHEET_BLANK=your-sheet-id
+TEST_SHEET_INVALID=your-sheet-id
+TEST_SHEET_VALID=your-sheet-id
+```
+
+- `config/service-account.json` must contain the downloaded service account JSON key and stay gitignored.
+- All three spreadsheets must be shared with the service account `client_email` as `Editor`.
 
 ## Main user flows
 
