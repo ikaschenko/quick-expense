@@ -12,6 +12,7 @@ import { useAuth } from "./AuthContext";
 
 interface ConfigContextValue {
   config: SpreadsheetConfig | null;
+  isConfigLoading: boolean;
   saveConfig: (config: SpreadsheetConfig) => void;
   clearConfig: () => void;
   refreshConfig: () => void;
@@ -22,22 +23,27 @@ const ConfigContext = createContext<ConfigContextValue | null>(null);
 export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
   const { session } = useAuth();
   const [config, setConfig] = useState<SpreadsheetConfig | null>(null);
+  const [isConfigLoading, setIsConfigLoading] = useState(false);
 
   useEffect(() => {
     if (!session) {
+      setIsConfigLoading(false);
       setConfig(null);
       return;
     }
 
+    setIsConfigLoading(true);
     void googleSheetsService
       .getConfig()
       .then((nextConfig) => setConfig(nextConfig))
-      .catch(() => setConfig(null));
+      .catch(() => setConfig(null))
+      .finally(() => setIsConfigLoading(false));
   }, [session]);
 
   const value = useMemo<ConfigContextValue>(() => {
     return {
       config,
+      isConfigLoading,
       saveConfig: (nextConfig) => {
         setConfig(nextConfig);
       },
@@ -46,17 +52,20 @@ export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
       },
       refreshConfig: () => {
         if (!session) {
+          setIsConfigLoading(false);
           setConfig(null);
           return;
         }
 
+        setIsConfigLoading(true);
         void googleSheetsService
           .getConfig()
           .then((nextConfig) => setConfig(nextConfig))
-          .catch(() => setConfig(null));
+          .catch(() => setConfig(null))
+          .finally(() => setIsConfigLoading(false));
       },
     };
-  }, [config, session]);
+  }, [config, isConfigLoading, session]);
 
   return <ConfigContext.Provider value={value}>{children}</ConfigContext.Provider>;
 }

@@ -8,11 +8,12 @@ import { openSpreadsheetPicker } from "../services/googlePicker";
 import { googleSheetsService } from "../services/googleSheets";
 import { trackEvent } from "../services/analytics";
 import { AppError, HeaderDetails, SetupReport } from "../types/expense";
+import { resolveSetupBannerState } from "../utils/setupStatus";
 
 type SetupOption = "existing" | "new";
 
 export function SetupPage(): JSX.Element {
-  const { config, saveConfig, refreshConfig } = useConfig();
+  const { config, isConfigLoading, saveConfig, refreshConfig } = useConfig();
   const navigate = useNavigate();
   const [spreadsheetUrl, setSpreadsheetUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -21,6 +22,7 @@ export function SetupPage(): JSX.Element {
   const [setupReport, setSetupReport] = useState<SetupReport | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isPicking, setIsPicking] = useState(false);
+  const [hasInvalidSetup, setHasInvalidSetup] = useState(false);
   const [activeOption, setActiveOption] = useState<SetupOption>("existing");
 
   useEffect(() => {
@@ -38,15 +40,18 @@ export function SetupPage(): JSX.Element {
       if (!url) {
         await googleSheetsService.clearConfig();
         refreshConfig();
+        setHasInvalidSetup(false);
         setSuccess("Spreadsheet removed. Setup is not complete.");
         return;
       }
       const { config: nextConfig, setupReport: report } = await googleSheetsService.saveConfig(url);
       saveConfig(nextConfig);
+      setHasInvalidSetup(false);
       setSetupReport(report);
       setSuccess("Spreadsheet is configured and validated.");
       trackEvent("setup_saved");
     } catch (saveError) {
+      setHasInvalidSetup(true);
       setError((saveError as Error).message);
       if (saveError instanceof AppError && saveError.headerDetails) {
         setHeaderDetails(saveError.headerDetails);
@@ -82,6 +87,11 @@ export function SetupPage(): JSX.Element {
 
   const busy = isSaving || isPicking;
   const isExisting = activeOption === "existing";
+  const setupBanner = resolveSetupBannerState({
+    isConfigLoading,
+    hasConfig: Boolean(config),
+    hasInvalidSetup,
+  });
 
   return (
     <Layout>
@@ -100,6 +110,7 @@ export function SetupPage(): JSX.Element {
             </p>
           </div>
         </div>
+        <StatusBanner variant={setupBanner.variant} message={setupBanner.message} />
         {error ? <StatusBanner variant="error" message={error} /> : null}
         {headerDetails ? (
           <div className="header-mismatch">
