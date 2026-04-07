@@ -12,9 +12,9 @@ window.__i18n.es = {
 
   "features.title": "\u00bfPor qu\u00e9 Quick Expense?",
   "features.mobile.title": "Dise\u00f1o M\u00f3vil",
-  "features.mobile.desc": "Dise\u00f1ado para usar <strong>sobre la marcha</strong>. Funciona perfectamente en smartphones, tablets y escritorio. Accede desde cualquier lugar, en cualquier momento.",
+  "features.mobile.desc": "Dise\u00f1ado para usar sobre la marcha. Funciona perfectamente en smartphones, tablets y escritorio. Accede desde cualquier lugar, en cualquier momento.",
   "features.data.title": "Tus Datos Son Tuyos",
-  "features.data.desc": "Todos los datos est\u00e1n en <strong>tu</strong> propia Hoja de C\u00e1lculo de Google. Control total, f\u00e1cil exportaci\u00f3n, analiza con tus herramientas favoritas.",
+  "features.data.desc": "Todos los datos est\u00e1n en tu propia Hoja de C\u00e1lculo de Google. Control total, f\u00e1cil exportaci\u00f3n, analiza con tus herramientas favoritas.",
   "features.ui.title": "Interfaz Minimalista",
   "features.ui.desc": "Sin desorden, sin distracciones. Solo las funciones que necesitas: Agregar, Ver, Buscar. Simple y enfocado.",
   "features.free.title": "100% Gratis",

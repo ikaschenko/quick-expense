@@ -2,422 +2,483 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Quick Expense - Simple, fast expense tracking on the go. Store your data in your own Google Spreadsheet. Free, minimalist, and always accessible." data-i18n-attr="content:meta.description">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#4F46E5">
+    <meta name="description" content="Quick Expense - Simple, fast expense tracking. Store your data in your own Google Spreadsheet. Free, minimalist, and always accessible." data-i18n-attr="content:meta.description">
     <meta name="keywords" content="expense tracker, expense management, Google Sheets, personal finance, family budget, free expense app" data-i18n-attr="content:meta.keywords">
     <title data-i18n="meta.title">Quick Expense - Track Expenses On The Go</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root {
+            --color-accent: #4F46E5;
+            --color-accent-hover: #4338CA;
+            --color-accent-light: #EEF2FF;
+            --color-bg: #FAFAFA;
+            --color-surface: #FFFFFF;
+            --color-surface-raised: #F5F5F5;
+            --color-border: #E5E7EB;
+            --color-text-primary: #111827;
+            --color-text-secondary: #6B7280;
+            --color-text-placeholder: #9CA3AF;
+            --color-text-inverse: #FFFFFF;
+            --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 16px;
+            --radius-full: 9999px;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+            --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
         }
 
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { font-size: 16px; -webkit-text-size-adjust: 100%; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background: #fff;
+            font-family: var(--font-family);
+            font-size: 15px;
+            color: var(--color-text-primary);
+            background: var(--color-bg);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
         }
+
+        a { color: inherit; text-decoration: none; }
 
         .container {
-            max-width: 1200px;
+            max-width: 1080px;
             margin: 0 auto;
             padding: 0 20px;
         }
 
         /* Header */
-        header {
-            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
-            color: white;
-            padding: 20px 0;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        .header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            background: var(--color-surface);
+            border-bottom: 1px solid var(--color-border);
         }
 
-        .header-content {
+        .header .container {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            width: 100%;
         }
 
-        .logo {
-            font-size: 24px;
-            font-weight: bold;
+        .header-logo {
             display: flex;
             align-items: center;
             gap: 10px;
+            font-size: 17px;
+            font-weight: 700;
+            color: var(--color-text-primary);
         }
 
-        .logo-icon {
-            width: 40px;
-            height: 40px;
-            background: rgba(255,255,255,0.2);
-            border-radius: 8px;
+        .header-logo-mark {
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-md);
+            background: var(--color-accent-light);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 20px;
         }
 
         .header-cta {
-            background: white;
-            color: #2c3e50;
-            padding: 12px 30px;
-            border-radius: 25px;
-            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 20px;
+            background: var(--color-accent);
+            color: var(--color-text-inverse);
+            border-radius: var(--radius-md);
+            font-size: 14px;
             font-weight: 600;
-            transition: transform 0.2s, box-shadow 0.2s;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: background 0.15s;
         }
+        .header-cta:hover { background: var(--color-accent-hover); }
 
-        .header-cta:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
-        }
-
-        /* Hero Section */
+        /* Hero */
         .hero {
-            background: linear-gradient(135deg, #3498db 0%, #2ecc71 100%);
-            color: white;
-            padding: 80px 0;
-            text-align: center;
+            padding: 80px 0 60px;
+        }
+
+        .hero .container {
+            display: flex;
+            align-items: center;
+            gap: 60px;
+        }
+
+        .hero-text {
+            flex: 1;
         }
 
         .hero h1 {
-            font-size: 48px;
+            font-size: clamp(32px, 8vw, 56px);
+            font-weight: 800;
+            line-height: 1.1;
+            color: var(--color-text-primary);
             margin-bottom: 20px;
-            font-weight: 700;
-            line-height: 1.2;
         }
 
-        .hero .subtitle {
-            font-size: 22px;
-            margin-bottom: 40px;
-            opacity: 0.95;
-            font-weight: 300;
+        .hero h1 span {
+            display: block;
         }
 
-        .hero-cta {
-            display: inline-block;
-            background: white;
-            color: #2c3e50;
-            padding: 18px 50px;
-            border-radius: 30px;
-            text-decoration: none;
+        .hero-sub {
             font-size: 18px;
-            font-weight: 600;
-            transition: transform 0.2s, box-shadow 0.2s;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+            color: var(--color-text-secondary);
+            margin-bottom: 32px;
+            max-width: 420px;
         }
 
-        .hero-cta:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 12px 35px rgba(0,0,0,0.4);
+        .hero-cta-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 32px;
+            background: var(--color-accent);
+            color: var(--color-text-inverse);
+            border-radius: var(--radius-md);
+            font-size: 17px;
+            font-weight: 600;
+            box-shadow: 0 4px 16px rgba(79,70,229,0.3);
+            transition: background 0.15s, transform 0.1s;
         }
+        .hero-cta-btn:hover { background: var(--color-accent-hover); }
+        .hero-cta-btn:active { transform: scale(0.98); }
 
         .hero-note {
-            margin-top: 20px;
-            font-size: 14px;
-            opacity: 0.9;
+            margin-top: 16px;
+            font-size: 13px;
+            color: var(--color-text-placeholder);
         }
 
-        /* Features Section */
-        .features {
+        /* Phone mockup */
+        .hero-mockup {
+            flex-shrink: 0;
+            width: 280px;
+        }
+
+        .phone-frame {
+            width: 260px;
+            border-radius: 36px;
+            border: 8px solid #1F2937;
+            background: var(--color-surface);
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+            aspect-ratio: 9 / 18;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .phone-topbar {
+            height: 44px;
+            border-bottom: 1px solid var(--color-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--color-text-primary);
+        }
+
+        .phone-body {
+            flex: 1;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .phone-amount {
+            text-align: center;
+            font-size: 36px;
+            font-weight: 700;
+            color: var(--color-text-primary);
+            border-bottom: 2px solid var(--color-border);
+            padding-bottom: 8px;
+        }
+
+        .phone-pills {
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+        }
+
+        .phone-pill {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            border: 1.5px solid var(--color-border);
+            color: var(--color-text-secondary);
+        }
+
+        .phone-pill.active {
+            background: var(--color-accent);
+            border-color: var(--color-accent);
+            color: var(--color-text-inverse);
+        }
+
+        .phone-input {
+            height: 36px;
+            border: 1.5px solid var(--color-border);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            font-size: 12px;
+            color: var(--color-text-placeholder);
+        }
+
+        .phone-input.filled {
+            color: var(--color-text-primary);
+        }
+
+        .phone-label {
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--color-text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .phone-save {
+            margin-top: auto;
+            height: 40px;
+            background: var(--color-accent);
+            color: var(--color-text-inverse);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .phone-bottomnav {
+            height: 48px;
+            border-top: 1px solid var(--color-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            padding: 0 8px;
+        }
+
+        .phone-nav-dot {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--color-surface-raised);
+        }
+
+        .phone-nav-dot.accent {
+            background: var(--color-accent);
+        }
+
+        /* How It Works */
+        .steps-section {
             padding: 80px 0;
-            background: #f8f9fa;
+            background: var(--color-surface);
         }
 
         .section-title {
             text-align: center;
-            font-size: 36px;
-            color: #2c3e50;
-            margin-bottom: 60px;
+            font-size: 24px;
             font-weight: 700;
+            margin-bottom: 48px;
+            color: var(--color-text-primary);
+        }
+
+        .steps-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 32px;
+        }
+
+        .step-card {
+            text-align: center;
+        }
+
+        .step-number {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: var(--color-accent-light);
+            color: var(--color-accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: 700;
+            margin: 0 auto 16px;
+        }
+
+        .step-card h3 {
+            font-size: 17px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .step-card p {
+            font-size: 14px;
+            color: var(--color-text-secondary);
+            line-height: 1.6;
+        }
+
+        /* Features */
+        .features-section {
+            padding: 80px 0;
         }
 
         .features-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 40px;
-            margin-bottom: 40px;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
         }
 
         .feature-card {
-            background: white;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-            transition: transform 0.3s, box-shadow 0.3s;
-        }
-
-        .feature-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.12);
-        }
-
-        .feature-card .feature-header {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 15px;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            box-shadow: var(--shadow-sm);
         }
 
         .feature-icon {
-            font-size: 48px;
-            color: #3498db;
-            flex-shrink: 0;
+            font-size: 28px;
+            margin-bottom: 12px;
         }
 
         .feature-card h3 {
-            font-size: 22px;
-            color: #2c3e50;
-            white-space: nowrap;
-        }
-
-        @media (max-width: 480px) {
-            .feature-card h3 {
-                white-space: normal;
-            }
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 6px;
         }
 
         .feature-card p {
-            color: #666;
-            line-height: 1.7;
+            font-size: 14px;
+            color: var(--color-text-secondary);
+            line-height: 1.6;
         }
 
-        /* How It Works */
-        .how-it-works {
-            padding: 80px 0;
-            background: white;
-        }
-
-        .steps {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 40px;
-            margin-top: 40px;
-        }
-
-        .step {
-            text-align: center;
-            position: relative;
-        }
-
-        .step-number {
-            width: 60px;
-            height: 60px;
-            background: linear-gradient(135deg, #3498db, #2ecc71);
-            color: white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 28px;
-            font-weight: bold;
-            margin: 0 auto 20px;
-            box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
-        }
-
-        .step h3 {
-            font-size: 20px;
-            color: #2c3e50;
-            margin-bottom: 15px;
-        }
-
-        .step p {
-            color: #666;
-            line-height: 1.7;
-        }
-
-        /* Why Choose */
-        .why-choose {
-            padding: 80px 0;
-            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
-            color: white;
-        }
-
-        .why-choose .section-title {
-            color: white;
-        }
-
-        .benefits-list {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 30px;
-            margin-top: 40px;
-        }
-
-        .benefit {
-            display: flex;
-            gap: 20px;
-            align-items: flex-start;
-        }
-
-        .benefit-icon {
-            font-size: 32px;
-            flex-shrink: 0;
-        }
-
-        .benefit-content h4 {
-            font-size: 20px;
-            margin-bottom: 10px;
-            color: #2ecc71;
-        }
-
-        .benefit-content p {
-            opacity: 0.9;
-            line-height: 1.7;
-        }
-
-        /* Screenshot Section */
-        .screenshots {
-            padding: 80px 0;
-            background: #f8f9fa;
-        }
-
-        .screenshot-placeholder {
-            max-width: 900px;
-            margin: 40px auto;
-            background: white;
-            border-radius: 12px;
-            padding: 60px;
-            text-align: center;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-            border: 2px dashed #ddd;
-        }
-
-        .screenshot-placeholder p {
-            color: #999;
-            font-size: 16px;
-        }
-
-        /* CTA Section */
+        /* CTA */
         .cta-section {
             padding: 80px 0;
-            background: linear-gradient(135deg, #3498db 0%, #2ecc71 100%);
-            color: white;
             text-align: center;
+            background: var(--color-surface);
         }
 
         .cta-section h2 {
-            font-size: 40px;
-            margin-bottom: 20px;
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 24px;
         }
 
-        .cta-section p {
-            font-size: 20px;
-            margin-bottom: 40px;
-            opacity: 0.95;
-        }
-
-        .cta-button {
-            display: inline-block;
-            background: white;
-            color: #2c3e50;
-            padding: 20px 60px;
-            border-radius: 30px;
-            text-decoration: none;
-            font-size: 20px;
+        .cta-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 16px 40px;
+            background: var(--color-accent);
+            color: var(--color-text-inverse);
+            border-radius: var(--radius-md);
+            font-size: 17px;
             font-weight: 600;
-            transition: transform 0.2s, box-shadow 0.2s;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 16px rgba(79,70,229,0.3);
+            transition: background 0.15s;
         }
-
-        .cta-button:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 12px 35px rgba(0,0,0,0.4);
-        }
+        .cta-btn:hover { background: var(--color-accent-hover); }
 
         /* Footer */
-        footer {
-            background: #2c3e50;
-            color: white;
-            padding: 40px 0 20px;
-        }
-
-        .footer-content {
+        .site-footer {
+            padding: 32px 0;
             text-align: center;
+            font-size: 13px;
+            color: var(--color-text-placeholder);
         }
 
-        .footer-links {
-            margin-bottom: 20px;
+        .site-footer a {
+            color: var(--color-text-placeholder);
+            margin: 0 8px;
+        }
+        .site-footer a:hover {
+            color: var(--color-text-secondary);
+            text-decoration: underline;
         }
 
-        .footer-links a {
-            color: rgba(255,255,255,0.7);
-            text-decoration: none;
-            margin: 0 15px;
-            font-size: 14px;
-            transition: color 0.3s;
-        }
-
-        .footer-links a:hover {
-            color: white;
-        }
-
-        .footer-note {
-            font-size: 14px;
-            opacity: 0.6;
-            margin-top: 20px;
+        .footer-copy {
+            margin-top: 12px;
         }
 
         /* Language Switcher */
         .lang-switcher {
             position: fixed;
-            top: 16px;
+            top: 64px;
             right: 16px;
             z-index: 1000;
             display: flex;
             gap: 0;
-            background: rgba(255,255,255,0.15);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border-radius: 20px;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-full);
             overflow: hidden;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            border: 1px solid rgba(255,255,255,0.25);
+            box-shadow: var(--shadow-md);
         }
 
         .lang-switcher button {
             background: transparent;
-            color: rgba(255,255,255,0.8);
+            color: var(--color-text-secondary);
             border: none;
-            padding: 8px 14px;
-            font-size: 13px;
+            padding: 6px 12px;
+            font-size: 12px;
             font-weight: 600;
             cursor: pointer;
-            transition: background 0.2s, color 0.2s;
-            font-family: inherit;
-            letter-spacing: 0.5px;
+            transition: background 0.15s, color 0.15s;
+            font-family: var(--font-family);
         }
 
         .lang-switcher button:hover {
-            background: rgba(255,255,255,0.15);
-            color: white;
+            background: var(--color-surface-raised);
         }
 
         .lang-switcher button.active {
-            background: white;
-            color: #2c3e50;
+            background: var(--color-accent);
+            color: var(--color-text-inverse);
         }
 
         /* Responsive */
         @media (max-width: 768px) {
-            .hero h1 {
-                font-size: 36px;
+            .hero .container {
+                flex-direction: column;
+                text-align: center;
             }
 
-            .hero .subtitle {
-                font-size: 18px;
+            .hero-sub {
+                margin-left: auto;
+                margin-right: auto;
             }
 
-            .section-title {
-                font-size: 28px;
+            .hero-mockup {
+                width: 220px;
             }
 
-            .features-grid,
-            .steps,
-            .benefits-list {
+            .phone-frame {
+                width: 220px;
+            }
+
+            .steps-grid {
+                grid-template-columns: 1fr;
+                gap: 24px;
+            }
+
+            .features-grid {
                 grid-template-columns: 1fr;
             }
         }
@@ -430,143 +491,136 @@
     <!-- Language Switcher -->
     <div class="lang-switcher" aria-label="Language selector"></div>
 
-    <!-- Hero Section -->
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-logo">
+                <div class="header-logo-mark">
+                    <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
+                        <rect width="32" height="32" rx="8" fill="#4F46E5"/>
+                        <path d="M16 8v16M8 16h16" stroke="#fff" strokeWidth="3" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                Quick Expense
+            </div>
+            <a href="https://app.q-expense.com" class="header-cta" data-i18n="hero.cta">Sign in</a>
+        </div>
+    </header>
+
+    <!-- Hero -->
     <section class="hero">
         <div class="container">
-            <h1 data-i18n="hero.title">Track Expenses On The Go</h1>
-            <p class="subtitle" data-i18n="hero.subtitle">Simple, fast, and always at your fingertips. Your data, your spreadsheet, your control.</p>
-            <a href="https://app.q-expense.com" class="hero-cta" data-i18n="hero.cta">Get Started - It's Free</a>
-            <p class="hero-note" data-i18n="hero.note">Sign in with Google • Start in 2 minutes</p>
-        </div>
-    </section>
-
-    <!-- Features Section -->
-    <section class="features">
-        <div class="container">
-            <h2 class="section-title" data-i18n="features.title">Why Quick Expense?</h2>
-            <div class="features-grid">
-                <div class="feature-card">
-                    <div class="feature-header">
-                        <div class="feature-icon">📱</div>
-                        <h3 data-i18n="features.mobile.title">Mobile First</h3>
+            <div class="hero-text">
+                <h1 data-i18n="hero.title">
+                    <span>Log expenses</span>
+                    <span>in seconds.</span>
+                </h1>
+                <p class="hero-sub" data-i18n="hero.subtitle">Free, private, lives in your Google Sheets.</p>
+                <a href="https://app.q-expense.com" class="hero-cta-btn" data-i18n="hero.cta">Start for Free →</a>
+                <p class="hero-note" data-i18n="hero.note">Sign in with Google · No signup · Start in 2 min</p>
+            </div>
+            <div class="hero-mockup">
+                <div class="phone-frame">
+                    <div class="phone-topbar">Add Expense</div>
+                    <div class="phone-body">
+                        <div class="phone-amount">67.50</div>
+                        <div class="phone-pills">
+                            <div class="phone-pill active">PLN</div>
+                            <div class="phone-pill">EUR</div>
+                            <div class="phone-pill">USD</div>
+                        </div>
+                        <div class="phone-label">Category</div>
+                        <div class="phone-input filled">Groceries</div>
+                        <div class="phone-label">Date</div>
+                        <div class="phone-input filled">Today</div>
+                        <div class="phone-label">Comment</div>
+                        <div class="phone-input">Add a note…</div>
+                        <div class="phone-save">Save Expense</div>
                     </div>
-                    <p data-i18n-html="features.mobile.desc">Designed for <strong>on-the-go</strong> use. Works perfectly on smartphones, tablets, and desktop. Access anywhere, anytime.</p>
-                </div>
-
-                <div class="feature-card">
-                    <div class="feature-header">
-                        <div class="feature-icon">📊</div>
-                        <h3 data-i18n="features.data.title">You Own Your Data</h3>
+                    <div class="phone-bottomnav">
+                        <div class="phone-nav-dot"></div>
+                        <div class="phone-nav-dot"></div>
+                        <div class="phone-nav-dot accent"></div>
+                        <div class="phone-nav-dot"></div>
+                        <div class="phone-nav-dot"></div>
                     </div>
-                    <p data-i18n-html="features.data.desc">All data lives in <strong>your</strong> own Google Spreadsheet. Full control, easy export, analyze with your favorite tools.</p>
-                </div>
-
-                <div class="feature-card">
-                    <div class="feature-header">
-                        <div class="feature-icon">🎯</div>
-                        <h3 data-i18n="features.ui.title">Minimalist UI</h3>
-                    </div>
-                    <p data-i18n="features.ui.desc">No clutter, no distractions. Only the features you need: Add, View, Search. Simple and focused.</p>
-                </div>
-
-                <div class="feature-card">
-                    <div class="feature-header">
-                        <div class="feature-icon">🆓</div>
-                        <h3 data-i18n="features.free.title">100% Free</h3>
-                    </div>
-                    <p data-i18n="features.free.desc">No subscriptions, no premium tiers, no ads, no hidden costs. Completely free for personal and family use.</p>
                 </div>
             </div>
         </div>
     </section>
 
     <!-- How It Works -->
-    <section class="how-it-works">
+    <section class="steps-section">
         <div class="container">
-            <h2 class="section-title" data-i18n="steps.title">Get Started in 3 Simple Steps</h2>
-            <div class="steps">
-                <div class="step">
+            <h2 class="section-title" data-i18n="steps.title">How It Works</h2>
+            <div class="steps-grid">
+                <div class="step-card">
                     <div class="step-number">1</div>
-                    <h3 data-i18n="steps.signin.title">Sign In with Google</h3>
-                    <p data-i18n="steps.signin.desc">Use your existing Google account. No registration forms, no passwords to remember.</p>
+                    <h3 data-i18n="steps.signin.title">Sign in with Google</h3>
+                    <p data-i18n="steps.signin.desc">Use your existing Google account. No registration, no passwords.</p>
                 </div>
-
-                <div class="step">
+                <div class="step-card">
                     <div class="step-number">2</div>
-                    <h3 data-i18n="steps.connect.title">Connect Your Spreadsheet</h3>
-                    <p data-i18n="steps.connect.desc">Link to your Google Spreadsheet or create a new one. We'll guide you through the simple setup.</p>
+                    <h3 data-i18n="steps.connect.title">Connect your spreadsheet</h3>
+                    <p data-i18n="steps.connect.desc">Link your Google Spreadsheet or create a new one. We guide you through setup.</p>
                 </div>
-
-                <div class="step">
+                <div class="step-card">
                     <div class="step-number">3</div>
-                    <h3 data-i18n="steps.track.title">Start Tracking</h3>
-                    <p data-i18n="steps.track.desc">Add expenses, search your history, and always stay in control of your spending.</p>
+                    <h3 data-i18n="steps.track.title">Log expenses instantly</h3>
+                    <p data-i18n="steps.track.desc">Add expenses, search your history, and stay in control of your spending.</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Why Choose Section -->
-    <section class="why-choose">
+    <!-- Features -->
+    <section class="features-section">
         <div class="container">
-            <h2 class="section-title" data-i18n="benefits.title">Built for Real Life</h2>
-            <div class="benefits-list">
-                <div class="benefit">
-                    <div class="benefit-icon">💰</div>
-                    <div class="benefit-content">
-                        <h4 data-i18n="benefits.currency.title">Multi-Currency Support</h4>
-                        <p data-i18n="benefits.currency.desc">Track expenses in PLN, USD, EUR, or BYN. Perfect for travelers and international families.</p>
-                    </div>
+            <h2 class="section-title" data-i18n="features.title">Why Quick Expense?</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">📱</div>
+                    <h3 data-i18n="features.mobile.title">Mobile First</h3>
+                    <p data-i18n="features.mobile.desc">Designed for on-the-go use. Works perfectly on any device, anywhere.</p>
                 </div>
-
-                <div class="benefit">
-                    <div class="benefit-icon">👨‍👩‍👧‍👦</div>
-                    <div class="benefit-content">
-                        <h4 data-i18n="benefits.family.title">Family-Friendly</h4>
-                        <p data-i18n="benefits.family.desc">Multiple users can share the same spreadsheet. Track who spent what and for whom.</p>
-                    </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3 data-i18n="features.data.title">Your Data Only</h3>
+                    <p data-i18n="features.data.desc">All data lives in your own Google Spreadsheet. We never store your expenses.</p>
                 </div>
-
-                <div class="benefit">
-                    <div class="benefit-icon">🔒</div>
-                    <div class="benefit-content">
-                        <h4 data-i18n="benefits.secure.title">Secure & Private</h4>
-                        <p data-i18n="benefits.secure.desc">Your data never leaves Google's secure infrastructure. We don't store your expense records.</p>
-                    </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🌍</div>
+                    <h3 data-i18n="benefits.currency.title">Multi-Currency</h3>
+                    <p data-i18n="benefits.currency.desc">Track in PLN, USD, EUR, or BYN. Perfect for travelers and international families.</p>
                 </div>
-
-                <div class="benefit">
-                    <div class="benefit-icon">🔌</div>
-                    <div class="benefit-content">
-                        <h4 data-i18n="benefits.export.title">Export-Ready</h4>
-                        <p data-i18n="benefits.export.desc">Your data is already in Google Sheets. Export to Excel, CSV, or analyze with any tool you prefer.</p>
-                    </div>
+                <div class="feature-card">
+                    <div class="feature-icon">👨‍👩‍👧</div>
+                    <h3 data-i18n="benefits.family.title">Family Sharing</h3>
+                    <p data-i18n="benefits.family.desc">Multiple users can share the same spreadsheet. Track who spent what and for whom.</p>
                 </div>
-
             </div>
         </div>
     </section>
 
-    <!-- CTA Section -->
+    <!-- CTA -->
     <section class="cta-section">
         <div class="container">
-            <h2 data-i18n="cta.title">Ready to Simplify Your Expense Tracking?</h2>
-            <p data-i18n="cta.desc">Join users who've already ditched complicated expense apps for something better.</p>
-            <a href="https://app.q-expense.com" class="cta-button" data-i18n="cta.button">Start Now - And Use For Free</a>
+            <h2 data-i18n="cta.title">Ready to simplify?</h2>
+            <a href="https://app.q-expense.com" class="cta-btn" data-i18n="cta.button">Start Now — It's Free</a>
         </div>
     </section>
 
     <!-- Footer -->
-    <footer>
+    <footer class="site-footer">
         <div class="container">
-            <div class="footer-content">
-                <div class="footer-links">
-                    <a href="https://app.q-expense.com/privacy-policy.html" data-i18n="footer.privacy">Privacy Policy</a>
-                    <a href="https://app.q-expense.com/terms-of-service.html" data-i18n="footer.terms">Terms of Service</a>
-                    <script>document.write('<a href="mailto:'+decrypt('F0kNTkddChUCHEBBXRcHGEN4XgsGAVoZWwsL','fgh678dfg234-ghj789')+'" data-i18n="footer.contact">Contact</a>');</script>
-                </div>
-                <p class="footer-note" data-i18n="footer.copyright">© 2026 Quick Expense. Made with care for people who value simplicity.</p>
+            <div>
+                <a href="https://app.q-expense.com/privacy-policy.html" data-i18n="footer.privacy">Privacy Policy</a>
+                <span aria-hidden>·</span>
+                <a href="https://app.q-expense.com/terms-of-service.html" data-i18n="footer.terms">Terms of Service</a>
+                <span aria-hidden>·</span>
+                <script>document.write('<a href="mailto:'+decrypt('F0kNTkddChUCHEBBXRcHGEN4XgsGAVoZWwsL','fgh678dfg234-ghj789')+'" data-i18n="footer.contact">Contact</a>');</script>
             </div>
+            <p class="footer-copy" data-i18n="footer.copyright">© 2026 Quick Expense. Made with care for people who value simplicity.</p>
         </div>
     </footer>
     <script src="lang/en.js"></script>

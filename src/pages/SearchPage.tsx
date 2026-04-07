@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Search as SearchIcon, SearchX, RefreshCw } from "lucide-react";
 import { ExpenseTable } from "../components/ExpenseTable";
 import { Layout } from "../components/Layout";
 import { LoadingBlock } from "../components/LoadingBlock";
@@ -35,109 +36,125 @@ export function SearchPage(): JSX.Element {
   }, [dataset.searchFilters, dataset.snapshot]);
 
   return (
-    <Layout>
-      <section className="card">
-        <div className="page-header">
-          <div className="page-header-top">
-            <h1>Search</h1>
-            <button className="secondary-button" onClick={() => navigate(-1)} type="button">
-              Back
-            </button>
-          </div>
-        </div>
-        {dataset.snapshot ? (
-          <form
-            className="form-layout"
-            onSubmit={(event) => {
-              event.preventDefault();
+    <Layout title="Search">
+      {/* Search bar */}
+      <div className="search-hero-input">
+        <SearchIcon size={18} className="search-icon" aria-hidden />
+        <input
+          className="input"
+          value={dataset.searchFilters.comment}
+          onChange={(event) => {
+            dataset.setSearchFilters({
+              ...dataset.searchFilters,
+              comment: event.target.value,
+            });
+            if (!hasSearched && event.target.value.trim()) {
               setHasSearched(true);
               trackEvent("search_performed", { result_count: outcome?.allMatches.length ?? 0 });
-            }}
-          >
-            <div className="button-row search-actions">
+            }
+          }}
+          placeholder="Search expenses…"
+          inputMode="text"
+          aria-label="Search expenses"
+        />
+      </div>
+
+      {/* Category pills */}
+      {dataset.snapshot ? (
+        <>
+          <div className="input-label mb-2">Categories</div>
+          <div className="category-chips mb-4">
+            <button
+              type="button"
+              className={`category-chip${dataset.searchFilters.categories.length === 0 ? " active" : ""}`}
+              onClick={() => {
+                dataset.setSearchFilters({ ...dataset.searchFilters, categories: [] });
+                if (!hasSearched) setHasSearched(true);
+              }}
+            >
+              All
+            </button>
+            {dataset.distinctValues.Category.map((category) => (
               <button
-                className="secondary-button"
+                key={category}
+                type="button"
+                className={`category-chip${dataset.searchFilters.categories.includes(category) ? " active" : ""}`}
                 onClick={() => {
-                  dataset.setSearchFilters({ categories: [], comment: "" });
-                  setHasSearched(false);
+                  const cats = dataset.searchFilters.categories;
+                  const next = cats.includes(category)
+                    ? cats.filter((c) => c !== category)
+                    : [...cats, category];
+                  dataset.setSearchFilters({ ...dataset.searchFilters, categories: next });
+                  if (!hasSearched) setHasSearched(true);
                 }}
-                type="button"
               >
-                Clear
+                {category}
               </button>
-              <button className="primary-button" type="submit">
-                Search
-              </button>
-              <button
-                className="primary-button"
-                onClick={() => void dataset.reloadDataset().catch(() => undefined)}
-                type="button"
-              >
-                Reload
-              </button>
+            ))}
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }} className="mb-4">
+            <button
+              className="btn btn-secondary btn-inline"
+              type="button"
+              onClick={() => {
+                dataset.setSearchFilters({ categories: [], comment: "" });
+                setHasSearched(false);
+              }}
+            >
+              Clear
+            </button>
+            <button
+              className="btn btn-secondary btn-inline"
+              type="button"
+              onClick={() => {
+                setHasSearched(true);
+                trackEvent("search_performed", { result_count: outcome?.allMatches.length ?? 0 });
+              }}
+            >
+              <SearchIcon size={14} aria-hidden />
+              Search
+            </button>
+            <button
+              className="btn btn-secondary btn-inline"
+              type="button"
+              onClick={() => void dataset.reloadDataset().catch(() => undefined)}
+            >
+              <RefreshCw size={14} aria-hidden />
+              Reload
+            </button>
+          </div>
+        </>
+      ) : null}
+
+      {dataset.error ? <StatusBanner variant="error" message={dataset.error} /> : null}
+      {dataset.status === "loading" ? <LoadingBlock label="Loading expenses…" variant="skeleton" /> : null}
+
+      {dataset.snapshot && hasSearched && outcome ? (
+        <>
+          <div className="search-results-count">
+            Results <span className="search-results-badge">{outcome.allMatches.length}</span>
+          </div>
+
+          {outcome.allMatches.length === 0 ? (
+            <div className="expense-empty">
+              <SearchX size={40} className="expense-empty-icon" />
+              <p>No expenses match your search</p>
+              <p className="text-sm muted mt-4">Try adjusting your filters or search term</p>
             </div>
-            <div className="field-grid emphasized-field-labels">
-              <label className="field">
-                <span>Category</span>
-                <select
-                  multiple
-                  value={dataset.searchFilters.categories}
-                  onChange={(event) =>
-                    dataset.setSearchFilters({
-                      ...dataset.searchFilters,
-                      categories: Array.from(event.target.selectedOptions).map(
-                        (option) => option.value,
-                      ),
-                    })
-                  }
-                  className="multi-select"
-                >
-                  {dataset.distinctValues.Category.map((category) => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Comment contains</span>
-                <input
-                  value={dataset.searchFilters.comment}
-                  onChange={(event) =>
-                    dataset.setSearchFilters({
-                      ...dataset.searchFilters,
-                      comment: event.target.value,
-                    })
-                  }
-                  placeholder="Type a substring"
+          ) : (
+            <>
+              {outcome.truncated ? (
+                <StatusBanner
+                  variant="info"
+                  message={`Showing first 100 of ${outcome.allMatches.length} results.`}
                 />
-              </label>
-            </div>
-          </form>
-        ) : null}
-
-        {dataset.error ? <StatusBanner variant="error" message={dataset.error} /> : null}
-        {dataset.status === "loading" ? <LoadingBlock label="Loading expenses…" /> : null}
-        {dataset.snapshot ? (
-          <>
-
-            {hasSearched && outcome ? (
-              <>
-                {outcome.allMatches.length === 0 ? (
-                  <StatusBanner variant="info" message="Nothing is found." />
-                ) : null}
-                {outcome.truncated ? (
-                  <StatusBanner
-                    variant="info"
-                    message={`Too many records found. Showing first 100 of ${outcome.allMatches.length}.`}
-                  />
-                ) : null}
-                <ExpenseTable records={outcome.visibleMatches} emptyMessage="Nothing is found." />
-              </>
-            ) : null}
-          </>
-        ) : null}
-      </section>
+              ) : null}
+              <ExpenseTable records={outcome.visibleMatches} emptyMessage="Nothing found." />
+            </>
+          )}
+        </>
+      ) : null}
     </Layout>
   );
 }

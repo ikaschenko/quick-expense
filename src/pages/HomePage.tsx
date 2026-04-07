@@ -1,71 +1,91 @@
 import { Link } from "react-router-dom";
-import { Settings, CirclePlus, ListEnd, Search } from "lucide-react";
+import { Plus, Clock, Search, AlertTriangle, BarChart3 } from "lucide-react";
 import { Layout } from "../components/Layout";
 import { useConfig } from "../contexts/ConfigContext";
+import { useAuth } from "../contexts/AuthContext";
 
-const MENU_ICONS: Record<string, React.ReactNode> = {
-  Setup: <Settings size={20} aria-hidden />,
-  Add: <CirclePlus size={20} aria-hidden />,
-  Tail: <ListEnd size={20} aria-hidden />,
-  Search: <Search size={20} aria-hidden />,
-};
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
 
-type MenuActionProps = {
-  label: string;
-  to?: string;
-  unavailableReason?: string;
-};
-
-function MenuAction({ label, to, unavailableReason }: MenuActionProps): JSX.Element {
-  const icon = MENU_ICONS[label];
-  if (!to) {
-    return (
-      <span
-        aria-disabled="true"
-        className="primary-button home-menu-button menu-action-disabled"
-        title={unavailableReason}
-      >
-        {icon}
-        {label}
-      </span>
-    );
-  }
-
-  return (
-    <Link className="primary-button home-menu-button" to={to}>
-      {icon}
-      {label}
-    </Link>
-  );
+function getFirstName(email: string): string {
+  const local = email.split("@")[0] ?? "";
+  const name = local.split(/[._-]/)[0] ?? "";
+  return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
 }
 
 export function HomePage(): JSX.Element {
   const { config } = useConfig();
-  const setupFirstMessage = "Complete Setup first to unlock this action.";
+  const { session } = useAuth();
+  const firstName = session?.email ? getFirstName(session.email) : "";
 
   return (
-    <Layout>
-      <section className="card home-menu-card">
-        <h1 className="home-menu-title">Menu</h1>
-        <div className="home-menu-actions">
-          <MenuAction label="Setup" to="/setup" />
-          <MenuAction
-            label="Add"
-            to={config ? "/add" : undefined}
-            unavailableReason={!config ? setupFirstMessage : undefined}
-          />
-          <MenuAction
-            label="Tail"
-            to={config ? "/tail" : undefined}
-            unavailableReason={!config ? setupFirstMessage : undefined}
-          />
-          <MenuAction
-            label="Search"
-            to={config ? "/search" : undefined}
-            unavailableReason={!config ? setupFirstMessage : undefined}
-          />
+    <Layout title="Quick Expense">
+      <p className="home-greeting">
+        {getGreeting()}, {firstName} 👋
+      </p>
+
+      {config ? (
+        <div className="home-status-card connected">
+          <BarChart3 size={20} className="home-status-icon" aria-hidden />
+          <div className="home-status-content">
+            <div className="home-status-label">Connected</div>
+            <div className="home-status-detail">{config.spreadsheetUrl}</div>
+          </div>
+          <Link to="/setup" className="home-status-action">Change</Link>
         </div>
-      </section>
+      ) : (
+        <div className="home-status-card disconnected">
+          <AlertTriangle size={20} className="home-status-icon" aria-hidden />
+          <div className="home-status-content">
+            <div className="home-status-label">No spreadsheet yet</div>
+            <div className="home-status-detail">Connect one to start tracking</div>
+          </div>
+          <Link to="/setup" className="home-status-action">Setup now →</Link>
+        </div>
+      )}
+
+      <div className="home-cta">
+        {config ? (
+          <Link to="/add" className="btn btn-primary">
+            <Plus size={20} aria-hidden />
+            Add Expense
+          </Link>
+        ) : (
+          <span className="btn btn-primary" style={{ opacity: 0.5, cursor: "not-allowed" }}>
+            <Plus size={20} aria-hidden />
+            Add Expense
+          </span>
+        )}
+      </div>
+
+      <div className="home-secondary-row">
+        {config ? (
+          <Link to="/tail" className="card card-hover home-secondary-card">
+            <Clock size={24} className="home-secondary-card-icon" aria-hidden />
+            <span className="home-secondary-card-label">Last 20</span>
+          </Link>
+        ) : (
+          <div className="card home-secondary-card home-secondary-card-disabled">
+            <Clock size={24} className="home-secondary-card-icon" aria-hidden />
+            <span className="home-secondary-card-label">Last 20</span>
+          </div>
+        )}
+        {config ? (
+          <Link to="/search" className="card card-hover home-secondary-card">
+            <Search size={24} className="home-secondary-card-icon" aria-hidden />
+            <span className="home-secondary-card-label">Find expense</span>
+          </Link>
+        ) : (
+          <div className="card home-secondary-card home-secondary-card-disabled">
+            <Search size={24} className="home-secondary-card-icon" aria-hidden />
+            <span className="home-secondary-card-label">Find expense</span>
+          </div>
+        )}
+      </div>
     </Layout>
   );
 }

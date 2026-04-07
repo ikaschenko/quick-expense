@@ -12,9 +12,9 @@ window.__i18n.en = {
 
   "features.title": "Why Quick Expense?",
   "features.mobile.title": "Mobile First",
-  "features.mobile.desc": "Designed for <strong>on-the-go</strong> use. Works perfectly on smartphones, tablets, and desktop. Access anywhere, anytime.",
+  "features.mobile.desc": "Designed for on-the-go use. Works perfectly on smartphones, tablets, and desktop. Access anywhere, anytime.",
   "features.data.title": "You Own Your Data",
-  "features.data.desc": "All data lives in <strong>your</strong> own Google Spreadsheet. Full control, easy export, analyze with your favorite tools.",
+  "features.data.desc": "All data lives in your own Google Spreadsheet. Full control, easy export, analyze with your favorite tools.",
   "features.ui.title": "Minimalist UI",
   "features.ui.desc": "No clutter, no distractions. Only the features you need: Add, View, Search. Simple and focused.",
   "features.free.title": "100% Free",

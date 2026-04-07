@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
+import { Check, Calendar } from "lucide-react";
 import { Layout } from "../components/Layout";
 import { LoadingBlock } from "../components/LoadingBlock";
 import { StatusBanner } from "../components/StatusBanner";
@@ -372,104 +373,148 @@ export function AddExpensePage(): JSX.Element {
     }
   };
 
+  const dateLabel = useMemo(() => {
+    const today = getTodayLocalDate();
+    if (draft.Date === today) return "Today";
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
+    if (draft.Date === yStr) return "Yesterday";
+    return draft.Date;
+  }, [draft.Date]);
+
   return (
-    <Layout>
-      <section className="card">
-        <div className="page-header">
-          <div className="page-header-top">
-            <h1>Add Expense</h1>
-            <button className="secondary-button" onClick={() => navigate(-1)} type="button">
-              Back
+    <Layout title="Add Expense">
+      {success ? <StatusBanner variant="success" message={success} /> : null}
+      {error ? <StatusBanner variant="error" message={error} /> : null}
+
+      <form onSubmit={(event) => void onSubmit(event)}>
+        {/* Amount */}
+        <div className="add-amount-field">
+          <input
+            className="add-amount-input"
+            inputMode="decimal"
+            value={draft[activeNonUsdCurrency]}
+            onChange={(event) => updateDraft(activeNonUsdCurrency, event.target.value)}
+            placeholder="0.00"
+            aria-label={`Amount in ${activeNonUsdCurrency}`}
+          />
+          {errors[activeNonUsdCurrency] ? (
+            <div className="field-error">{errors[activeNonUsdCurrency]}</div>
+          ) : null}
+        </div>
+
+        {/* Currency pills */}
+        <div className="currency-pills" role="tablist" aria-label="Select currency">
+          {NON_USD_CURRENCIES.map((currency) => (
+            <button
+              key={currency}
+              className={`currency-pill${currency === activeNonUsdCurrency ? " active" : ""}`}
+              onClick={() => selectNonUsdCurrency(currency)}
+              role="tab"
+              type="button"
+              aria-selected={currency === activeNonUsdCurrency}
+            >
+              {currency}
             </button>
+          ))}
+          <div
+            className={`currency-pill${activeNonUsdCurrency === ("USD" as never) ? " active" : ""}`}
+            style={{ opacity: 0.6 }}
+          >
+            USD
           </div>
         </div>
-        {success ? <StatusBanner variant="success" message={success} /> : null}
-        {error ? <StatusBanner variant="error" message={error} /> : null}
-        <form className="form-layout emphasized-field-labels" onSubmit={(event) => void onSubmit(event)}>
-          <div className="field-grid">
-            <label className="field">
-              <span>Date</span>
-              <input
-                type="date"
-                value={draft.Date}
-                onChange={(event) => updateDraft("Date", event.target.value)}
-                required
-              />
-              {errors.Date ? <small className="field-error">{errors.Date}</small> : null}
-            </label>
-            <label className="field" key={activeNonUsdCurrency}>
-              <span className="currency-picker" role="tablist" aria-label="Select non-USD currency">
-                {NON_USD_CURRENCIES.map((currency, index) => (
-                  <span className="currency-picker-item" key={currency}>
-                    <button
-                      className={
-                        currency === activeNonUsdCurrency
-                          ? "currency-picker-link active"
-                          : "currency-picker-link"
-                      }
-                      onClick={() => selectNonUsdCurrency(currency)}
-                      role="tab"
-                      type="button"
-                      aria-selected={currency === activeNonUsdCurrency}
-                    >
-                      {currency}
-                    </button>
-                    {index < NON_USD_CURRENCIES.length - 1 ? (
-                      <span className="currency-picker-separator" aria-hidden="true">
-                        |
-                      </span>
-                    ) : null}
-                  </span>
-                ))}
-              </span>
-              <input
-                value={draft[activeNonUsdCurrency]}
-                onChange={(event) => updateDraft(activeNonUsdCurrency, event.target.value)}
-                placeholder="0.00"
-              />
-              {errors[activeNonUsdCurrency] ? (
-                <small className="field-error">{errors[activeNonUsdCurrency]}</small>
-              ) : null}
-              <input
-                className="fx-rate-input"
-                value={manualFxRates[activeNonUsdCurrency]}
-                onChange={(event) => updateFxRate(activeNonUsdCurrency, event.target.value)}
-                placeholder={`USD rate for ${activeNonUsdCurrency}`}
-              />
-              {fxErrors[activeNonUsdCurrency] ? (
-                <small className="field-error">{fxErrors[activeNonUsdCurrency]}</small>
-              ) : (
-                <small className="fx-rate-label">Manual USD rate</small>
-              )}
-            </label>
-            <label className="field">
-              <span>USD</span>
-              <input
-                value={draft.USD}
-                onChange={(event) => updateDraft("USD", event.target.value)}
-                placeholder="0.00"
-              />
-              {errors.USD ? <small className="field-error">{errors.USD}</small> : null}
-            </label>
-          </div>
-          <label className="field">
-            <span>Category</span>
+
+        {/* FX Rate row */}
+        {activeNonUsdCurrency !== "PLN" || manualFxRates[activeNonUsdCurrency] ? (
+          <div className="add-fx-row">
+            <span className="add-fx-label">Rate</span>
             <input
-              list="category-options"
-              value={draft.Category}
-              onChange={(event) => updateDraft("Category", event.target.value)}
-              required
+              className="input add-fx-input"
+              inputMode="decimal"
+              value={manualFxRates[activeNonUsdCurrency]}
+              onChange={(event) => updateFxRate(activeNonUsdCurrency, event.target.value)}
+              placeholder={`USD rate for ${activeNonUsdCurrency}`}
             />
-            <datalist id="category-options">
-              {suggestionLists.Category.map((value) => (
-                <option key={value} value={value} />
-              ))}
-            </datalist>
-            {errors.Category ? <small className="field-error">{errors.Category}</small> : null}
-          </label>
-          <label className="field">
-            <span>WhoSpent</span>
+          </div>
+        ) : null}
+        {manualFxRates[activeNonUsdCurrency] || draft[activeNonUsdCurrency] ? (
+          <div className="input-group">
+            <label className="input-label" htmlFor="usd-amount">USD</label>
             <input
+              id="usd-amount"
+              className="input"
+              inputMode="decimal"
+              value={draft.USD}
+              onChange={(event) => updateDraft("USD", event.target.value)}
+              placeholder="0.00"
+            />
+            {errors.USD ? <div className="field-error">{errors.USD}</div> : null}
+          </div>
+        ) : null}
+        {fxErrors[activeNonUsdCurrency] ? (
+          <div className="field-error mb-4">{fxErrors[activeNonUsdCurrency]}</div>
+        ) : null}
+
+        {/* Category */}
+        <div className="input-group">
+          <label className="input-label" htmlFor="category-field">Category</label>
+          {suggestionLists.Category.length > 0 ? (
+            <div className="category-chips">
+              {suggestionLists.Category.map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  className={`category-chip${draft.Category === cat ? " active" : ""}`}
+                  onClick={() => updateDraft("Category", cat)}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <input
+            id="category-field"
+            className="input"
+            list="category-options"
+            value={draft.Category}
+            onChange={(event) => updateDraft("Category", event.target.value)}
+            placeholder="Or type a new category…"
+            required
+          />
+          <datalist id="category-options">
+            {suggestionLists.Category.map((value) => (
+              <option key={value} value={value} />
+            ))}
+          </datalist>
+          {errors.Category ? <div className="field-error">{errors.Category}</div> : null}
+        </div>
+
+        {/* Date */}
+        <div className="input-group">
+          <label className="input-label">Date</label>
+          <div className="add-date-chip">
+            <Calendar size={16} aria-hidden />
+            <span>{dateLabel}</span>
+            <input
+              type="date"
+              value={draft.Date}
+              onChange={(event) => updateDraft("Date", event.target.value)}
+              required
+              aria-label="Expense date"
+            />
+          </div>
+          {errors.Date ? <div className="field-error">{errors.Date}</div> : null}
+        </div>
+
+        {/* Who Spent / For Whom */}
+        <div className="add-fields-row">
+          <div className="input-group">
+            <label className="input-label" htmlFor="who-spent-field">Who spent</label>
+            <input
+              id="who-spent-field"
+              className="input"
               list="who-spent-options"
               value={draft.WhoSpent}
               onChange={(event) => updateDraft("WhoSpent", event.target.value)}
@@ -480,11 +525,13 @@ export function AddExpensePage(): JSX.Element {
                 <option key={value} value={value} />
               ))}
             </datalist>
-            {errors.WhoSpent ? <small className="field-error">{errors.WhoSpent}</small> : null}
-          </label>
-          <label className="field">
-            <span>ForWhom</span>
+            {errors.WhoSpent ? <div className="field-error">{errors.WhoSpent}</div> : null}
+          </div>
+          <div className="input-group">
+            <label className="input-label" htmlFor="for-whom-field">For whom</label>
             <input
+              id="for-whom-field"
+              className="input"
               list="for-whom-options"
               value={draft.ForWhom}
               onChange={(event) => updateDraft("ForWhom", event.target.value)}
@@ -494,68 +541,94 @@ export function AddExpensePage(): JSX.Element {
                 <option key={value} value={value} />
               ))}
             </datalist>
-          </label>
-          <label className="field">
-            <span>Comment</span>
-            <textarea
-              value={draft.Comment}
-              onChange={(event) => updateDraft("Comment", event.target.value)}
-              rows={3}
-            />
-          </label>
-          <label className="field">
-            <span>PaymentChannel</span>
-            <input
-              list="payment-channel-options"
-              value={draft.PaymentChannel}
-              onChange={(event) => updateDraft("PaymentChannel", event.target.value)}
-            />
-            <datalist id="payment-channel-options">
-              {suggestionLists.PaymentChannel.map((value) => (
-                <option key={value} value={value} />
-              ))}
-            </datalist>
-          </label>
-          <label className="field">
-            <span>Theme</span>
-            <input
-              list="theme-options"
-              value={draft.Theme}
-              onChange={(event) => updateDraft("Theme", event.target.value)}
-            />
-            <datalist id="theme-options">
-              {suggestionLists.Theme.map((value) => (
-                <option key={value} value={value} />
-              ))}
-            </datalist>
-          </label>
-          <div className="action-row">
-            <div className="button-row">
-              <button className="primary-button" disabled={isSaving} type="submit">
-                {isSaving ? (
-                  <>
-                    <span className="spinner button-spinner" aria-hidden="true" />
-                    <span>Saving…</span>
-                  </>
-                ) : (
-                  "Save"
-                )}
-              </button>
-            </div>
-            <div className="action-status">
-              {isSaving ? (
-                <StatusBanner variant="info" message="Saving expense to the backend. Please wait…" />
-              ) : null}
-              {success ? <StatusBanner variant="success" message={success} /> : null}
-              {error ? <StatusBanner variant="error" message={error} /> : null}
-            </div>
           </div>
-        </form>
-        {dataset.status === "loading" ? (
-          <LoadingBlock label="Loading previous values for quick suggestions…" />
-        ) : null}
-        {isLoadingFxBackup ? <LoadingBlock label="Loading saved FX rates…" /> : null}
-      </section>
+        </div>
+
+        {/* Comment */}
+        <div className="input-group">
+          <label className="input-label" htmlFor="comment-field">Comment</label>
+          <input
+            id="comment-field"
+            className="input"
+            value={draft.Comment}
+            onChange={(event) => updateDraft("Comment", event.target.value)}
+            placeholder="Add a note…"
+          />
+        </div>
+
+        {/* PaymentChannel */}
+        <div className="input-group">
+          <label className="input-label" htmlFor="payment-channel-field">Payment Channel</label>
+          <input
+            id="payment-channel-field"
+            className="input"
+            list="payment-channel-options"
+            value={draft.PaymentChannel}
+            onChange={(event) => updateDraft("PaymentChannel", event.target.value)}
+          />
+          <datalist id="payment-channel-options">
+            {suggestionLists.PaymentChannel.map((value) => (
+              <option key={value} value={value} />
+            ))}
+          </datalist>
+        </div>
+
+        {/* Theme */}
+        <div className="input-group">
+          <label className="input-label" htmlFor="theme-field">Theme</label>
+          <input
+            id="theme-field"
+            className="input"
+            list="theme-options"
+            value={draft.Theme}
+            onChange={(event) => updateDraft("Theme", event.target.value)}
+          />
+          <datalist id="theme-options">
+            {suggestionLists.Theme.map((value) => (
+              <option key={value} value={value} />
+            ))}
+          </datalist>
+        </div>
+
+        {/* Spacer for sticky button */}
+        <div style={{ height: 72 }} />
+      </form>
+
+      {/* Sticky Save Button */}
+      <div className="add-sticky-save">
+        {success ? (
+          <div className="btn btn-primary add-saved-feedback">
+            <Check size={20} aria-hidden />
+            Saved!
+          </div>
+        ) : (
+          <button
+            className="btn btn-primary"
+            disabled={isSaving}
+            type="submit"
+            form=""
+            onClick={(e) => {
+              e.preventDefault();
+              const form = document.querySelector<HTMLFormElement>("form");
+              if (form) form.requestSubmit();
+            }}
+          >
+            {isSaving ? (
+              <>
+                <span className="spinner spinner-sm spinner-inverse" aria-hidden />
+                Saving…
+              </>
+            ) : (
+              "Save Expense"
+            )}
+          </button>
+        )}
+      </div>
+
+      {dataset.status === "loading" ? (
+        <LoadingBlock label="Loading suggestions…" />
+      ) : null}
+      {isLoadingFxBackup ? <LoadingBlock label="Loading saved FX rates…" /> : null}
     </Layout>
   );
 }

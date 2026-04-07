@@ -1,160 +1,233 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { EXPENSE_HEADERS } from "../constants/expenses";
+import { useMemo, useState } from "react";
+import {
+  ShoppingCart,
+  Bus,
+  Utensils,
+  Home,
+  Heart,
+  Briefcase,
+  Zap,
+  Receipt,
+  Fuel,
+  Shirt,
+  GraduationCap,
+  Plane,
+  Gift,
+  Dumbbell,
+  Pill,
+} from "lucide-react";
 import { ExpenseRecord } from "../types/expense";
 
-const COMMENT_PREVIEW_LENGTH = 50;
-const TOOLTIP_GAP = 6;
-const TOOLTIP_VIEWPORT_MARGIN = 8;
+import { LucideProps } from "lucide-react";
 
 interface ExpenseTableProps {
   records: ExpenseRecord[];
   emptyMessage?: string;
 }
 
-function getCommentPreview(comment: string): string {
-  return comment.length > COMMENT_PREVIEW_LENGTH
-    ? `${comment.slice(0, COMMENT_PREVIEW_LENGTH)}...`
-    : comment;
+const COMMENT_PREVIEW_LENGTH = 72;
+
+type LucideIcon = React.ForwardRefExoticComponent<Omit<LucideProps, "ref"> & React.RefAttributes<SVGSVGElement>>;
+
+const CATEGORY_ICONS: Record<string, LucideIcon> = {
+  groceries: ShoppingCart,
+  food: Utensils,
+  restaurant: Utensils,
+  dining: Utensils,
+  transport: Bus,
+  taxi: Bus,
+  uber: Bus,
+  home: Home,
+  rent: Home,
+  utilities: Zap,
+  health: Heart,
+  medical: Pill,
+  pharmacy: Pill,
+  work: Briefcase,
+  fuel: Fuel,
+  gas: Fuel,
+  clothing: Shirt,
+  clothes: Shirt,
+  education: GraduationCap,
+  travel: Plane,
+  gift: Gift,
+  gifts: Gift,
+  sport: Dumbbell,
+  gym: Dumbbell,
+  fitness: Dumbbell,
+};
+
+function getCategoryIcon(category: string): LucideIcon {
+  const lower = category.toLowerCase();
+  for (const [key, Icon] of Object.entries(CATEGORY_ICONS)) {
+    if (lower.includes(key)) return Icon;
+  }
+  return Receipt;
 }
 
-interface TooltipPosition {
-  top: number;
-  left: number;
-  maxWidth: number;
+function getDisplayAmount(record: ExpenseRecord): string {
+  if (record.PLN) return `PLN ${record.PLN}`;
+  if (record.EUR) return `EUR ${record.EUR}`;
+  if (record.BYN) return `BYN ${record.BYN}`;
+  if (record.USD) return `USD ${record.USD}`;
+  return "—";
 }
 
-function computeTooltipPosition(triggerEl: HTMLElement): TooltipPosition {
-  const rect = triggerEl.getBoundingClientRect();
-  const viewportWidth = document.documentElement.clientWidth;
-
-  const left = Math.max(TOOLTIP_VIEWPORT_MARGIN, rect.left);
-  const maxWidth = viewportWidth - left - TOOLTIP_VIEWPORT_MARGIN;
-
-  return {
-    top: rect.bottom + TOOLTIP_GAP,
-    left,
-    maxWidth: Math.max(maxWidth, 120),
-  };
+function formatGroupDate(dateStr: string): string {
+  const normalized = dateStr.trim();
+  return normalized || "Unknown";
 }
 
-function CommentCell({ comment }: { comment: string }): JSX.Element {
+function getCommentPreview(record: ExpenseRecord): string {
+  const base = record.Comment || (record.ForWhom ? `For: ${record.ForWhom}` : "");
+  if (!base) {
+    return "";
+  }
+
+  return base.length > COMMENT_PREVIEW_LENGTH
+    ? `${base.slice(0, COMMENT_PREVIEW_LENGTH)}...`
+    : base;
+}
+
+function hasDetails(record: ExpenseRecord): boolean {
+  const base = record.Comment || (record.ForWhom ? `For: ${record.ForWhom}` : "");
+  return (
+    base.length > COMMENT_PREVIEW_LENGTH ||
+    Boolean(record.PaymentChannel.trim()) ||
+    Boolean(record.Theme.trim()) ||
+    Boolean(record.ForWhom.trim() && record.Comment.trim())
+  );
+}
+
+function ExpenseDetails({ record }: { record: ExpenseRecord }): JSX.Element {
   const [isOpen, setIsOpen] = useState(false);
-  const [position, setPosition] = useState<TooltipPosition | null>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
+  const preview = getCommentPreview(record);
 
-  const updatePosition = useCallback(() => {
-    if (triggerRef.current) {
-      setPosition(computeTooltipPosition(triggerRef.current));
-    }
-  }, []);
+  if (!preview) {
+    return <></>;
+  }
 
-  const open = useCallback(() => {
-    updatePosition();
-    setIsOpen(true);
-  }, [updatePosition]);
-
-  const close = useCallback(() => {
-    setIsOpen(false);
-  }, []);
-
-  const toggle = useCallback(() => {
-    if (isOpen) {
-      close();
-    } else {
-      open();
-    }
-  }, [isOpen, open, close]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const onScroll = (): void => updatePosition();
-    const wrapper = triggerRef.current?.closest(".table-wrapper");
-    wrapper?.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("scroll", onScroll, { passive: true });
-
-    return () => {
-      wrapper?.removeEventListener("scroll", onScroll);
-      window.removeEventListener("scroll", onScroll);
-    };
-  }, [isOpen, updatePosition]);
-
-  if (comment.length <= COMMENT_PREVIEW_LENGTH) {
-    return <>{comment}</>;
+  if (!hasDetails(record)) {
+    return <span className="expense-card-comment">{preview}</span>;
   }
 
   return (
     <div
-      className="comment-preview-wrapper"
-      onMouseEnter={open}
-      onMouseLeave={close}
+      className="expense-card-details"
+      onMouseEnter={() => setIsOpen(true)}
+      onMouseLeave={() => setIsOpen(false)}
     >
       <button
-        ref={triggerRef}
-        aria-expanded={isOpen}
-        className="comment-preview-trigger"
-        onBlur={close}
-        onClick={toggle}
         type="button"
+        className="expense-card-comment-trigger"
+        onClick={() => setIsOpen((prev) => !prev)}
+        onBlur={() => setIsOpen(false)}
+        aria-expanded={isOpen}
+        aria-label="Show full expense details"
       >
-        {getCommentPreview(comment)}
+        {preview}
       </button>
-      {isOpen && position ? (
-        <div
-          className="comment-tooltip"
-          role="tooltip"
-          style={{
-            position: "fixed",
-            top: position.top,
-            left: position.left,
-            maxWidth: position.maxWidth,
-          }}
-        >
-          {comment}
+      {isOpen ? (
+        <div className="expense-card-tooltip" role="tooltip">
+          {record.Comment.trim() ? (
+            <div className="expense-card-tooltip-row">
+              <span className="expense-card-tooltip-label">Comment:</span>
+              <span>{record.Comment}</span>
+            </div>
+          ) : null}
+          {record.ForWhom.trim() ? (
+            <div className="expense-card-tooltip-row">
+              <span className="expense-card-tooltip-label">For:</span>
+              <span>{record.ForWhom}</span>
+            </div>
+          ) : null}
+          {record.PaymentChannel.trim() ? (
+            <div className="expense-card-tooltip-row">
+              <span className="expense-card-tooltip-label">Channel:</span>
+              <span>{record.PaymentChannel}</span>
+            </div>
+          ) : null}
+          {record.Theme.trim() ? (
+            <div className="expense-card-tooltip-row">
+              <span className="expense-card-tooltip-label">Theme:</span>
+              <span>{record.Theme}</span>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
   );
 }
 
+interface DateGroup {
+  date: string;
+  records: ExpenseRecord[];
+}
+
+function groupByDate(records: ExpenseRecord[]): DateGroup[] {
+  const groups = new Map<string, ExpenseRecord[]>();
+
+  // Iterate in reverse so newest dates appear first
+  for (let i = records.length - 1; i >= 0; i--) {
+    const record = records[i];
+    const date = record.Date || "Unknown";
+    if (!groups.has(date)) {
+      groups.set(date, []);
+    }
+    groups.get(date)!.push(record);
+  }
+
+  return Array.from(groups.entries()).map(([date, recs]) => ({ date, records: recs }));
+}
+
 export function ExpenseTable({
   records,
   emptyMessage = "No records found.",
 }: ExpenseTableProps): JSX.Element {
+  const groups = useMemo(() => groupByDate(records), [records]);
+
+  if (records.length === 0) {
+    return (
+      <div className="expense-empty">
+        <Receipt size={40} className="expense-empty-icon" />
+        <p>{emptyMessage}</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="table-wrapper">
-      <table className="records-table">
-        <thead>
-          <tr>
-            {EXPENSE_HEADERS.map((header) => (
-              <th key={header}>{header}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {records.length === 0 ? (
-            <tr>
-              <td colSpan={EXPENSE_HEADERS.length} className="empty-cell">
-                {emptyMessage}
-              </td>
-            </tr>
-          ) : (
-            records.map((record) => (
-              <tr key={record.rowNumber}>
-                {EXPENSE_HEADERS.map((header) => (
-                  <td key={`${record.rowNumber}-${header}`}>
-                    {header === "Comment" ? (
-                      <CommentCell comment={record.Comment} />
-                    ) : (
-                      record[header]
-                    )}
-                  </td>
-                ))}
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+    <div>
+      {groups.map((group) => (
+        <div key={group.date} className="expense-date-group">
+          <div className="expense-date-header">{formatGroupDate(group.date)}</div>
+          {group.records.map((record) => {
+            const Icon = getCategoryIcon(record.Category);
+            return (
+              <div key={record.rowNumber} className="expense-card">
+                <div className="expense-card-icon">
+                  <Icon size={18} />
+                </div>
+                <div className="expense-card-body">
+                  <div className="expense-card-top">
+                    <span className="expense-card-category">
+                      {record.Category}
+                      {record.WhoSpent ? (
+                        <span className="expense-card-who">{record.WhoSpent}</span>
+                      ) : null}
+                    </span>
+                    <span className="expense-card-amount">{getDisplayAmount(record)}</span>
+                  </div>
+                  {record.Comment || record.ForWhom ? (
+                    <div className="expense-card-bottom">
+                      <ExpenseDetails record={record} />
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }

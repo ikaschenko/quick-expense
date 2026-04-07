@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { RefreshCw } from "lucide-react";
 import { MAX_TAIL_RECORDS } from "../constants/expenses";
 import { ExpenseTable } from "../components/ExpenseTable";
 import { Layout } from "../components/Layout";
@@ -30,39 +31,33 @@ export function TailPage(): JSX.Element {
   );
 
   return (
-    <Layout>
-      <section className="card">
-        <div className="page-header">
-          <div className="page-header-top">
-            <h1>Tail</h1>
-            <div className="button-row">
-              <button
-                className="primary-button"
-                onClick={() => void dataset.reloadDataset().catch(() => undefined)}
-                type="button"
-              >
-                Reload
-              </button>
-              <button className="secondary-button" onClick={() => navigate(-1)} type="button">
-                Back
-              </button>
-            </div>
-          </div>
-          <div>
-            <p className="muted">Up to the last 20 expense rows in sheet order.</p>
-          </div>
-        </div>
-        {dataset.error ? <StatusBanner variant="error" message={dataset.error} /> : null}
-        {dataset.status === "loading" ? <LoadingBlock label="Loading expenses…" /> : null}
-        {dataset.status === "ready" ? (
-          <>
-            <p className="muted small">
-              Loaded {dataset.snapshot?.records.length ?? 0} records. Showing up to the last 20.
-            </p>
-            <ExpenseTable records={visibleRecords} />
-          </>
-        ) : null}
-      </section>
+    <Layout title="History">
+      <div className="tail-header">
+        <span className="tail-count">
+          {dataset.snapshot
+            ? `${dataset.snapshot.records.length} total · showing last ${visibleRecords.length}`
+            : "Loading…"}
+        </span>
+        <button
+          className="btn btn-secondary btn-inline"
+          onClick={() => void dataset.reloadDataset().catch(() => undefined)}
+          type="button"
+          aria-label="Reload expenses"
+        >
+          <RefreshCw size={14} aria-hidden />
+          Reload
+        </button>
+      </div>
+
+      {dataset.error ? <StatusBanner variant="error" message={dataset.error} /> : null}
+
+      {dataset.status === "loading" ? (
+        <LoadingBlock label="Loading expenses…" variant="skeleton" />
+      ) : null}
+
+      {dataset.status === "ready" ? (
+        <ExpenseTable records={visibleRecords} />
+      ) : null}
     </Layout>
   );
 }
