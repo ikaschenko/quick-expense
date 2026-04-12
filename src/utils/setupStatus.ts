@@ -1,4 +1,4 @@
-export type SetupBannerKind = "loading" | "configured" | "needs-setup" | "invalid";
+export type SetupBannerKind = "loading" | "configured" | "needs-setup" | "invalid" | "load-error";
 
 export interface SetupBannerState {
   kind: SetupBannerKind;
@@ -10,18 +10,28 @@ interface ResolveSetupBannerStateInput {
   isConfigLoading: boolean;
   hasConfig: boolean;
   hasInvalidSetup: boolean;
+  hasLoadError?: boolean;
 }
 
 export function resolveSetupBannerState({
   isConfigLoading,
   hasConfig,
   hasInvalidSetup,
+  hasLoadError = false,
 }: ResolveSetupBannerStateInput): SetupBannerState {
   if (isConfigLoading) {
     return {
       kind: "loading",
       variant: "info",
       message: "Checking your current setup status...",
+    };
+  }
+
+  if (hasLoadError) {
+    return {
+      kind: "load-error",
+      variant: "error",
+      message: "Connection issue checking your setup. Please refresh to try again.",
     };
   }
 

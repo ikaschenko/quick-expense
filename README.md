@@ -59,6 +59,8 @@ FRONTEND_BASE_URL=http://localhost:5173
 PORT=3001
 SESSION_SECRET=replace-this-for-local-use
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/quickexpense
+# Optional API request body limit (defaults to 10mb)
+API_JSON_BODY_LIMIT=10mb
 # Posthog analytics (leave blank to disable)
 VITE_POSTHOG_KEY=your-posthog-project-api-key
 ```
@@ -68,6 +70,7 @@ Notes:
 - `GOOGLE_REDIRECT_URI` must match the redirect URI configured in Google Cloud.
 - `FRONTEND_BASE_URL` should point to the frontend URL you use locally.
 - The backend validates required environment variables at startup and exits early if any are missing.
+- `API_JSON_BODY_LIMIT` controls JSON body size accepted by `/api/*` routes. Default is `10mb` to align with the dataset payload ceiling in requirements.
 - Do not commit real secrets to a public repository.
 
 ## Install dependencies
@@ -128,7 +131,17 @@ By default, `vite preview` serves the frontend on `http://localhost:4173`. If yo
 ```bash
 npm test
 npm run test:integration
+npm run security:audit
 ```
+
+## Request logging
+
+Backend request logs are emitted as JSON lines to stdout. Each request includes:
+
+- `requestId` (also returned as `X-Request-Id` response header)
+- HTTP method and path
+- status code
+- latency in milliseconds (`durationMs`)
 
 ### Integration tests env setup
 

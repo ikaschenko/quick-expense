@@ -1,9 +1,11 @@
 import "dotenv/config";
 import crypto from "node:crypto";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import express from "express";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
+import rateLimit from "express-rate-limit";
 import {
   buildGoogleAuthorizationUrl,
   exchangeAuthorizationCode,
@@ -19,6 +21,15 @@ import {
   parseSpreadsheetUrl,
   validateSpreadsheet,
 } from "./google-sheets.js";
+import {
+  checkDatabaseHealth,
+  createGracefulShutdown,
+  createRequireAuthenticatedUser,
+  createShutdownGuard,
+  destroySession,
+  logInfrastructureError,
+  safelyDestroySession,
+} from "./resilience.js";
 import { getUserRecord, updateUserRecord, saveFxRateBackup, getLatestFxRateBackup } from "./store.js";
 import pool from "./db.js";
 
@@ -27,6 +38,12 @@ const app = express();
 app.set("trust proxy", 1);
 
 const port = Number(process.env.PORT ?? 3001);
+const shutdownTimeoutMs = 10_000;
+const maxApiJsonBodySize = process.env.API_JSON_BODY_LIMIT?.trim() || "10mb";
+
+let isShuttingDown = false;
+let server;
+let signalHandlersRegistered = false;
 
 function validateStartupEnv() {
   const missing = [];
@@ -50,7 +67,47 @@ function validateStartupEnv() {
 
 validateStartupEnv();
 
-app.use(express.json());
+app.use("/api", express.json({ limit: maxApiJsonBodySize }));
+
+app.use((req, res, next) => {
+  const requestId = crypto.randomUUID();
+  const startedAt = process.hrtime.bigint();
+
+  res.setHeader("X-Request-Id", requestId);
+
+  res.on("finish", () => {
+    const elapsedMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+    const logEntry = {
+      level: "info",
+      event: "http_request",
+      requestId,
+      method: req.method,
+      path: req.path,
+      statusCode: res.statusCode,
+      durationMs: Number(elapsedMs.toFixed(2)),
+      shuttingDown: isShuttingDown,
+    };
+
+    console.log(JSON.stringify(logEntry));
+  });
+
+  next();
+});
+
+app.get("/api/health", async (_req, res) => {
+  const health = await checkDatabaseHealth(pool);
+  const ok = health.ok && !isShuttingDown;
+
+  res.status(ok ? 200 : 503).json({
+    ...health,
+    ok,
+    checks: {
+      ...health.checks,
+      shutdown: isShuttingDown ? "in_progress" : "ready",
+    },
+  });
+});
+
 app.use(
   session({
     store: new PgSession({
@@ -84,23 +141,11 @@ function getUserSession(req) {
   return req.session.userEmail ? { email: req.session.userEmail } : null;
 }
 
-async function requireAuthenticatedUser(req, res, next) {
-  const sessionUser = getUserSession(req);
-  if (!sessionUser) {
-    res.status(401).json({ message: "Please sign in to continue." });
-    return;
-  }
-
-  const userRecord = await getUserRecord(sessionUser.email);
-  if (!userRecord) {
-    req.session.destroy(() => undefined);
-    res.status(401).json({ message: "Stored session is no longer available. Please sign in again." });
-    return;
-  }
-
-  req.userRecord = userRecord;
-  next();
-}
+const requireAuthenticatedUser = createRequireAuthenticatedUser({
+  getUserSession,
+  getUserRecord,
+  destroySessionState: safelyDestroySession,
+});
 
 async function getAuthorizedAccessToken(userRecord) {
   if (userRecord.accessToken && userRecord.accessTokenExpiresAt > Date.now() + 60_000) {
@@ -122,8 +167,32 @@ async function getAuthorizedAccessToken(userRecord) {
   return updatedUser.accessToken;
 }
 
-app.get("/api/health", (_req, res) => {
-  res.json({ ok: true });
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { message: "Too many authentication attempts. Please try again later." },
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { message: "Too many requests. Please slow down." },
+});
+
+app.use(createShutdownGuard({ isShuttingDown: () => isShuttingDown, excludedPaths: ["/api/health"] }));
+app.use("/api/auth/login", authLimiter);
+app.use("/api/auth/callback", authLimiter);
+app.use("/api/", (req, res, next) => {
+  if (req.path === "/health") {
+    next();
+    return;
+  }
+
+  apiLimiter(req, res, next);
 });
 
 app.get("/api/auth/login", (req, res) => {
@@ -177,11 +246,14 @@ app.get("/api/auth/callback", async (req, res) => {
       spreadsheetId: current.spreadsheetId ?? null,
     }));
 
-    req.session.userEmail = userInfo.email;
-    delete req.session.oauthState;
-    delete req.session.codeVerifier;
-
-    res.redirect(`${getFrontendBaseUrl()}/home`);
+    req.session.regenerate((err) => {
+      if (err) {
+        res.redirect(`${getFrontendBaseUrl()}/?error=${encodeURIComponent("Session regeneration failed.")}`);
+        return;
+      }
+      req.session.userEmail = userInfo.email;
+      res.redirect(`${getFrontendBaseUrl()}/home`);
+    });
   } catch (callbackError) {
     res.redirect(
       `${getFrontendBaseUrl()}/?error=${encodeURIComponent((callbackError).message)}`,
@@ -196,27 +268,36 @@ app.get("/api/auth/session", async (req, res) => {
     return;
   }
 
-  const userRecord = await getUserRecord(sessionUser.email);
-  if (!userRecord) {
-    req.session.destroy(() => undefined);
-    res.json({ authenticated: false });
-    return;
-  }
+  try {
+    const userRecord = await getUserRecord(sessionUser.email);
+    if (!userRecord) {
+      await safelyDestroySession(req.session, "Failed to clear missing stored session.");
+      res.json({ authenticated: false });
+      return;
+    }
 
-  res.json({
-    authenticated: true,
-    session: {
-      email: userRecord.email,
-      lastAuthenticatedAt: userRecord.lastAuthenticatedAt,
-      lastActivityAt: userRecord.lastActivityAt,
-    },
-  });
+    res.json({
+      authenticated: true,
+      session: {
+        email: userRecord.email,
+        lastAuthenticatedAt: userRecord.lastAuthenticatedAt,
+        lastActivityAt: userRecord.lastActivityAt,
+      },
+    });
+  } catch (error) {
+    logInfrastructureError("Failed to load auth session", error);
+    res.status(500).json({ message: "Unable to load your session right now. Please try again." });
+  }
 });
 
-app.post("/api/auth/logout", (req, res) => {
-  req.session.destroy(() => {
+app.post("/api/auth/logout", async (req, res) => {
+  try {
+    await destroySession(req.session);
     res.status(204).end();
-  });
+  } catch (error) {
+    logInfrastructureError("Failed to destroy session during logout", error);
+    res.status(500).json({ message: "Unable to sign out right now. Please try again." });
+  }
 });
 
 app.get("/api/config", requireAuthenticatedUser, async (req, res) => {
@@ -337,6 +418,22 @@ app.post("/api/expenses", requireAuthenticatedUser, async (req, res) => {
   }
 });
 
+app.use((error, req, res, next) => {
+  logInfrastructureError("Unhandled request error", error);
+
+  if (res.headersSent) {
+    next(error);
+    return;
+  }
+
+  if (req.path.startsWith("/api/")) {
+    res.status(503).json({ message: "Service temporarily unavailable. Please try again." });
+    return;
+  }
+
+  res.status(500).send("Unexpected server error.");
+});
+
 if (process.env.NODE_ENV === "production") {
   const distPath = path.resolve(process.cwd(), "dist");
   app.use(express.static(distPath));
@@ -345,6 +442,47 @@ if (process.env.NODE_ENV === "production") {
   });
 }
 
-app.listen(port, () => {
-  console.log(`QuickExpense backend listening on http://localhost:${port}`);
+const shutdownServer = createGracefulShutdown({
+  getServer: () => server,
+  closeDatabase: () => pool.end(),
+  setShuttingDown: (nextValue) => {
+    isShuttingDown = nextValue;
+  },
+  timeoutMs: shutdownTimeoutMs,
 });
+
+function registerSignalHandlers() {
+  if (signalHandlersRegistered) {
+    return;
+  }
+
+  signalHandlersRegistered = true;
+  process.once("SIGTERM", () => {
+    void shutdownServer("SIGTERM");
+  });
+  process.once("SIGINT", () => {
+    void shutdownServer("SIGINT");
+  });
+}
+
+export function startServer() {
+  if (server) {
+    return server;
+  }
+
+  server = app.listen(port, () => {
+    console.log(`QuickExpense backend listening on http://localhost:${port}`);
+  });
+  registerSignalHandlers();
+  return server;
+}
+
+function isDirectExecution() {
+  return Boolean(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]).href;
+}
+
+if (isDirectExecution()) {
+  startServer();
+}
+
+export { app, shutdownServer };

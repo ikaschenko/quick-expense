@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ConfigProvider } from "./contexts/ConfigContext";
 import { DatasetProvider } from "./contexts/DatasetContext";
@@ -13,10 +14,11 @@ import { TailPage } from "./pages/TailPage";
 
 export default function App(): JSX.Element {
   return (
-    <AuthProvider>
-      <ConfigProvider>
-        <DatasetProvider>
-          <Routes>
+    <ErrorBoundary>
+      <AuthProvider>
+        <ConfigProvider>
+          <DatasetProvider>
+            <Routes>
             <Route path="/" element={<LoginPage />} />
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
             <Route
@@ -64,5 +66,6 @@ export default function App(): JSX.Element {
         </DatasetProvider>
       </ConfigProvider>
     </AuthProvider>
+    </ErrorBoundary>
   );
 }

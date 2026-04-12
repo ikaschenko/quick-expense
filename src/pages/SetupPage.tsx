@@ -12,7 +12,7 @@ import { AppError, HeaderDetails, SetupReport } from "../types/expense";
 import { resolveSetupBannerState } from "../utils/setupStatus";
 
 export function SetupPage(): JSX.Element {
-  const { config, isConfigLoading, saveConfig, refreshConfig } = useConfig();
+  const { config, isConfigLoading, error: configError, saveConfig, refreshConfig } = useConfig();
   const navigate = useNavigate();
   const [spreadsheetUrl, setSpreadsheetUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -88,6 +88,7 @@ export function SetupPage(): JSX.Element {
     isConfigLoading,
     hasConfig: Boolean(config),
     hasInvalidSetup,
+    hasLoadError: Boolean(configError),
   });
 
   return (

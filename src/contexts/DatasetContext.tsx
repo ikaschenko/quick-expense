@@ -4,9 +4,11 @@ import {
   PropsWithChildren,
   useContext,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { googleSheetsService } from "../services/googleSheets";
+import { RetryBackoff } from "../services/retryBackoff";
 import { DatasetSnapshot, DistinctValues, SearchFilters } from "../types/expense";
 import { buildDistinctValues } from "../utils/spreadsheet";
 import { useAuth } from "./AuthContext";
@@ -48,6 +50,7 @@ export function DatasetProvider({ children }: PropsWithChildren): JSX.Element {
     categories: [],
     comment: "",
   });
+  const retryBackoffRef = useRef(new RetryBackoff());
 
   const loadDataset = useCallback(
     async (force = false): Promise<DatasetSnapshot> => {
@@ -60,6 +63,14 @@ export function DatasetProvider({ children }: PropsWithChildren): JSX.Element {
 
       if (snapshot && !force && !isInvalidated) {
         return snapshot;
+      }
+
+      // Only proceed if retry backoff allows it
+      if (!retryBackoffRef.current.canRetryNow()) {
+        const err = new Error("Retrying... please wait.");
+        setStatus("error");
+        setError(err.message);
+        throw err;
       }
 
       setStatus("loading");
@@ -78,10 +89,14 @@ export function DatasetProvider({ children }: PropsWithChildren): JSX.Element {
         setSnapshot(nextSnapshot);
         setIsInvalidated(false);
         setStatus("ready");
+        retryBackoffRef.current.reset(); // Clear backoff on success
         return nextSnapshot;
       } catch (loadError) {
         setStatus("error");
-        setError((loadError as Error).message);
+        retryBackoffRef.current.recordFailure(); // Increment backoff on failure
+        const message = (loadError as Error).message;
+        setError(message);
+        console.error("[DatasetContext] loadDataset error:", message);
         throw loadError;
       }
     },
@@ -89,6 +104,7 @@ export function DatasetProvider({ children }: PropsWithChildren): JSX.Element {
   );
 
   const reloadDataset = useCallback(async (): Promise<DatasetSnapshot> => {
+    retryBackoffRef.current.reset(); // Clear backoff on manual reload
     setSnapshot(null);
     setIsInvalidated(false);
     return loadDataset(true);

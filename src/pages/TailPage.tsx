@@ -10,20 +10,22 @@ import { useConfig } from "../contexts/ConfigContext";
 import { useDataset } from "../contexts/DatasetContext";
 
 export function TailPage(): JSX.Element {
-  const { config } = useConfig();
+  const { config, isConfigLoading, error: configError } = useConfig();
   const dataset = useDataset();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!config) {
+    // Only redirect to setup if config is truly missing AND not loading/errored
+    if (!config && !isConfigLoading && !configError) {
       navigate("/setup", { replace: true });
       return;
     }
 
-    if (!dataset.snapshot && dataset.status !== "loading") {
+    // Load dataset if config exists, not loading, and no errors
+    if (config && !dataset.snapshot && dataset.status !== "loading") {
       void dataset.loadDataset().catch(() => undefined);
     }
-  }, [config, dataset, navigate]);
+  }, [config, configError, isConfigLoading, dataset, navigate]);
 
   const visibleRecords = useMemo(
     () => dataset.snapshot?.records.slice(-MAX_TAIL_RECORDS) ?? [],

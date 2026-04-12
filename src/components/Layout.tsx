@@ -1,7 +1,9 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { PropsWithChildren, useState, useRef, useEffect } from "react";
-import { ChevronLeft, House, Plus, Clock, Search, LogOut, MessageSquareShare } from "lucide-react";
+import { ChevronLeft, House, Plus, Clock, Search, LogOut, MessageSquareShare, X } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import { useConfig } from "../contexts/ConfigContext";
+import { useDataset } from "../contexts/DatasetContext";
 import { FEEDBACK_FORM_URL } from "../constants/feedback";
 
 interface LayoutProps extends PropsWithChildren {
@@ -10,13 +12,28 @@ interface LayoutProps extends PropsWithChildren {
 
 export function Layout({ children, title }: LayoutProps): JSX.Element {
   const auth = useAuth();
+  const config = useConfig();
+  const dataset = useDataset();
   const location = useLocation();
   const navigate = useNavigate();
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const [showErrorBanner, setShowErrorBanner] = useState(false);
   const avatarRef = useRef<HTMLDivElement>(null);
 
   const isHome = location.pathname === "/home";
   const avatarLetter = auth.session?.email?.charAt(0) ?? "?";
+  
+  // Show banner when auth, config, or dataset has an error
+  const activeError = auth.error || config.error || dataset.error;
+  
+  useEffect(() => {
+    if (activeError) {
+      console.log("[Layout] Error detected:", activeError);
+      setShowErrorBanner(true);
+      const timer = setTimeout(() => setShowErrorBanner(false), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [activeError]);
 
   useEffect(() => {
     if (!avatarMenuOpen) return;
@@ -110,6 +127,44 @@ export function Layout({ children, title }: LayoutProps): JSX.Element {
       </header>
 
       <main className="page-content">
+        {showErrorBanner && activeError && (
+          <div
+            style={{
+              padding: "var(--space-3)",
+              marginBottom: "var(--space-3)",
+              backgroundColor: "#fee2e2",
+              border: "1px solid #fecaca",
+              borderRadius: "var(--radius-sm)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              color: "#7f1d1d",
+              fontSize: "var(--font-size-sm)",
+            }}
+          >
+            <span>{activeError}</span>
+            <button
+              onClick={() => {
+                setShowErrorBanner(false);
+                auth.clearError?.();
+                config.clearError?.();
+                dataset.clearError?.();
+              }}
+              type="button"
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                color: "inherit",
+              }}
+              aria-label="Close error message"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
         <div className="page-content-inner page-animate">{children}</div>
       </main>
 
