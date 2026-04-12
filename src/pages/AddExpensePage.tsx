@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { Check, Calendar } from "lucide-react";
+import DatePicker from "react-datepicker";
 import { Layout } from "../components/Layout";
 import { LoadingBlock } from "../components/LoadingBlock";
 import { StatusBanner } from "../components/StatusBanner";
@@ -16,7 +17,7 @@ import {
   ManualFxRates,
   NonUsdCurrencyCode,
 } from "../types/expense";
-import { getTodayLocalDate } from "../utils/date";
+import { formatLocalDate, getTodayLocalDate } from "../utils/date";
 import { expenseDraftToRowValues } from "../utils/spreadsheet";
 import { parseOptionalDecimal, parsePositiveDecimal, validateExpenseDraft } from "../utils/validation";
 import { trackEvent } from "../services/analytics";
@@ -373,15 +374,20 @@ export function AddExpensePage(): JSX.Element {
     }
   };
 
-  const dateLabel = useMemo(() => {
-    const today = getTodayLocalDate();
-    if (draft.Date === today) return "Today";
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
-    if (draft.Date === yStr) return "Yesterday";
-    return draft.Date;
+  const selectedExpenseDate = useMemo(() => {
+    const parsedDate = new Date(`${draft.Date}T00:00:00`);
+    return Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
   }, [draft.Date]);
+
+  const exactDateLabel = useMemo(
+    () =>
+      selectedExpenseDate.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "2-digit",
+      }),
+    [selectedExpenseDate],
+  );
 
   return (
     <Layout title="Add Expense">
@@ -493,14 +499,24 @@ export function AddExpensePage(): JSX.Element {
 
         {/* Date */}
         <div className="input-group">
-          <label className="input-label">Date</label>
-          <div className="add-date-chip">
+          <label className="input-label" htmlFor="expense-date-field">
+            Date <span className="add-date-label-muted">({exactDateLabel})</span>
+          </label>
+          <div className="add-date-picker-row">
             <Calendar size={16} aria-hidden />
-            <span>{dateLabel}</span>
-            <input
-              type="date"
-              value={draft.Date}
-              onChange={(event) => updateDraft("Date", event.target.value)}
+            <DatePicker
+              id="expense-date-field"
+              className="input add-date-picker-input"
+              selected={selectedExpenseDate}
+              onChange={(date: Date | null) => {
+                if (!date) {
+                  return;
+                }
+                updateDraft("Date", formatLocalDate(date));
+              }}
+              dateFormat="yyyy-MM-dd"
+              popperPlacement="bottom-start"
+              showPopperArrow={false}
               required
               aria-label="Expense date"
             />

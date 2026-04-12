@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { PropsWithChildren, useState, useRef, useEffect } from "react";
-import { ChevronLeft, House, Plus, Clock, Search, LogOut, MessageSquareShare, X } from "lucide-react";
+import { ChevronLeft, House, Plus, Clock, Search, LogOut, MessageSquareShare, X, Shield, FileText } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useConfig } from "../contexts/ConfigContext";
 import { useDataset } from "../contexts/DatasetContext";
@@ -90,12 +90,14 @@ export function Layout({ children, title }: LayoutProps): JSX.Element {
                     href="/privacy-policy.html"
                     style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", width: "100%", padding: "var(--space-2) var(--space-3)", border: "none", background: "transparent", fontSize: "var(--font-size-sm)", color: "var(--color-text-primary)", borderRadius: "var(--radius-sm)", cursor: "pointer", textDecoration: "none" }}
                   >
+                    <Shield size={14} aria-hidden />
                     Privacy Policy
                   </a>
                   <a
                     href="/terms-of-service.html"
                     style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", width: "100%", padding: "var(--space-2) var(--space-3)", border: "none", background: "transparent", fontSize: "var(--font-size-sm)", color: "var(--color-text-primary)", borderRadius: "var(--radius-sm)", cursor: "pointer", textDecoration: "none" }}
                   >
+                    <FileText size={14} aria-hidden />
                     Terms of Service
                   </a>
                   <button

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Plus, Clock, Search, AlertTriangle, BarChart3 } from "lucide-react";
+import { Plus, Clock, Search, AlertTriangle, Settings } from "lucide-react";
 import { Layout } from "../components/Layout";
 import { useConfig } from "../contexts/ConfigContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -30,7 +30,7 @@ export function HomePage(): JSX.Element {
 
       {config ? (
         <div className="home-status-card connected">
-          <BarChart3 size={20} className="home-status-icon" aria-hidden />
+          <Settings size={20} className="home-status-icon" aria-hidden />
           <div className="home-status-content">
             <div className="home-status-label">Connected</div>
             <div className="home-status-detail">{config.spreadsheetUrl}</div>
