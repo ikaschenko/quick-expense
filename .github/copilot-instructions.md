@@ -38,6 +38,48 @@ Quick Expense is a React 18 + Vite SPA with an Express 4 backend for recording p
 - If there is an architectural choice, a design trade-off, or ambiguity in requirements — **raise questions to the human** rather than guessing.
 - Provide: the options considered, pros and cons of each, and your recommendation. Let the human decide.
 
+## Behavioral Guidelines
+
+### Think Before Coding
+
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them — don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+
+### Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+```
+
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+### Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+- Don't "improve" adjacent code, comments, or formatting when editing.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it — don't delete it.
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+The test: every changed line should trace directly to the user's request.
+
 ## Project-Specific Conventions
 
 - All API calls from the frontend go through `src/services/http.ts` — never use raw `fetch` in components.
@@ -49,3 +91,16 @@ Quick Expense is a React 18 + Vite SPA with an Express 4 backend for recording p
 - Mutating API endpoints require the `X-Requested-With: fetch` header (CSRF protection).
 - Run `npm test` (Vitest) before considering any change complete. Tests live in `tests/`.
 - Run `npm run build` after TypeScript changes to verify compilation.
+
+## Common Mistakes to Avoid
+
+- Using raw `fetch` instead of `src/services/http.ts` in components or pages.
+- Importing from `server/` in `src/` or vice versa.
+- Adding state management libraries (Redux, Zustand, etc.) without explicit approval.
+- Forgetting the `X-Requested-With: fetch` header on mutating API endpoints.
+- Scattering type definitions instead of centralizing in `src/types/expense.ts`.
+- Forgetting `requireAuthenticatedUser` middleware on new protected routes.
+- Modifying context provider nesting order (Auth → Config → Dataset) without architect approval.
+- Putting side effects (network, storage, DOM) in `src/utils/` — those must remain pure.
+- Adding npm packages without human approval.
+- Leaving dead code, commented-out blocks, or orphaned files behind after a change.

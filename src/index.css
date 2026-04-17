@@ -442,6 +442,10 @@ button { cursor: pointer; }
   border-top-color: #ffffff;
 }
 
+.icon-spin {
+  animation: spin 0.8s linear infinite;
+}
+
 .loading-block {
   display: flex;
   align-items: center;

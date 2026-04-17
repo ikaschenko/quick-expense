@@ -46,7 +46,7 @@ export function TailPage(): JSX.Element {
           type="button"
           aria-label="Reload expenses"
         >
-          <RefreshCw size={14} aria-hidden />
+          <RefreshCw size={14} aria-hidden className={dataset.status === "loading" ? "icon-spin" : ""} />
           Reload
         </button>
       </div>

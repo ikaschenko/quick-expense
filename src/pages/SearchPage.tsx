@@ -120,7 +120,7 @@ export function SearchPage(): JSX.Element {
               type="button"
               onClick={() => void dataset.reloadDataset().catch(() => undefined)}
             >
-              <RefreshCw size={14} aria-hidden />
+              <RefreshCw size={14} aria-hidden className={dataset.status === "loading" ? "icon-spin" : ""} />
               Reload
             </button>
           </div>
