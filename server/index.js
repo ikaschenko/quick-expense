@@ -20,6 +20,8 @@ import {
   loadExpenses,
   parseSpreadsheetUrl,
   validateSpreadsheet,
+  applyUserCurrencies,
+  VALID_CURRENCY_CODES,
 } from "./google-sheets.js";
 import {
   checkDatabaseHealth,
@@ -30,8 +32,21 @@ import {
   logInfrastructureError,
   safelyDestroySession,
 } from "./resilience.js";
-import { getUserRecord, updateUserRecord, saveFxRateBackup, getLatestFxRateBackup } from "./store.js";
+import {
+  getUserRecord,
+  updateUserRecord,
+  saveFxRateBackup,
+  getLatestFxRateBackup,
+  getActiveUserCurrencies,
+  setUserCurrencies,
+  initUserCurrenciesFromHeaders,
+} from "./store.js";
 import pool from "./db.js";
+
+import { readFileSync } from "node:fs";
+const currencyDictionary = JSON.parse(
+  readFileSync(new URL("../config/currencies.json", import.meta.url), "utf-8"),
+);
 
 const PgSession = connectPgSimple(session);
 const app = express();
@@ -307,14 +322,49 @@ app.get("/api/config", requireAuthenticatedUser, async (req, res) => {
     return;
   }
 
-  res.json({
-    config: {
-      email: userRecord.email,
-      spreadsheetId: userRecord.spreadsheetId,
-      spreadsheetUrl: userRecord.spreadsheetUrl,
-      sheetName: "Expenses",
-    },
-  });
+  try {
+    const currencies = await getActiveUserCurrencies(userRecord.email);
+
+    // Determine sheet currencies by peeking at headers
+    let sheetCurrencies = [...currencies];
+    try {
+      const accessToken = await getAuthorizedAccessToken(userRecord);
+      const report = await validateSpreadsheet(accessToken, userRecord.spreadsheetId, currencies);
+      sheetCurrencies = report.sheetCurrencies;
+
+      // Legacy migration: seed user_currencies from sheet if DB is empty
+      if (currencies.length === 0 && sheetCurrencies.length > 0) {
+        await initUserCurrenciesFromHeaders(userRecord.email, sheetCurrencies);
+        const refreshed = await getActiveUserCurrencies(userRecord.email);
+        res.json({
+          config: {
+            email: userRecord.email,
+            spreadsheetId: userRecord.spreadsheetId,
+            spreadsheetUrl: userRecord.spreadsheetUrl,
+            sheetName: "Expenses",
+            currencies: refreshed,
+            sheetCurrencies,
+          },
+        });
+        return;
+      }
+    } catch {
+      // If sheet validation fails, still return config with DB currencies
+    }
+
+    res.json({
+      config: {
+        email: userRecord.email,
+        spreadsheetId: userRecord.spreadsheetId,
+        spreadsheetUrl: userRecord.spreadsheetUrl,
+        sheetName: "Expenses",
+        currencies,
+        sheetCurrencies,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: (error).message });
+  }
 });
 
 app.post("/api/config", requireAuthenticatedUser, async (req, res) => {
@@ -327,7 +377,15 @@ app.post("/api/config", requireAuthenticatedUser, async (req, res) => {
     }
 
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    const setupReport = await validateSpreadsheet(accessToken, spreadsheetId);
+    const currencies = await getActiveUserCurrencies(req.userRecord.email);
+    const setupReport = await validateSpreadsheet(accessToken, spreadsheetId, currencies);
+
+    // Legacy migration: seed user_currencies from sheet if DB is empty
+    let activeCurrencies = currencies;
+    if (currencies.length === 0 && setupReport.sheetCurrencies.length > 0) {
+      await initUserCurrenciesFromHeaders(req.userRecord.email, setupReport.sheetCurrencies);
+      activeCurrencies = await getActiveUserCurrencies(req.userRecord.email);
+    }
 
     const updatedUser = await updateUserRecord(req.userRecord.email, (current) => ({
       ...current,
@@ -341,6 +399,8 @@ app.post("/api/config", requireAuthenticatedUser, async (req, res) => {
         spreadsheetId: updatedUser.spreadsheetId,
         spreadsheetUrl: updatedUser.spreadsheetUrl,
         sheetName: "Expenses",
+        currencies: activeCurrencies,
+        sheetCurrencies: setupReport.sheetCurrencies,
       },
       setupReport,
     });
@@ -370,6 +430,64 @@ app.delete("/api/config", requireAuthenticatedUser, async (req, res) => {
     spreadsheetId: null,
   }));
   res.status(204).end();
+});
+
+// --- Currency configuration ---
+
+app.get("/api/currencies/available", requireAuthenticatedUser, (_req, res) => {
+  res.json(currencyDictionary);
+});
+
+app.get("/api/currencies", requireAuthenticatedUser, async (req, res) => {
+  try {
+    const currencies = await getActiveUserCurrencies(req.userRecord.email);
+    res.json({ currencies });
+  } catch (error) {
+    res.status(500).json({ message: (error).message });
+  }
+});
+
+app.put("/api/currencies", requireAuthenticatedUser, async (req, res) => {
+  try {
+    const codes = req.body?.currencies;
+    if (!Array.isArray(codes)) {
+      res.status(400).json({ message: "currencies must be an array of currency codes." });
+      return;
+    }
+
+    if (codes.length > currencyDictionary.maxOptional) {
+      res.status(400).json({ message: `At most ${currencyDictionary.maxOptional} optional currencies allowed.` });
+      return;
+    }
+
+    for (const code of codes) {
+      if (typeof code !== "string" || code.length !== 3 || !VALID_CURRENCY_CODES.has(code)) {
+        res.status(400).json({ message: `Invalid currency code: ${code}` });
+        return;
+      }
+    }
+
+    if (!req.userRecord.spreadsheetId) {
+      res.status(400).json({ message: "Connect a spreadsheet before configuring currencies." });
+      return;
+    }
+
+    await setUserCurrencies(req.userRecord.email, codes);
+
+    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const { sheetCurrencies } = await applyUserCurrencies(
+      accessToken,
+      req.userRecord.spreadsheetId,
+      codes,
+    );
+
+    res.json({
+      currencies: codes,
+      sheetCurrencies,
+    });
+  } catch (error) {
+    res.status(400).json({ message: (error).message });
+  }
 });
 
 app.get("/api/expenses", requireAuthenticatedUser, async (req, res) => {

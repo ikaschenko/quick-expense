@@ -1,6 +1,6 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileSpreadsheet, Info } from "lucide-react";
+import { FileSpreadsheet, Info, Coins, X } from "lucide-react";
 import { Layout } from "../components/Layout";
 import { LoadingBlock } from "../components/LoadingBlock";
 import { StatusBanner } from "../components/StatusBanner";
@@ -8,11 +8,11 @@ import { useConfig } from "../contexts/ConfigContext";
 import { openSpreadsheetPicker } from "../services/googlePicker";
 import { googleSheetsService } from "../services/googleSheets";
 import { trackEvent } from "../services/analytics";
-import { AppError, HeaderDetails, SetupReport } from "../types/expense";
+import { AppError, CurrencyDictionary, CurrencyEntry, HeaderDetails, SetupReport } from "../types/expense";
 import { resolveSetupBannerState } from "../utils/setupStatus";
 
 export function SetupPage(): JSX.Element {
-  const { config, isConfigLoading, error: configError, saveConfig, refreshConfig } = useConfig();
+  const { config, isConfigLoading, error: configError, saveConfig, refreshConfig, saveCurrencies } = useConfig();
   const navigate = useNavigate();
   const [spreadsheetUrl, setSpreadsheetUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -23,9 +23,85 @@ export function SetupPage(): JSX.Element {
   const [isPicking, setIsPicking] = useState(false);
   const [hasInvalidSetup, setHasInvalidSetup] = useState(false);
 
+  // Currency config state
+  const [dictionary, setDictionary] = useState<CurrencyDictionary | null>(null);
+  const [selectedCurrencies, setSelectedCurrencies] = useState<string[]>([]);
+  const [currencySearch, setCurrencySearch] = useState("");
+  const [isSavingCurrencies, setIsSavingCurrencies] = useState(false);
+  const [currencyError, setCurrencyError] = useState<string | null>(null);
+  const [currencySuccess, setCurrencySuccess] = useState<string | null>(null);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
   useEffect(() => {
     setSpreadsheetUrl(config?.spreadsheetUrl ?? "");
   }, [config]);
+
+  // Load currency dictionary and pre-populate selection from config
+  useEffect(() => {
+    if (!config) return;
+    void googleSheetsService.getAvailableCurrencies().then(setDictionary).catch(() => undefined);
+  }, [config]);
+
+  useEffect(() => {
+    if (config?.currencies) {
+      setSelectedCurrencies(config.currencies);
+    }
+  }, [config?.currencies]);
+
+  const currencyMap = useMemo(() => {
+    if (!dictionary) return new Map<string, CurrencyEntry>();
+    return new Map(dictionary.currencies.map((c) => [c.code, c]));
+  }, [dictionary]);
+
+  const filteredCurrencies = useMemo(() => {
+    if (!dictionary) return [];
+    const q = currencySearch.toLowerCase();
+    return dictionary.currencies.filter(
+      (c) =>
+        !selectedCurrencies.includes(c.code) &&
+        (c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)),
+    );
+  }, [dictionary, currencySearch, selectedCurrencies]);
+
+  const toggleCurrency = useCallback(
+    (code: string) => {
+      setCurrencySuccess(null);
+      setCurrencyError(null);
+      setSelectedCurrencies((prev) => {
+        if (prev.includes(code)) return prev.filter((c) => c !== code);
+        if (dictionary && prev.length >= dictionary.maxOptional) return prev;
+        return [...prev, code];
+      });
+    },
+    [dictionary],
+  );
+
+  const onSaveCurrencies = async (): Promise<void> => {
+    setCurrencyError(null);
+    setCurrencySuccess(null);
+    setIsSavingCurrencies(true);
+    try {
+      const result = await googleSheetsService.saveUserCurrencies(selectedCurrencies);
+      saveCurrencies(result.currencies, result.sheetCurrencies);
+      setCurrencySuccess("Currency columns updated.");
+      trackEvent("currencies_saved", { count: result.currencies.length });
+    } catch (err) {
+      setCurrencyError((err as Error).message);
+    } finally {
+      setIsSavingCurrencies(false);
+    }
+  };
 
   const saveSpreadsheet = async (url: string): Promise<void> => {
     setError(null);
@@ -197,6 +273,98 @@ export function SetupPage(): JSX.Element {
           {isPicking ? "Opening picker…" : "Browse Google Drive"}
         </button>
       </div>
+
+      {/* Currency configuration card — visible only when spreadsheet is connected */}
+      {config?.spreadsheetId && dictionary ? (
+        <div className="card setup-card" style={{ marginTop: "var(--space-4)" }}>
+          <div className="setup-card-icon">
+            <Coins size={24} aria-hidden />
+            <span className="setup-card-title">Currency Configuration</span>
+          </div>
+
+          <div className="input-group">
+            <label className="input-label">Baseline Currency</label>
+            <div className="currency-baseline-pill">USD — US Dollar</div>
+          </div>
+
+          <div className="input-group">
+            <label className="input-label" htmlFor="currency-search">
+              Optional Currencies (up to {dictionary.maxOptional})
+            </label>
+
+            {/* Selected chips */}
+            {selectedCurrencies.length > 0 ? (
+              <div className="currency-selected-chips">
+                {selectedCurrencies.map((code) => {
+                  const entry = currencyMap.get(code);
+                  return (
+                    <span key={code} className="currency-chip">
+                      {code}{entry ? ` — ${entry.name}` : ""}
+                      <button
+                        type="button"
+                        className="currency-chip-remove"
+                        onClick={() => toggleCurrency(code)}
+                        aria-label={`Remove ${code}`}
+                      >
+                        <X size={12} />
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            {/* Searchable dropdown */}
+            <div className="currency-dropdown-wrapper" ref={dropdownRef}>
+              <input
+                id="currency-search"
+                className="input"
+                value={currencySearch}
+                onChange={(e) => {
+                  setCurrencySearch(e.target.value);
+                  setIsDropdownOpen(true);
+                }}
+                onFocus={() => setIsDropdownOpen(true)}
+                onClick={() => setIsDropdownOpen(true)}
+                onKeyDown={(e) => { if (e.key === "Escape") setIsDropdownOpen(false); }}
+                placeholder={selectedCurrencies.length >= dictionary.maxOptional ? `Limit of ${dictionary.maxOptional} reached` : "Search currencies…"}
+                autoComplete="off"
+              />
+              {isDropdownOpen && filteredCurrencies.length > 0 ? (
+                <ul className="currency-dropdown-list" role="listbox">
+                  {filteredCurrencies.map((c) => (
+                    <li
+                      key={c.code}
+                      className="currency-dropdown-item"
+                      role="option"
+                      aria-selected={false}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        toggleCurrency(c.code);
+                        setCurrencySearch("");
+                      }}
+                    >
+                      <strong>{c.code}</strong> — {c.name}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          </div>
+
+          {currencyError ? <StatusBanner variant="error" message={currencyError} /> : null}
+          {currencySuccess ? <StatusBanner variant="success" message={currencySuccess} /> : null}
+
+          <button
+            className="btn btn-primary"
+            disabled={isSavingCurrencies}
+            type="button"
+            onClick={() => void onSaveCurrencies()}
+          >
+            {isSavingCurrencies ? "Saving…" : "Save Currencies"}
+          </button>
+        </div>
+      ) : null}
 
       <div className="setup-trust">
         <Info size={16} aria-hidden />

@@ -82,8 +82,12 @@ quick-expense/
 │   ├── privacy-policy.html    ← required for Google OAuth app verification
 │   └── terms-of-service.html  ← required for Google OAuth app verification
 │
+├── config/
+│   └── currencies.json        ← currency dictionary (25 codes) + maxOptional limit
+│
 ├── db/                        ← database schema and migration scripts
 │   ├── 001_initial_schema.sql ← initial PostgreSQL schema (users, fx_rate_backups, sessions)
+│   ├── 003_user_currencies.sql ← user_currencies table (configurable currencies per user)
 │   └── README.md              ← database setup instructions
 │
 ├── server/                    ← Express back-end (plain JS, ES modules)
@@ -105,7 +109,7 @@ quick-expense/
 │   │   ├── ProtectedRoute.tsx ← redirect to login if unauthenticated
 │   │   └── StatusBanner.tsx   ← error/success/info banner
 │   ├── constants/
-│   │   ├── expenses.ts        ← header names, currency lists, limits
+│   │   ├── expenses.ts        ← fixed header names, header builder, limits
 │   │   └── feedback.ts        ← Google Forms feedback URL
 │   ├── contexts/              ← React context providers (global state)
 │   │   ├── AuthContext.tsx     ← authentication state + sign-in/sign-out
@@ -243,6 +247,9 @@ All API routes are defined in `server/index.js`.
 | GET | `/api/expenses` | Yes | Load all expense records from the spreadsheet |
 | POST | `/api/expenses` | Yes | Append a new expense row |
 | GET | `/api/fx-backup` | Yes | Get the latest saved FX rate backup |
+| GET | `/api/currencies/available` | Yes | Get the currency dictionary (all supported codes + max limit) |
+| GET | `/api/currencies` | Yes | Get the user's active currency codes |
+| PUT | `/api/currencies` | Yes | Save user's currency selection and update sheet columns |
 
 "Auth = Yes" means the `requireAuthenticatedUser` middleware is applied: it verifies the session cookie has a `userEmail`, retrieves the user record, and attaches it to `req.userRecord`.
 
@@ -290,7 +297,7 @@ Stores FX rate conversion rates from expense submissions. One row per currency p
 | `submitted_at` | TIMESTAMPTZ | NOT NULL |
 
 - Index on `(user_email, spreadsheet_id, submitted_at DESC)` for efficient latest-backup lookup.
-- A single backup submission with rates for PLN and EUR creates 2 rows sharing the same `submitted_at` value.
+- A single backup submission with rates for any configured currencies creates one row per currency sharing the same `submitted_at` value.
 - Currency amounts are not stored (they are not read back by the frontend).
 
 #### c) `sessions` Table
@@ -305,22 +312,40 @@ Managed automatically by `connect-pg-simple`. Stores express-session data.
 
 - Expired sessions are pruned automatically every 15 minutes by `connect-pg-simple`.
 
+#### d) `user_currencies` Table
+
+Stores each user's configurable (non-USD) currency selections with an audit trail.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | SERIAL | PRIMARY KEY |
+| `user_email` | TEXT | NOT NULL, FK → users(email) |
+| `currency_code` | VARCHAR(3) | NOT NULL |
+| `added_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() |
+| `removed_at` | TIMESTAMPTZ | NULL |
+
+- Unique partial index on `(user_email, currency_code) WHERE removed_at IS NULL` prevents duplicates among active currencies.
+- When a user removes a currency, `removed_at` is set (soft-delete). The column remains in the spreadsheet for historical data.
+- On first load, if no records exist for a user, active currencies are auto-seeded from the sheet's existing header columns (legacy migration).
+
 ### 7.2 Expense Data — Google Spreadsheet
 
 **Expense data is NOT stored in the backend.** It lives entirely in a Google Spreadsheet controlled by the user.
 
 Required structure:
 - Sheet name: `Expenses`
-- Header row (exact order):
+- Header row (dynamic order):
 
-| Date | PLN | BYN | EUR | USD | Category | WhoSpent | ForWhom | Comment | PaymentChannel | Theme |
-|---|---|---|---|---|---|---|---|---|---|---|
+| Date | *[user-configured currencies]* | USD | Category | WhoSpent | ForWhom | Comment | PaymentChannel | Theme |
+|---|---|---|---|---|---|---|---|---|
 
+- Currency columns between Date and USD are user-configurable (up to 3 non-USD currencies from a dictionary of 25).
+- New currency columns are inserted before USD via Sheets batchUpdate `insertDimension`. Removed currencies keep their columns in-place for historical data (never deleted).
 - Auto-created if the sheet is empty on Setup.
-- Legacy column order (USD/EUR swapped) is auto-migrated.
+- Legacy column order (USD/EUR swapped from original PLN/BYN/USD/EUR layout) is auto-migrated.
 - Header validation occurs on Setup and before every Add, Tail, and Search operation.
 - Append uses Google Sheets API `values:append` with `INSERT_ROWS`.
-- Load reads `Expenses!A:K`, maps rows to `ExpenseRecord` objects.
+- Load reads a dynamic column range `Expenses!A:{lastColumn}`, maps rows to `ExpenseRecord` objects with a `currencyAmounts` map.
 - Dataset payload size is capped at **10 MB** (calculated as JSON byte size of all records). If exceeded, Tail/Search is denied.
 
 ### 7.3 Database Schema Management
@@ -379,8 +404,8 @@ Frontend services in `src/services/` are thin wrappers around `fetch`:
 ### 8.4 Key Front-End Conventions
 
 - **TypeScript strict mode** with `moduleResolution: Bundler`.
-- Types are centralized in `src/types/expense.ts` — includes `ExpenseDraft`, `ExpenseRecord`, `SpreadsheetConfig`, `AuthSession`, `SearchFilters`, `DatasetSnapshot`, `AppError`.
-- Constants (header names, currency lists, limits) are in `src/constants/expenses.ts`.
+- Types are centralized in `src/types/expense.ts` — includes `ExpenseDraft`, `ExpenseRecord`, `SpreadsheetConfig`, `CurrencyDictionary`, `AuthSession`, `SearchFilters`, `DatasetSnapshot`, `AppError`.
+- Constants (fixed header names, `buildExpenseHeaders()`, limits) are in `src/constants/expenses.ts`.
 - Pure utility functions are in `src/utils/` — validation, search filtering, spreadsheet helpers, date formatting.
 - No CSS framework — global styles in `src/index.css`.
 - Icons via `lucide-react`.
@@ -457,7 +482,7 @@ The backend validates all required env vars at startup and fails fast if any are
 3. **Client-side search** — the full dataset is loaded into the browser. Capped at 10 MB JSON payload.
 4. **No edit/delete of existing records** — append-only by design (v1).
 5. **No duplicate detection** — each Save appends a new row unconditionally.
-6. **Currency:** At most one of PLN/BYN/EUR at a time, optionally alongside USD. Manual FX rate conversion (no external API).
+6. **Currency:** Users configure up to 3 non-USD currencies from a dictionary of 25 (stored in `config/currencies.json` and `user_currencies` DB table). At most one non-USD currency at a time per expense, optionally alongside USD. Manual FX rate conversion (no external API). Archived currency columns remain in the sheet.
 7. **No pagination** — search results capped at 100.
 8. **Single sheet named "Expenses"** — no multi-sheet support.
 9. **Concurrency** — relies on Google Sheets API atomic append; no manual row indexing.

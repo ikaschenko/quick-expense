@@ -150,7 +150,12 @@ export function SearchPage(): JSX.Element {
                   message={`Showing first 100 of ${outcome.allMatches.length} results.`}
                 />
               ) : null}
-              <ExpenseTable records={outcome.visibleMatches} emptyMessage="Nothing found." />
+              <ExpenseTable
+                records={outcome.visibleMatches}
+                emptyMessage="Nothing found."
+                sheetCurrencies={config?.sheetCurrencies}
+                activeCurrencies={config?.currencies}
+              />
             </>
           )}
         </>

@@ -1,4 +1,5 @@
 import {
+  CurrencyDictionary,
   ExpenseRecord,
   FxRateBackupPayload,
   FxRateBackupRecord,
@@ -33,6 +34,7 @@ export const googleSheetsService = {
   async loadExpenses(): Promise<{
     records: ExpenseRecord[];
     payloadBytes: number;
+    sheetCurrencies: string[];
   }> {
     return requestJson("/api/expenses");
   },
@@ -47,5 +49,21 @@ export const googleSheetsService = {
   async getLatestFxRateBackup(): Promise<FxRateBackupRecord | null> {
     const response = await requestJson<{ backup: FxRateBackupRecord | null }>("/api/fx-backup");
     return response.backup;
+  },
+
+  async getAvailableCurrencies(): Promise<CurrencyDictionary> {
+    return requestJson("/api/currencies/available");
+  },
+
+  async getUserCurrencies(): Promise<string[]> {
+    const response = await requestJson<{ currencies: string[] }>("/api/currencies");
+    return response.currencies;
+  },
+
+  async saveUserCurrencies(codes: string[]): Promise<{ currencies: string[]; sheetCurrencies: string[] }> {
+    return requestJson("/api/currencies", {
+      method: "PUT",
+      body: JSON.stringify({ currencies: codes }),
+    });
   },
 };

@@ -1,23 +1,44 @@
 // @vitest-environment node
 const mockQuery = vi.fn();
+const mockConnect = vi.fn();
+const mockClient = {
+  query: vi.fn(),
+  release: vi.fn(),
+};
 
 vi.mock("../server/db.js", () => ({
-  default: { query: (...args) => mockQuery(...args) },
+  default: {
+    query: (...args) => mockQuery(...args),
+    connect: () => mockConnect(),
+  },
 }));
 
 let getUserRecord;
 let updateUserRecord;
 let saveFxRateBackup;
 let getLatestFxRateBackup;
+let getActiveUserCurrencies;
+let setUserCurrencies;
+let initUserCurrenciesFromHeaders;
 
 beforeAll(async () => {
-  ({ getUserRecord, updateUserRecord, saveFxRateBackup, getLatestFxRateBackup } = await import(
-    "../server/store.js"
-  ));
+  ({
+    getUserRecord,
+    updateUserRecord,
+    saveFxRateBackup,
+    getLatestFxRateBackup,
+    getActiveUserCurrencies,
+    setUserCurrencies,
+    initUserCurrenciesFromHeaders,
+  } = await import("../server/store.js"));
 });
 
 beforeEach(() => {
   mockQuery.mockReset();
+  mockConnect.mockReset();
+  mockClient.query.mockReset();
+  mockClient.release.mockReset();
+  mockConnect.mockResolvedValue(mockClient);
 });
 
 describe("getUserRecord", () => {
@@ -165,9 +186,73 @@ describe("getLatestFxRateBackup", () => {
     expect(result).toEqual({
       rates: {
         PLN: "3.720000",
-        BYN: null,
         EUR: "1.160000",
       },
     });
+  });
+});
+
+describe("getActiveUserCurrencies", () => {
+  it("returns active currency codes ordered by added_at", async () => {
+    mockQuery.mockResolvedValue({
+      rows: [{ currency_code: "PLN" }, { currency_code: "EUR" }],
+    });
+
+    const result = await getActiveUserCurrencies("user@test.com");
+    expect(result).toEqual(["PLN", "EUR"]);
+    expect(mockQuery.mock.calls[0][0]).toContain("removed_at IS NULL");
+  });
+
+  it("returns empty array when no currencies are configured", async () => {
+    mockQuery.mockResolvedValue({ rows: [] });
+    const result = await getActiveUserCurrencies("user@test.com");
+    expect(result).toEqual([]);
+  });
+});
+
+describe("setUserCurrencies", () => {
+  it("marks removed currencies and inserts new ones in a transaction", async () => {
+    // Current active: PLN, EUR; Desired: EUR, GBP
+    mockClient.query
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockResolvedValueOnce({
+        rows: [{ currency_code: "PLN" }, { currency_code: "EUR" }],
+      }) // SELECT current
+      .mockResolvedValueOnce({}) // UPDATE PLN removed_at
+      .mockResolvedValueOnce({}) // INSERT GBP
+      .mockResolvedValueOnce({}); // COMMIT
+
+    await setUserCurrencies("user@test.com", ["EUR", "GBP"]);
+
+    expect(mockClient.query).toHaveBeenCalledTimes(5);
+    expect(mockClient.query.mock.calls[0][0]).toBe("BEGIN");
+    expect(mockClient.query.mock.calls[2][0]).toContain("UPDATE user_currencies SET removed_at");
+    expect(mockClient.query.mock.calls[2][1]).toContain("PLN");
+    expect(mockClient.query.mock.calls[3][0]).toContain("INSERT INTO user_currencies");
+    expect(mockClient.query.mock.calls[3][1]).toContain("GBP");
+    expect(mockClient.query.mock.calls[4][0]).toBe("COMMIT");
+    expect(mockClient.release).toHaveBeenCalled();
+  });
+});
+
+describe("initUserCurrenciesFromHeaders", () => {
+  it("inserts currencies when user has no records", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ count: "0" }] }) // COUNT
+      .mockResolvedValueOnce({}) // INSERT PLN
+      .mockResolvedValueOnce({}); // INSERT EUR
+
+    await initUserCurrenciesFromHeaders("user@test.com", ["PLN", "EUR"]);
+
+    expect(mockQuery).toHaveBeenCalledTimes(3);
+    expect(mockQuery.mock.calls[1][0]).toContain("INSERT INTO user_currencies");
+  });
+
+  it("skips insert when user already has records", async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [{ count: "2" }] });
+
+    await initUserCurrenciesFromHeaders("user@test.com", ["PLN", "EUR"]);
+
+    expect(mockQuery).toHaveBeenCalledTimes(1);
   });
 });

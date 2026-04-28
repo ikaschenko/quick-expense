@@ -1,20 +1,25 @@
 import { parsePositiveDecimal, validateExpenseDraft } from "../src/utils/validation";
 
+const ACTIVE_CURRENCIES = ["PLN", "BYN", "EUR"];
+
+function makeDraft(overrides: Record<string, unknown> = {}) {
+  return {
+    Date: "",
+    USD: "",
+    Category: "",
+    WhoSpent: "",
+    ForWhom: "",
+    Comment: "",
+    PaymentChannel: "",
+    Theme: "",
+    currencyAmounts: { PLN: "", BYN: "", EUR: "" },
+    ...overrides,
+  };
+}
+
 describe("expense validation", () => {
   it("requires date, at least one currency, category, and WhoSpent", () => {
-    const errors = validateExpenseDraft({
-      Date: "",
-      PLN: "",
-      BYN: "",
-      USD: "",
-      EUR: "",
-      Category: "",
-      WhoSpent: "",
-      ForWhom: "",
-      Comment: "",
-      PaymentChannel: "",
-      Theme: "",
-    });
+    const errors = validateExpenseDraft(makeDraft(), ACTIVE_CURRENCIES);
 
     expect(errors.Date).toContain("YYYY-MM-DD");
     expect(errors.USD).toContain("at least one");
@@ -23,57 +28,61 @@ describe("expense validation", () => {
   });
 
   it("accepts valid decimal currency fields", () => {
-    const errors = validateExpenseDraft({
-      Date: "2026-03-14",
-      PLN: "-10.25",
-      BYN: "",
-      USD: "",
-      EUR: "",
-      Category: "Misc",
-      WhoSpent: "ivan@example.com",
-      ForWhom: "",
-      Comment: "",
-      PaymentChannel: "",
-      Theme: "",
-    });
+    const errors = validateExpenseDraft(
+      makeDraft({
+        Date: "2026-03-14",
+        Category: "Misc",
+        WhoSpent: "ivan@example.com",
+        currencyAmounts: { PLN: "-10.25", BYN: "", EUR: "" },
+      }),
+      ACTIVE_CURRENCIES,
+    );
 
     expect(errors).toEqual({});
   });
 
   it("rejects submitting more than one non-USD currency amount", () => {
-    const errors = validateExpenseDraft({
-      Date: "2026-03-14",
-      PLN: "10.25",
-      BYN: "5",
-      USD: "",
-      EUR: "",
-      Category: "Misc",
-      WhoSpent: "ivan@example.com",
-      ForWhom: "",
-      Comment: "",
-      PaymentChannel: "",
-      Theme: "",
-    });
+    const errors = validateExpenseDraft(
+      makeDraft({
+        Date: "2026-03-14",
+        Category: "Misc",
+        WhoSpent: "ivan@example.com",
+        currencyAmounts: { PLN: "10.25", BYN: "5", EUR: "" },
+      }),
+      ACTIVE_CURRENCIES,
+    );
 
-    expect(errors.PLN).toContain("Only one of PLN, BYN, or EUR");
-    expect(errors.BYN).toContain("Only one of PLN, BYN, or EUR");
+    expect(errors.PLN).toContain("Only one of");
+    expect(errors.BYN).toContain("Only one of");
     expect(errors.EUR).toBeUndefined();
   });
 
   it("allows a single non-USD amount together with USD", () => {
-    const errors = validateExpenseDraft({
-      Date: "2026-03-14",
-      PLN: "10.25",
-      BYN: "",
-      USD: "2.80",
-      EUR: "",
-      Category: "Misc",
-      WhoSpent: "ivan@example.com",
-      ForWhom: "",
-      Comment: "",
-      PaymentChannel: "",
-      Theme: "",
-    });
+    const errors = validateExpenseDraft(
+      makeDraft({
+        Date: "2026-03-14",
+        USD: "2.80",
+        Category: "Misc",
+        WhoSpent: "ivan@example.com",
+        currencyAmounts: { PLN: "10.25", BYN: "", EUR: "" },
+      }),
+      ACTIVE_CURRENCIES,
+    );
+
+    expect(errors).toEqual({});
+  });
+
+  it("works with zero active currencies (USD-only mode)", () => {
+    const errors = validateExpenseDraft(
+      makeDraft({
+        Date: "2026-03-14",
+        USD: "5.00",
+        Category: "Misc",
+        WhoSpent: "ivan@example.com",
+        currencyAmounts: {},
+      }),
+      [],
+    );
 
     expect(errors).toEqual({});
   });

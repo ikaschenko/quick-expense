@@ -23,6 +23,10 @@ import { LucideProps } from "lucide-react";
 interface ExpenseTableProps {
   records: ExpenseRecord[];
   emptyMessage?: string;
+  /** All currency columns in the sheet (active + archived). */
+  sheetCurrencies?: string[];
+  /** User's currently active currencies. */
+  activeCurrencies?: string[];
 }
 
 const COMMENT_PREVIEW_LENGTH = 72;
@@ -65,11 +69,13 @@ function getCategoryIcon(category: string): LucideIcon {
   return Receipt;
 }
 
-function getDisplayAmount(record: ExpenseRecord): string {
-  if (record.PLN) return `PLN ${record.PLN}`;
-  if (record.EUR) return `EUR ${record.EUR}`;
-  if (record.BYN) return `BYN ${record.BYN}`;
-  if (record.USD) return `USD ${record.USD}`;
+function getDisplayAmount(record: ExpenseRecord, sheetCurrencies: string[] = []): string {
+  // Show the first non-empty non-USD currency amount
+  for (const code of sheetCurrencies) {
+    const val = record.currencyAmounts?.[code];
+    if (val?.trim()) return `${code} ${val}`;
+  }
+  if (record.USD?.trim()) return `USD ${record.USD}`;
   return "—";
 }
 
@@ -183,6 +189,8 @@ function groupByDate(records: ExpenseRecord[]): DateGroup[] {
 export function ExpenseTable({
   records,
   emptyMessage = "No records found.",
+  sheetCurrencies = [],
+  activeCurrencies = [],
 }: ExpenseTableProps): JSX.Element {
   const groups = useMemo(() => groupByDate(records), [records]);
 
@@ -215,7 +223,7 @@ export function ExpenseTable({
                         <span className="expense-card-who">{record.WhoSpent}</span>
                       ) : null}
                     </span>
-                    <span className="expense-card-amount">{getDisplayAmount(record)}</span>
+                    <span className="expense-card-amount">{getDisplayAmount(record, sheetCurrencies)}</span>
                   </div>
                   {record.Comment || record.ForWhom ? (
                     <div className="expense-card-bottom">

@@ -30,7 +30,7 @@ window.__i18n.es = {
 
   "benefits.title": "Hecho para la Vida Real",
   "benefits.currency.title": "Soporte Multi-Moneda",
-  "benefits.currency.desc": "Registra gastos en PLN, USD, EUR o BYN. Perfecto para viajeros y familias internacionales.",
+  "benefits.currency.desc": "Registra gastos en más de 25 monedas incluyendo PLN, EUR, GBP, BYN y más. Configura hasta 3 junto con USD. Perfecto para viajeros y familias internacionales.",
   "benefits.family.title": "Para Toda la Familia",
   "benefits.family.desc": "M\u00faltiples usuarios pueden compartir la misma hoja de c\u00e1lculo. Registra qui\u00e9n gast\u00f3 qu\u00e9 y para qui\u00e9n.",
   "benefits.secure.title": "Seguro y Privado",

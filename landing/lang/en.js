@@ -30,7 +30,7 @@ window.__i18n.en = {
 
   "benefits.title": "Built for Real Life",
   "benefits.currency.title": "Multi-Currency Support",
-  "benefits.currency.desc": "Track expenses in PLN, USD, EUR, or BYN. Perfect for travelers and international families.",
+  "benefits.currency.desc": "Track expenses in 25+ currencies including PLN, EUR, GBP, BYN, and more. Configure up to 3 alongside USD. Perfect for travelers and international families.",
   "benefits.family.title": "Family-Friendly",
   "benefits.family.desc": "Multiple users can share the same spreadsheet. Track who spent what and for whom.",
   "benefits.secure.title": "Secure & Private",

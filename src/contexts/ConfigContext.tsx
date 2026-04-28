@@ -20,6 +20,7 @@ interface ConfigContextValue {
   clearConfig: () => void;
   clearError: () => void;
   refreshConfig: () => void;
+  saveCurrencies: (currencies: string[], sheetCurrencies: string[]) => void;
 }
 
 const ConfigContext = createContext<ConfigContextValue | null>(null);
@@ -103,6 +104,11 @@ export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
             console.error("[ConfigContext] refreshConfig failed:", message);
           })
           .finally(() => setIsConfigLoading(false));
+      },
+      saveCurrencies: (currencies, sheetCurrencies) => {
+        setConfig((prev) =>
+          prev ? { ...prev, currencies, sheetCurrencies } : prev,
+        );
       },
     };
   }, [config, isConfigLoading, error, session]);

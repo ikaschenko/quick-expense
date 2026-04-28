@@ -1,7 +1,6 @@
-import { EXPENSE_HEADERS, NON_USD_CURRENCIES } from "../constants/expenses";
-import { AppError, CurrencyCode, ExpenseDraft, NonUsdCurrencyCode } from "../types/expense";
+import { AppError, ExpenseDraft } from "../types/expense";
 
-export type ExpenseValidationErrors = Partial<Record<(typeof EXPENSE_HEADERS)[number], string>>;
+export type ExpenseValidationErrors = Record<string, string>;
 
 const decimalPattern = /^-?\d+(\.\d+)?$/;
 const positiveDecimalPattern = /^\d+([.,]\d+)?$/;
@@ -35,29 +34,40 @@ export function parsePositiveDecimal(value: string): number | null {
   return Number(trimmed.replace(",", "."));
 }
 
-export function validateExpenseDraft(draft: ExpenseDraft): ExpenseValidationErrors {
+export function validateExpenseDraft(
+  draft: ExpenseDraft,
+  activeCurrencies: string[],
+): ExpenseValidationErrors {
   const errors: ExpenseValidationErrors = {};
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.Date)) {
     errors.Date = "Date must be in ISO format YYYY-MM-DD.";
   }
 
-  const currencyKeys: CurrencyCode[] = ["PLN", "BYN", "USD", "EUR"];
-  const filledNonUsdCurrencies: NonUsdCurrencyCode[] = [];
+  const filledNonUsdCurrencies: string[] = [];
   let atLeastOneCurrency = false;
 
-  for (const currency of currencyKeys) {
+  // Check USD
+  try {
+    const usdValue = parseOptionalDecimal(draft.USD);
+    if (usdValue !== null) {
+      atLeastOneCurrency = true;
+    }
+  } catch (error) {
+    errors.USD = (error as Error).message;
+  }
+
+  // Check dynamic non-USD currencies
+  for (const code of activeCurrencies) {
+    const raw = draft.currencyAmounts[code] ?? "";
     try {
-      const parsedValue = parseOptionalDecimal(draft[currency]);
+      const parsedValue = parseOptionalDecimal(raw);
       if (parsedValue !== null) {
         atLeastOneCurrency = true;
-
-        if ((NON_USD_CURRENCIES as readonly string[]).includes(currency)) {
-          filledNonUsdCurrencies.push(currency as NonUsdCurrencyCode);
-        }
+        filledNonUsdCurrencies.push(code);
       }
     } catch (error) {
-      errors[currency] = (error as Error).message;
+      errors[code] = (error as Error).message;
     }
   }
 
@@ -66,8 +76,8 @@ export function validateExpenseDraft(draft: ExpenseDraft): ExpenseValidationErro
   }
 
   if (filledNonUsdCurrencies.length > 1) {
-    const message = "Only one of PLN, BYN, or EUR can be filled at a time.";
-
+    const names = activeCurrencies.join(", ");
+    const message = `Only one of ${names} can be filled at a time.`;
     filledNonUsdCurrencies.forEach((currency) => {
       errors[currency] = message;
     });

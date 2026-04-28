@@ -107,13 +107,11 @@ a) Date, mandatory, ISO format YYYY-MM-DD. By default, fill with Today date (Cli
 
 b) Sum (group of fields), filling at least 1 of those fields is mandatory with a number (currency)
 
-\- PLN
+\- USD (always present)
 
-\- BYN
+\- Up to 3 additional non-USD currencies, configurable per user from a dictionary of 25 supported currencies (e.g. PLN, BYN, EUR, GBP, etc.)
 
-\- USD
-
-\- EUR
+Users configure their active currencies via the Setup page. Currency selection is stored in the database (`user_currencies` table) and reflected as columns in the spreadsheet header. Archived currencies (previously active, now removed) keep their columns in the sheet for historical data.
 
 c) Category, free text, mandatory (with ability to select via quick search from all previously entered values in this field across the database)
 
@@ -127,19 +125,33 @@ g) PaymentChannel, optional, text, with ability to select via quick search from 
 
 h) Theme, optional, text, with ability to select via quick search from all previously entered values in this field across the database
 
-The header row in the "Expenses" sheet must contain the following column names in this exact order:
+The header row in the "Expenses" sheet contains columns in this order:
 
-Date  
-PLN  
-BYN  
-EUR  
-USD  
-Category  
-WhoSpent  
-ForWhom  
-Comment  
-PaymentChannel  
+Date
+[user-configured currency columns]
+USD
+Category
+WhoSpent
+ForWhom
+Comment
+PaymentChannel
 Theme
+
+For example, a user who configured PLN, BYN, and EUR would have:
+
+Date
+PLN
+BYN
+EUR
+USD
+Category
+WhoSpent
+ForWhom
+Comment
+PaymentChannel
+Theme
+
+The currency columns between Date and USD are dynamic and depend on the user's configuration. USD is always present.
 
 Header validation must check exact match (case-sensitive) and exact column order.
 
@@ -155,7 +167,7 @@ What happens if the spreadsheet exists but has no correct header structure? Answ
 
 After a successful Setup validation, the application reports what actions were taken (e.g. "Expenses tab created", "Column headers created automatically", "Columns migrated from legacy format", or "Column headers valid"). If headers mismatch, the error includes a side-by-side table of expected vs. actual column names with mismatched columns highlighted.
 
-Can multiple currency fields be filled simultaneously? Answer: Allow USD together with at most one non-USD currency. Only one of PLN, BYN, or EUR may be filled at a time.
+Can multiple currency fields be filled simultaneously? Answer: Allow USD together with at most one non-USD currency. Only one non-USD currency may be filled at a time (regardless of which currencies are configured).
 
 Currency conversion: Here are key cases:
 
@@ -168,6 +180,7 @@ For the conversion of currency, here are key guidelines:
 * No external exchange-rate API integration is required in v1.
 * Converted USD value must be rounded to 2 decimal places.
 * Missing or invalid manual rate input must block Save when a non-USD amount is entered and USD is not entered directly.
+* The last-used FX rate for each currency is backed up in the database and pre-filled on the next Add.
 
 What format for currency fields? Answer:
 

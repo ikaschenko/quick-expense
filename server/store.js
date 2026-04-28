@@ -52,14 +52,84 @@ export async function updateUserRecord(email, updater) {
   return next;
 }
 
+export async function getActiveUserCurrencies(email) {
+  const normalizedEmail = email.toLowerCase();
+  const { rows } = await pool.query(
+    `SELECT currency_code FROM user_currencies
+     WHERE user_email = $1 AND removed_at IS NULL
+     ORDER BY added_at`,
+    [normalizedEmail],
+  );
+  return rows.map((row) => row.currency_code);
+}
+
+export async function setUserCurrencies(email, codes) {
+  const normalizedEmail = email.toLowerCase();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const { rows: currentRows } = await client.query(
+      `SELECT currency_code FROM user_currencies
+       WHERE user_email = $1 AND removed_at IS NULL`,
+      [normalizedEmail],
+    );
+    const currentCodes = new Set(currentRows.map((r) => r.currency_code));
+    const desiredCodes = new Set(codes);
+
+    // Mark removed currencies
+    for (const code of currentCodes) {
+      if (!desiredCodes.has(code)) {
+        await client.query(
+          `UPDATE user_currencies SET removed_at = now()
+           WHERE user_email = $1 AND currency_code = $2 AND removed_at IS NULL`,
+          [normalizedEmail, code],
+        );
+      }
+    }
+
+    // Insert new currencies
+    for (const code of codes) {
+      if (!currentCodes.has(code)) {
+        await client.query(
+          `INSERT INTO user_currencies (user_email, currency_code)
+           VALUES ($1, $2)`,
+          [normalizedEmail, code],
+        );
+      }
+    }
+
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export async function initUserCurrenciesFromHeaders(email, codes) {
+  const normalizedEmail = email.toLowerCase();
+  const { rows } = await pool.query(
+    `SELECT COUNT(*) AS count FROM user_currencies WHERE user_email = $1`,
+    [normalizedEmail],
+  );
+  if (Number(rows[0].count) > 0) return;
+
+  for (const code of codes) {
+    await pool.query(
+      `INSERT INTO user_currencies (user_email, currency_code) VALUES ($1, $2)`,
+      [normalizedEmail, code],
+    );
+  }
+}
+
 export async function saveFxRateBackup(email, spreadsheetId, backup) {
   const normalizedEmail = email.toLowerCase();
   const submittedAt = new Date().toISOString();
-  const currencies = ["PLN", "BYN", "EUR"];
 
-  for (const code of currencies) {
-    const rateStr = backup.rates?.[code];
-    if (!rateStr) continue;
+  for (const [code, rateStr] of Object.entries(backup.rates ?? {})) {
+    if (!rateStr || typeof code !== "string" || code.length !== 3) continue;
 
     const numericRate = Number(String(rateStr).replace(",", "."));
     if (Number.isNaN(numericRate) || numericRate <= 0) continue;
@@ -90,7 +160,7 @@ export async function getLatestFxRateBackup(email, spreadsheetId) {
 
   if (rows.length === 0) return null;
 
-  const rates = { PLN: null, BYN: null, EUR: null };
+  const rates = {};
   for (const row of rows) {
     rates[row.currency_code] = String(row.fx_rate);
   }

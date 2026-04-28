@@ -5,29 +5,29 @@ import DatePicker from "react-datepicker";
 import { Layout } from "../components/Layout";
 import { LoadingBlock } from "../components/LoadingBlock";
 import { StatusBanner } from "../components/StatusBanner";
-import { NON_USD_CURRENCIES } from "../constants/expenses";
 import { useAuth } from "../contexts/AuthContext";
 import { useConfig } from "../contexts/ConfigContext";
 import { useDataset } from "../contexts/DatasetContext";
 import { currencyService } from "../services/currency";
 import { googleSheetsService } from "../services/googleSheets";
 import {
+  CurrencyDictionary,
   ExpenseDraft,
   FxRateBackupPayload,
   ManualFxRates,
-  NonUsdCurrencyCode,
 } from "../types/expense";
 import { formatLocalDate, getTodayLocalDate } from "../utils/date";
 import { expenseDraftToRowValues } from "../utils/spreadsheet";
 import { parseOptionalDecimal, parsePositiveDecimal, validateExpenseDraft } from "../utils/validation";
 import { trackEvent } from "../services/analytics";
 
-function createInitialDraft(defaultEmail: string): ExpenseDraft {
+function createInitialDraft(defaultEmail: string, currencies: string[]): ExpenseDraft {
+  const currencyAmounts: Record<string, string> = {};
+  for (const code of currencies) {
+    currencyAmounts[code] = "";
+  }
   return {
     Date: getTodayLocalDate(),
-    PLN: "",
-    BYN: "",
-    EUR: "",
     USD: "",
     Category: "",
     WhoSpent: defaultEmail,
@@ -35,57 +35,64 @@ function createInitialDraft(defaultEmail: string): ExpenseDraft {
     Comment: "",
     PaymentChannel: "",
     Theme: "",
+    currencyAmounts,
   };
 }
 
-const emptyManualFxRates: ManualFxRates = {
-  PLN: "",
-  BYN: "",
-  EUR: "",
-};
-
-function getPreferredNonUsdCurrency(
-  expense: Pick<ExpenseDraft, NonUsdCurrencyCode> | null | undefined,
-): NonUsdCurrencyCode {
-  if (!expense) {
-    return "PLN";
+function createEmptyFxRates(currencies: string[]): ManualFxRates {
+  const rates: ManualFxRates = {};
+  for (const code of currencies) {
+    rates[code] = "";
   }
+  return rates;
+}
 
-  for (const currency of NON_USD_CURRENCIES) {
-    if (expense[currency].trim()) {
-      return currency;
+function getPreferredCurrency(
+  record: { currencyAmounts?: Record<string, string> } | null | undefined,
+  currencies: string[],
+): string | null {
+  if (currencies.length === 0) return null;
+  if (!record?.currencyAmounts) return currencies[0];
+
+  for (const code of currencies) {
+    if (record.currencyAmounts[code]?.trim()) {
+      return code;
     }
   }
 
-  return "PLN";
+  return currencies[0];
 }
 
-function parseNonUsdValues(draft: ExpenseDraft): Partial<Record<"PLN" | "BYN" | "EUR", number>> | null {
+function parseNonUsdValues(
+  draft: ExpenseDraft,
+  currencies: string[],
+): Partial<Record<string, number>> | null {
   try {
-    return {
-      PLN: parseOptionalDecimal(draft.PLN) ?? undefined,
-      BYN: parseOptionalDecimal(draft.BYN) ?? undefined,
-      EUR: parseOptionalDecimal(draft.EUR) ?? undefined,
-    };
+    const result: Partial<Record<string, number>> = {};
+    for (const code of currencies) {
+      result[code] = parseOptionalDecimal(draft.currencyAmounts[code] ?? "") ?? undefined;
+    }
+    return result;
   } catch {
     return null;
   }
 }
 
-function buildFxBackupPayload(draft: ExpenseDraft, rates: ManualFxRates): FxRateBackupPayload {
+function buildFxBackupPayload(
+  draft: ExpenseDraft,
+  rates: ManualFxRates,
+  currencies: string[],
+): FxRateBackupPayload {
+  const ratesPayload: Record<string, string | null> = {};
+  const amountsPayload: Record<string, string> = { USD: draft.USD };
+  for (const code of currencies) {
+    ratesPayload[code] = rates[code]?.trim() || null;
+    amountsPayload[code] = draft.currencyAmounts[code] ?? "";
+  }
   return {
     expenseDate: draft.Date,
-    rates: {
-      PLN: rates.PLN.trim() || null,
-      BYN: rates.BYN.trim() || null,
-      EUR: rates.EUR.trim() || null,
-    },
-    amounts: {
-      PLN: draft.PLN,
-      BYN: draft.BYN,
-      EUR: draft.EUR,
-      USD: draft.USD,
-    },
+    rates: ratesPayload,
+    amounts: amountsPayload,
   };
 }
 
@@ -94,38 +101,61 @@ export function AddExpensePage(): JSX.Element {
   const { config } = useConfig();
   const dataset = useDataset();
   const navigate = useNavigate();
-  const [draft, setDraft] = useState<ExpenseDraft>(createInitialDraft(auth.session?.email ?? ""));
+
+  const activeCurrencies = useMemo(() => config?.currencies ?? [], [config?.currencies]);
+  const sheetCurrencies = useMemo(() => config?.sheetCurrencies ?? [], [config?.sheetCurrencies]);
+
+  const [draft, setDraft] = useState<ExpenseDraft>(
+    createInitialDraft(auth.session?.email ?? "", activeCurrencies),
+  );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingFxBackup, setIsLoadingFxBackup] = useState(false);
-  const [manualFxRates, setManualFxRates] = useState<ManualFxRates>(emptyManualFxRates);
-  const [fxErrors, setFxErrors] = useState<Partial<Record<NonUsdCurrencyCode, string>>>({});
-  const [activeNonUsdCurrency, setActiveNonUsdCurrency] = useState<NonUsdCurrencyCode>("PLN");
+  const [manualFxRates, setManualFxRates] = useState<ManualFxRates>(
+    createEmptyFxRates(activeCurrencies),
+  );
+  const [fxErrors, setFxErrors] = useState<Partial<Record<string, string>>>({});
+  const [activeNonUsdCurrency, setActiveNonUsdCurrency] = useState<string | null>(
+    activeCurrencies[0] ?? null,
+  );
   const [hasManuallySelectedCurrency, setHasManuallySelectedCurrency] = useState(false);
+  const [currencyDictionary, setCurrencyDictionary] = useState<CurrencyDictionary | null>(null);
 
-  const latestSavedNonUsdCurrency = useMemo(() => {
+  // Load currency dictionary for tooltips
+  useEffect(() => {
+    if (activeCurrencies.length > 0) {
+      void googleSheetsService.getAvailableCurrencies().then(setCurrencyDictionary).catch(() => undefined);
+    }
+  }, [activeCurrencies.length]);
+
+  const currencyNameMap = useMemo(() => {
+    if (!currencyDictionary) return new Map<string, string>();
+    return new Map(currencyDictionary.currencies.map((c) => [c.code, c.name]));
+  }, [currencyDictionary]);
+
+  const latestSavedCurrency = useMemo(() => {
     const records = dataset.snapshot?.records;
     const latestRecord = records && records.length > 0 ? records[records.length - 1] : null;
-    return getPreferredNonUsdCurrency(latestRecord);
-  }, [dataset.snapshot]);
+    return getPreferredCurrency(latestRecord, activeCurrencies);
+  }, [dataset.snapshot, activeCurrencies]);
 
   useEffect(() => {
-    setDraft(createInitialDraft(auth.session?.email ?? ""));
-    setManualFxRates(emptyManualFxRates);
+    setDraft(createInitialDraft(auth.session?.email ?? "", activeCurrencies));
+    setManualFxRates(createEmptyFxRates(activeCurrencies));
     setFxErrors({});
-    setActiveNonUsdCurrency("PLN");
+    setActiveNonUsdCurrency(activeCurrencies[0] ?? null);
     setHasManuallySelectedCurrency(false);
-  }, [auth.session?.email]);
+  }, [auth.session?.email, activeCurrencies]);
 
   useEffect(() => {
     if (hasManuallySelectedCurrency || !dataset.snapshot) {
       return;
     }
 
-    setActiveNonUsdCurrency(latestSavedNonUsdCurrency);
-  }, [dataset.snapshot, hasManuallySelectedCurrency, latestSavedNonUsdCurrency]);
+    setActiveNonUsdCurrency(latestSavedCurrency);
+  }, [dataset.snapshot, hasManuallySelectedCurrency, latestSavedCurrency]);
 
   useEffect(() => {
     if (!config) {
@@ -138,7 +168,7 @@ export function AddExpensePage(): JSX.Element {
   }, [config, dataset]);
 
   useEffect(() => {
-    if (!config) {
+    if (!config || activeCurrencies.length === 0) {
       return;
     }
 
@@ -152,11 +182,11 @@ export function AddExpensePage(): JSX.Element {
           return;
         }
 
-        setManualFxRates({
-          PLN: backup.rates.PLN ?? "",
-          BYN: backup.rates.BYN ?? "",
-          EUR: backup.rates.EUR ?? "",
-        });
+        const rates: ManualFxRates = {};
+        for (const code of activeCurrencies) {
+          rates[code] = backup.rates[code] ?? "";
+        }
+        setManualFxRates(rates);
       })
       .catch(() => undefined)
       .finally(() => {
@@ -168,49 +198,40 @@ export function AddExpensePage(): JSX.Element {
     return () => {
       isActive = false;
     };
-  }, [config?.spreadsheetId]);
+  }, [config?.spreadsheetId, activeCurrencies]);
 
+  // Auto-convert non-USD → USD
+  const draftCurrencyDeps = activeCurrencies.map((c) => draft.currencyAmounts[c]).join("|");
   useEffect(() => {
-    const nonUsdValues = parseNonUsdValues(draft);
-    if (!nonUsdValues) {
-      return;
-    }
+    if (activeCurrencies.length === 0) return;
 
-    const hasNonUsdValue = Object.values(nonUsdValues).some((value) => value !== undefined);
-    if (!hasNonUsdValue) {
-      return;
-    }
+    const nonUsdValues = parseNonUsdValues(draft, activeCurrencies);
+    if (!nonUsdValues) return;
+
+    const hasNonUsdValue = Object.values(nonUsdValues).some((v) => v !== undefined);
+    if (!hasNonUsdValue) return;
 
     try {
-      const parsedRates = currencyService.parseManualFxRates(manualFxRates);
-      const rateValidationErrors: Partial<Record<NonUsdCurrencyCode, string>> = {};
+      const parsedRates = currencyService.parseManualFxRates(manualFxRates, activeCurrencies);
       let allRatesPresent = true;
 
-      (["PLN", "BYN", "EUR"] as NonUsdCurrencyCode[]).forEach((currency) => {
-        if (nonUsdValues[currency] !== undefined && !parsedRates[currency]) {
+      for (const code of activeCurrencies) {
+        if (nonUsdValues[code] !== undefined && !parsedRates[code]) {
           allRatesPresent = false;
         }
-      });
-
-      if (!allRatesPresent) {
-        return;
       }
 
-      setFxErrors(rateValidationErrors);
-      const usdValue = currencyService.convertToUsdFromRates(nonUsdValues, parsedRates);
+      if (!allRatesPresent) return;
+
+      const usdValue = currencyService.convertToUsdFromRates(nonUsdValues, parsedRates, activeCurrencies);
       const nextUsd = usdValue ? usdValue.toFixed(2) : "";
       setDraft((currentDraft) =>
-        currentDraft.USD === nextUsd
-          ? currentDraft
-          : {
-              ...currentDraft,
-              USD: nextUsd,
-            },
+        currentDraft.USD === nextUsd ? currentDraft : { ...currentDraft, USD: nextUsd },
       );
     } catch {
       // Keep the current USD value until manual FX inputs are corrected.
     }
-  }, [draft.PLN, draft.BYN, draft.EUR, manualFxRates]);
+  }, [draftCurrencyDeps, manualFxRates, activeCurrencies]);
 
   const suggestionLists = useMemo(() => dataset.distinctValues, [dataset.distinctValues]);
 
@@ -218,89 +239,72 @@ export function AddExpensePage(): JSX.Element {
     return <Navigate to="/setup" replace />;
   }
 
-  const updateDraft = <K extends keyof ExpenseDraft>(key: K, value: ExpenseDraft[K]): void => {
-    if (success) {
-      setSuccess(null);
-    }
+  const updateDraft = <K extends keyof Omit<ExpenseDraft, "currencyAmounts">>(
+    key: K,
+    value: ExpenseDraft[K],
+  ): void => {
+    if (success) setSuccess(null);
+    setDraft((d) => ({ ...d, [key]: value }));
+  };
 
-    setDraft((currentDraft) => ({
-      ...currentDraft,
-      [key]: value,
+  const updateCurrencyAmount = (code: string, value: string): void => {
+    if (success) setSuccess(null);
+    setDraft((d) => ({
+      ...d,
+      currencyAmounts: { ...d.currencyAmounts, [code]: value },
     }));
   };
 
-  const updateFxRate = (currency: NonUsdCurrencyCode, value: string): void => {
-    if (success) {
-      setSuccess(null);
-    }
-
-    setManualFxRates((currentRates) => ({
-      ...currentRates,
-      [currency]: value,
-    }));
+  const updateFxRate = (currency: string, value: string): void => {
+    if (success) setSuccess(null);
+    setManualFxRates((r) => ({ ...r, [currency]: value }));
   };
 
-  const selectNonUsdCurrency = (currency: NonUsdCurrencyCode): void => {
-    if (success) {
-      setSuccess(null);
-    }
-
+  const selectNonUsdCurrency = (currency: string): void => {
+    if (success) setSuccess(null);
     setHasManuallySelectedCurrency(true);
     setActiveNonUsdCurrency(currency);
-    setDraft((currentDraft) => {
-      const nextDraft = { ...currentDraft };
 
-      NON_USD_CURRENCIES.forEach((candidate) => {
-        if (candidate !== currency) {
-          nextDraft[candidate] = "";
-        }
-      });
-
-      return nextDraft;
+    // Clear other non-USD amounts
+    setDraft((d) => {
+      const nextAmounts = { ...d.currencyAmounts };
+      for (const code of activeCurrencies) {
+        if (code !== currency) nextAmounts[code] = "";
+      }
+      return { ...d, currencyAmounts: nextAmounts };
     });
-    setErrors((currentErrors) => {
-      const nextErrors = { ...currentErrors };
-
-      NON_USD_CURRENCIES.forEach((candidate) => {
-        if (candidate !== currency) {
-          delete nextErrors[candidate];
-        }
-      });
-
-      return nextErrors;
+    setErrors((e) => {
+      const next = { ...e };
+      for (const code of activeCurrencies) {
+        if (code !== currency) delete next[code];
+      }
+      return next;
     });
-    setFxErrors((currentErrors) => {
-      const nextErrors = { ...currentErrors };
-
-      NON_USD_CURRENCIES.forEach((candidate) => {
-        if (candidate !== currency) {
-          delete nextErrors[candidate];
-        }
-      });
-
-      return nextErrors;
+    setFxErrors((e) => {
+      const next = { ...e };
+      for (const code of activeCurrencies) {
+        if (code !== currency) delete next[code];
+      }
+      return next;
     });
   };
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
-
-    if (isSaving) {
-      return;
-    }
+    if (isSaving) return;
 
     setSuccess(null);
     setError(null);
 
-    const validationErrors = validateExpenseDraft(draft);
-    const nextFxErrors: Partial<Record<NonUsdCurrencyCode, string>> = {};
+    const validationErrors = validateExpenseDraft(draft, activeCurrencies);
+    const nextFxErrors: Partial<Record<string, string>> = {};
 
-    (["PLN", "BYN", "EUR"] as NonUsdCurrencyCode[]).forEach((currency) => {
+    for (const currency of activeCurrencies) {
       try {
-        const amount = parseOptionalDecimal(draft[currency]);
-        const rate = parsePositiveDecimal(manualFxRates[currency]);
+        const amount = parseOptionalDecimal(draft.currencyAmounts[currency] ?? "");
+        const rate = parsePositiveDecimal(manualFxRates[currency] ?? "");
 
-        if (manualFxRates[currency].trim() && rate === null) {
+        if ((manualFxRates[currency] ?? "").trim() && rate === null) {
           nextFxErrors[currency] = "Provide a valid USD rate.";
         }
 
@@ -310,7 +314,7 @@ export function AddExpensePage(): JSX.Element {
       } catch (fxError) {
         nextFxErrors[currency] = (fxError as Error).message;
       }
-    });
+    }
 
     setErrors(validationErrors);
     setFxErrors(nextFxErrors);
@@ -340,33 +344,36 @@ export function AddExpensePage(): JSX.Element {
       };
 
       if (!normalizedDraft.USD.trim()) {
-        const nonUsdValues = parseNonUsdValues(normalizedDraft);
-        const parsedRates = currencyService.parseManualFxRates(manualFxRates);
+        const nonUsdValues = parseNonUsdValues(normalizedDraft, activeCurrencies);
+        const parsedRates = currencyService.parseManualFxRates(manualFxRates, activeCurrencies);
         const usdValue =
-          nonUsdValues !== null ? currencyService.convertToUsdFromRates(nonUsdValues, parsedRates) : 0;
-
+          nonUsdValues !== null
+            ? currencyService.convertToUsdFromRates(nonUsdValues, parsedRates, activeCurrencies)
+            : 0;
         normalizedDraft.USD = usdValue ? usdValue.toFixed(2) : "";
       }
 
       await googleSheetsService.appendExpenseRow(
-        expenseDraftToRowValues(normalizedDraft),
-        buildFxBackupPayload(normalizedDraft, manualFxRates),
+        expenseDraftToRowValues(normalizedDraft, sheetCurrencies),
+        buildFxBackupPayload(normalizedDraft, manualFxRates, activeCurrencies),
       );
 
-      const submittedNonUsdCurrency = getPreferredNonUsdCurrency(normalizedDraft);
+      const submittedCurrency = getPreferredCurrency(normalizedDraft, activeCurrencies);
       dataset.invalidateDataset();
-      setDraft(createInitialDraft(auth.session?.email ?? ""));
-      setManualFxRates({
-        PLN: manualFxRates.PLN,
-        BYN: manualFxRates.BYN,
-        EUR: manualFxRates.EUR,
-      });
-      setActiveNonUsdCurrency(submittedNonUsdCurrency);
+      setDraft(createInitialDraft(auth.session?.email ?? "", activeCurrencies));
+
+      // Preserve current FX rates
+      const keptRates: ManualFxRates = {};
+      for (const code of activeCurrencies) {
+        keptRates[code] = manualFxRates[code] ?? "";
+      }
+      setManualFxRates(keptRates);
+      setActiveNonUsdCurrency(submittedCurrency);
       setHasManuallySelectedCurrency(true);
       setErrors({});
       setFxErrors({});
       setSuccess("Expense saved successfully.");
-      trackEvent("expense_added", { currency: submittedNonUsdCurrency });
+      trackEvent("expense_added", { currency: submittedCurrency ?? "USD" });
     } catch (submitError) {
       setError((submitError as Error).message);
     } finally {
@@ -395,57 +402,77 @@ export function AddExpensePage(): JSX.Element {
       {error ? <StatusBanner variant="error" message={error} /> : null}
 
       <form onSubmit={(event) => void onSubmit(event)}>
-        {/* Amount */}
-        <div className="add-amount-field">
-          <input
-            className="add-amount-input"
-            inputMode="decimal"
-            value={draft[activeNonUsdCurrency]}
-            onChange={(event) => updateDraft(activeNonUsdCurrency, event.target.value)}
-            placeholder="0.00"
-            aria-label={`Amount in ${activeNonUsdCurrency}`}
-          />
-          {errors[activeNonUsdCurrency] ? (
-            <div className="field-error">{errors[activeNonUsdCurrency]}</div>
-          ) : null}
-        </div>
-
-        {/* Currency pills */}
-        <div className="currency-pills" role="tablist" aria-label="Select currency">
-          {NON_USD_CURRENCIES.map((currency) => (
-            <button
-              key={currency}
-              className={`currency-pill${currency === activeNonUsdCurrency ? " active" : ""}`}
-              onClick={() => selectNonUsdCurrency(currency)}
-              role="tab"
-              type="button"
-              aria-selected={currency === activeNonUsdCurrency}
-            >
-              {currency}
-            </button>
-          ))}
-          <div
-            className={`currency-pill${activeNonUsdCurrency === ("USD" as never) ? " active" : ""}`}
-            style={{ opacity: 0.6 }}
-          >
-            USD
+        {/* Amount — show non-USD input only when currencies are configured */}
+        {activeNonUsdCurrency ? (
+          <div className="add-amount-field">
+            <input
+              className="add-amount-input"
+              inputMode="decimal"
+              value={draft.currencyAmounts[activeNonUsdCurrency] ?? ""}
+              onChange={(event) => updateCurrencyAmount(activeNonUsdCurrency, event.target.value)}
+              placeholder="0.00"
+              aria-label={`Amount in ${activeNonUsdCurrency}`}
+            />
+            {errors[activeNonUsdCurrency] ? (
+              <div className="field-error">{errors[activeNonUsdCurrency]}</div>
+            ) : null}
           </div>
-        </div>
+        ) : (
+          <div className="add-amount-field">
+            <input
+              className="add-amount-input"
+              inputMode="decimal"
+              value={draft.USD}
+              onChange={(event) => updateDraft("USD", event.target.value)}
+              placeholder="0.00"
+              aria-label="Amount in USD"
+            />
+            {errors.USD ? (
+              <div className="field-error">{errors.USD}</div>
+            ) : null}
+          </div>
+        )}
 
-        {/* FX Rate row */}
-        {activeNonUsdCurrency !== "PLN" || manualFxRates[activeNonUsdCurrency] ? (
+        {/* Currency pills — only when active currencies exist */}
+        {activeCurrencies.length > 0 ? (
+          <div className="currency-pills" role="tablist" aria-label="Select currency">
+            {activeCurrencies.map((currency) => (
+              <button
+                key={currency}
+                className={`currency-pill${currency === activeNonUsdCurrency ? " active" : ""}`}
+                onClick={() => selectNonUsdCurrency(currency)}
+                role="tab"
+                type="button"
+                aria-selected={currency === activeNonUsdCurrency}
+                title={currencyNameMap.get(currency) ?? currency}
+              >
+                {currency}
+              </button>
+            ))}
+            <div
+              className={`currency-pill${!activeNonUsdCurrency ? " active" : ""}`}
+              style={{ opacity: 0.6 }}
+              title="US Dollar"
+            >
+              USD
+            </div>
+          </div>
+        ) : null}
+
+        {/* FX Rate row — for active non-USD currency */}
+        {activeNonUsdCurrency && (manualFxRates[activeNonUsdCurrency] || draft.currencyAmounts[activeNonUsdCurrency]) ? (
           <div className="add-fx-row">
             <span className="add-fx-label">Rate</span>
             <input
               className="input add-fx-input"
               inputMode="decimal"
-              value={manualFxRates[activeNonUsdCurrency]}
+              value={manualFxRates[activeNonUsdCurrency] ?? ""}
               onChange={(event) => updateFxRate(activeNonUsdCurrency, event.target.value)}
               placeholder={`USD rate for ${activeNonUsdCurrency}`}
             />
           </div>
         ) : null}
-        {manualFxRates[activeNonUsdCurrency] || draft[activeNonUsdCurrency] ? (
+        {activeNonUsdCurrency && (manualFxRates[activeNonUsdCurrency] || draft.currencyAmounts[activeNonUsdCurrency]) ? (
           <div className="input-group">
             <label className="input-label" htmlFor="usd-amount">USD</label>
             <input
@@ -459,7 +486,7 @@ export function AddExpensePage(): JSX.Element {
             {errors.USD ? <div className="field-error">{errors.USD}</div> : null}
           </div>
         ) : null}
-        {fxErrors[activeNonUsdCurrency] ? (
+        {activeNonUsdCurrency && fxErrors[activeNonUsdCurrency] ? (
           <div className="field-error mb-4">{fxErrors[activeNonUsdCurrency]}</div>
         ) : null}
 

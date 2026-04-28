@@ -58,7 +58,11 @@ export function TailPage(): JSX.Element {
       ) : null}
 
       {dataset.status === "ready" ? (
-        <ExpenseTable records={visibleRecords} />
+        <ExpenseTable
+          records={visibleRecords}
+          sheetCurrencies={config?.sheetCurrencies}
+          activeCurrencies={config?.currencies}
+        />
       ) : null}
     </Layout>
   );

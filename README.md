@@ -19,9 +19,15 @@ The app is optimized for quick entry from a phone or desktop browser and support
 
 QuickExpense writes to a Google Spreadsheet that contains a sheet named `Expenses`.
 
-The required header row is:
+The header row is dynamic, based on the user's configured currencies:
 
-`Date, PLN, BYN, EUR, USD, Category, WhoSpent, ForWhom, Comment, PaymentChannel, Theme`
+`Date, [configured currencies], USD, Category, WhoSpent, ForWhom, Comment, PaymentChannel, Theme`
+
+For example, a user who configured PLN and EUR would have:
+
+`Date, PLN, EUR, USD, Category, WhoSpent, ForWhom, Comment, PaymentChannel, Theme`
+
+Users can configure up to 3 non-USD currencies from a built-in dictionary of 25 via the Setup page. USD is always present. Currency columns are added to the sheet automatically when saved, and are never removed (archived currencies remain for historical data).
 
 If the `Expenses` sheet exists and the first row is empty, the app creates the header automatically during setup.
 

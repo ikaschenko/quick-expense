@@ -1,24 +1,41 @@
-import { CURRENCY_HEADERS, EXPENSE_HEADERS, SHEET_NAME } from "../constants/expenses";
+import { FIXED_HEADERS, SHEET_NAME } from "../constants/expenses";
 
-export type CurrencyCode = (typeof CURRENCY_HEADERS)[number];
-export type HeaderName = (typeof EXPENSE_HEADERS)[number];
-export type NonUsdCurrencyCode = Exclude<CurrencyCode, "USD">;
+export type FixedHeaderName = (typeof FIXED_HEADERS)[number];
+
+export interface CurrencyEntry {
+  code: string;
+  name: string;
+}
+
+export interface CurrencyDictionary {
+  maxOptional: number;
+  currencies: CurrencyEntry[];
+}
 
 export interface ExpenseDraft {
   Date: string;
-  PLN: string;
-  BYN: string;
   USD: string;
-  EUR: string;
   Category: string;
   WhoSpent: string;
   ForWhom: string;
   Comment: string;
   PaymentChannel: string;
   Theme: string;
+  /** Dynamic non-USD currency amounts, keyed by currency code. */
+  currencyAmounts: Record<string, string>;
 }
 
-export interface ExpenseRecord extends ExpenseDraft {
+export interface ExpenseRecord {
+  Date: string;
+  USD: string;
+  Category: string;
+  WhoSpent: string;
+  ForWhom: string;
+  Comment: string;
+  PaymentChannel: string;
+  Theme: string;
+  /** Dynamic currency amounts (active + archived), keyed by code. */
+  currencyAmounts: Record<string, string>;
   rowNumber: number;
 }
 
@@ -35,6 +52,10 @@ export interface SpreadsheetConfig {
   spreadsheetUrl: string;
   spreadsheetId: string;
   sheetName: typeof SHEET_NAME;
+  /** User's currently active non-USD currency codes. */
+  currencies: string[];
+  /** All currency columns in the sheet (active + archived), in sheet order. */
+  sheetCurrencies: string[];
 }
 
 export interface SetupReport {
@@ -47,33 +68,16 @@ export interface HeaderDetails {
   actual: string[];
 }
 
-export interface ManualFxRates {
-  PLN: string;
-  BYN: string;
-  EUR: string;
-}
+export type ManualFxRates = Record<string, string>;
 
 export interface FxRateBackupPayload {
   expenseDate: string;
-  rates: {
-    PLN: string | null;
-    BYN: string | null;
-    EUR: string | null;
-  };
-  amounts: {
-    PLN: string;
-    BYN: string;
-    EUR: string;
-    USD: string;
-  };
+  rates: Record<string, string | null>;
+  amounts: Record<string, string>;
 }
 
 export interface FxRateBackupRecord {
-  rates: {
-    PLN: string | null;
-    BYN: string | null;
-    EUR: string | null;
-  };
+  rates: Record<string, string | null>;
 }
 
 export interface SearchFilters {

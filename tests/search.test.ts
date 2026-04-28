@@ -5,10 +5,8 @@ const records: ExpenseRecord[] = [
   {
     rowNumber: 2,
     Date: "2026-03-01",
-    PLN: "",
-    BYN: "",
     USD: "10.00",
-    EUR: "",
+    currencyAmounts: {},
     Category: "Food",
     WhoSpent: "ivan@example.com",
     ForWhom: "Family",
@@ -19,10 +17,8 @@ const records: ExpenseRecord[] = [
   {
     rowNumber: 3,
     Date: "2026-03-02",
-    PLN: "",
-    BYN: "",
     USD: "20.00",
-    EUR: "",
+    currencyAmounts: {},
     Category: "Travel",
     WhoSpent: "ivan@example.com",
     ForWhom: "",

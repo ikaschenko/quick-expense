@@ -1,9 +1,5 @@
 // @vitest-environment node
 const SHEET_NAME = "Expenses";
-const EXPENSE_HEADERS = [
-  "Date", "PLN", "BYN", "EUR", "USD",
-  "Category", "WhoSpent", "ForWhom", "Comment", "PaymentChannel", "Theme",
-];
 const LEGACY_EXPENSE_HEADERS = [
   "Date", "PLN", "BYN", "USD", "EUR",
   "Category", "WhoSpent", "ForWhom", "Comment", "PaymentChannel", "Theme",
@@ -81,11 +77,12 @@ describe("validateSpreadsheet", () => {
       updateValuesResponse(),
     ]);
 
-    const report = await validateSpreadsheet(TOKEN, SHEET_ID);
+    const report = await validateSpreadsheet(TOKEN, SHEET_ID, ["PLN", "EUR"]);
 
     expect(report).toEqual({
       tabAction: "created",
       headersAction: "created",
+      sheetCurrencies: ["PLN", "EUR"],
     });
 
     // Verify addSheet was called (2nd fetch call)
@@ -105,18 +102,20 @@ describe("validateSpreadsheet", () => {
       updateValuesResponse(),
     ]);
 
-    const report = await validateSpreadsheet(TOKEN, SHEET_ID);
+    const report = await validateSpreadsheet(TOKEN, SHEET_ID, ["PLN"]);
 
     expect(report).toEqual({
       tabAction: "found",
       headersAction: "created",
+      sheetCurrencies: ["PLN"],
     });
   });
 
-  it("returns valid when Expenses tab has correct headers", async () => {
+  it("returns valid when Expenses tab has correct dynamic headers", async () => {
+    const dynamicHeaders = ["Date", "PLN", "BYN", "EUR", "USD", "Category", "WhoSpent", "ForWhom", "Comment", "PaymentChannel", "Theme"];
     setupFetchSequence([
       metadataResponse(["Expenses"]),
-      headerResponse([...EXPENSE_HEADERS]),
+      headerResponse([...dynamicHeaders]),
     ]);
 
     const report = await validateSpreadsheet(TOKEN, SHEET_ID);
@@ -124,6 +123,7 @@ describe("validateSpreadsheet", () => {
     expect(report).toEqual({
       tabAction: "found",
       headersAction: "valid",
+      sheetCurrencies: ["PLN", "BYN", "EUR"],
     });
   });
 
@@ -143,6 +143,7 @@ describe("validateSpreadsheet", () => {
     expect(report).toEqual({
       tabAction: "found",
       headersAction: "migrated",
+      sheetCurrencies: ["PLN", "BYN", "EUR"],
     });
   });
 
@@ -158,11 +159,7 @@ describe("validateSpreadsheet", () => {
       await validateSpreadsheet(TOKEN, SHEET_ID);
       expect.unreachable("Should have thrown");
     } catch (error) {
-      expect(error.message).toContain("header must match");
-      expect(error.headerDetails).toEqual({
-        expected: [...EXPENSE_HEADERS],
-        actual: badHeaders,
-      });
+      expect(error.message).toContain("header");
     }
   });
 

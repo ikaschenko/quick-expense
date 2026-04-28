@@ -1,9 +1,16 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const currencyDictionary = JSON.parse(
+  readFileSync(join(__dirname, "..", "config", "currencies.json"), "utf-8"),
+);
+const VALID_CURRENCY_CODES = new Set(currencyDictionary.currencies.map((c) => c.code));
+
 const SHEET_NAME = "Expenses";
-const EXPENSE_HEADERS = [
-  "Date",
-  "PLN",
-  "BYN",
-  "EUR",
+const POST_CURRENCY_HEADERS = [
   "USD",
   "Category",
   "WhoSpent",
@@ -26,6 +33,32 @@ const LEGACY_EXPENSE_HEADERS = [
   "Theme",
 ];
 const MAX_DATASET_BYTES = 10 * 1024 * 1024;
+
+function buildExpenseHeaders(sheetCurrencies) {
+  return ["Date", ...sheetCurrencies, ...POST_CURRENCY_HEADERS];
+}
+
+/**
+ * Parse the header row and extract the currency codes between Date and USD.
+ * Returns null if the structure is invalid.
+ */
+function parseSheetCurrencies(headerRow) {
+  const normalized = normalizeHeaders(headerRow);
+  if (normalized[0] !== "Date") return null;
+
+  const usdIndex = normalized.indexOf("USD");
+  if (usdIndex < 1) return null;
+
+  const postHeaders = normalized.slice(usdIndex);
+  if (
+    postHeaders.length !== POST_CURRENCY_HEADERS.length ||
+    !POST_CURRENCY_HEADERS.every((h, i) => postHeaders[i] === h)
+  ) {
+    return null;
+  }
+
+  return normalized.slice(1, usdIndex);
+}
 
 function normalizeHeaders(row = []) {
   return row.map((value) => value.trim());
@@ -151,6 +184,7 @@ async function updateValues(accessToken, spreadsheetId, range, values) {
 }
 
 function remapLegacyRowToCurrent(row = []) {
+  // Legacy: Date,PLN,BYN,USD,EUR,...  →  Current: Date,PLN,BYN,EUR,USD,...
   const padded = [...row];
   while (padded.length < LEGACY_EXPENSE_HEADERS.length) {
     padded.push("");
@@ -172,33 +206,41 @@ function remapLegacyRowToCurrent(row = []) {
 }
 
 async function migrateLegacyColumnOrder(accessToken, spreadsheetId) {
+  const currentHeaders = ["Date", "PLN", "BYN", "EUR", ...POST_CURRENCY_HEADERS];
   const allRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A:K`);
   const migratedRows = allRows.map((row, index) =>
-    index === 0 ? [...EXPENSE_HEADERS] : remapLegacyRowToCurrent(row),
+    index === 0 ? [...currentHeaders] : remapLegacyRowToCurrent(row),
   );
 
   await updateValues(accessToken, spreadsheetId, `${SHEET_NAME}!A1:K${migratedRows.length}`, migratedRows);
 }
 
-function mapRowsToExpenseRecords(rows) {
+function mapRowsToExpenseRecords(rows, sheetCurrencies) {
+  const headers = buildExpenseHeaders(sheetCurrencies);
+
   return rows.map((row, index) => {
     const padded = [...row];
-    while (padded.length < EXPENSE_HEADERS.length) {
+    while (padded.length < headers.length) {
       padded.push("");
     }
 
+    // Currency columns are between index 1 and (1 + sheetCurrencies.length)
+    const currencyAmounts = {};
+    for (let i = 0; i < sheetCurrencies.length; i++) {
+      currencyAmounts[sheetCurrencies[i]] = padded[1 + i] ?? "";
+    }
+
+    const postStart = 1 + sheetCurrencies.length;
     return {
       Date: padded[0] ?? "",
-      PLN: padded[1] ?? "",
-      BYN: padded[2] ?? "",
-      EUR: padded[3] ?? "",
-      USD: padded[4] ?? "",
-      Category: padded[5] ?? "",
-      WhoSpent: padded[6] ?? "",
-      ForWhom: padded[7] ?? "",
-      Comment: padded[8] ?? "",
-      PaymentChannel: padded[9] ?? "",
-      Theme: padded[10] ?? "",
+      currencyAmounts,
+      USD: padded[postStart] ?? "",
+      Category: padded[postStart + 1] ?? "",
+      WhoSpent: padded[postStart + 2] ?? "",
+      ForWhom: padded[postStart + 3] ?? "",
+      Comment: padded[postStart + 4] ?? "",
+      PaymentChannel: padded[postStart + 5] ?? "",
+      Theme: padded[postStart + 6] ?? "",
       rowNumber: index + 2,
     };
   });
@@ -213,8 +255,8 @@ export function parseSpreadsheetUrl(url) {
   return match?.[1] ?? null;
 }
 
-export async function validateSpreadsheet(accessToken, spreadsheetId) {
-  const report = { tabAction: "found", headersAction: "valid" };
+export async function validateSpreadsheet(accessToken, spreadsheetId, activeCurrencies = []) {
+  const report = { tabAction: "found", headersAction: "valid", sheetCurrencies: [] };
 
   const metadata = await getMetadata(accessToken, spreadsheetId);
   const hasExpenseSheet = metadata.sheets?.some(
@@ -230,37 +272,150 @@ export async function validateSpreadsheet(accessToken, spreadsheetId) {
   const headerRow = headerRows[0];
 
   if (isHeaderRowEmpty(headerRow)) {
-    await updateValues(accessToken, spreadsheetId, `${SHEET_NAME}!A1:K1`, [
-      [...EXPENSE_HEADERS],
-    ]);
+    const headers = buildExpenseHeaders(activeCurrencies);
+    const endCol = columnLetter(headers.length);
+    await updateValues(accessToken, spreadsheetId, `${SHEET_NAME}!A1:${endCol}1`, [headers]);
     report.headersAction = "created";
+    report.sheetCurrencies = [...activeCurrencies];
     return report;
   }
 
   if (validateLegacyHeaderRow(headerRow)) {
     await migrateLegacyColumnOrder(accessToken, spreadsheetId);
     report.headersAction = "migrated";
+    report.sheetCurrencies = ["PLN", "BYN", "EUR"];
     return report;
   }
 
-  if (!validateHeaderRow(headerRow)) {
+  // Try to parse dynamic header structure
+  const sheetCurrencies = parseSheetCurrencies(headerRow);
+  if (sheetCurrencies === null) {
+    const expectedSample = buildExpenseHeaders(activeCurrencies.length > 0 ? activeCurrencies : ["(your currencies)"]);
     const error = new Error(
-      `The "${SHEET_NAME}" sheet header must match the required column names and order exactly.`,
+      `The "${SHEET_NAME}" sheet header must start with "Date", have currency columns, then "USD, Category, WhoSpent, ForWhom, Comment, PaymentChannel, Theme".`,
     );
     error.headerDetails = {
-      expected: [...EXPENSE_HEADERS],
+      expected: expectedSample,
       actual: normalizeHeaders(headerRow),
     };
     throw error;
   }
 
+  report.sheetCurrencies = sheetCurrencies;
   return report;
 }
 
+/**
+ * Apply the user's active currencies onto the sheet.
+ * - New currencies are inserted as columns immediately before USD.
+ * - Removed currencies keep their columns (archived).
+ * - Empty sheets get headers rewritten directly.
+ */
+export async function applyUserCurrencies(accessToken, spreadsheetId, activeCurrencies) {
+  const metadata = await getMetadata(accessToken, spreadsheetId);
+  const expenseSheet = metadata.sheets?.find(
+    (sheet) => sheet.properties?.title === SHEET_NAME,
+  );
+
+  if (!expenseSheet) {
+    // No sheet yet — will be created on next validateSpreadsheet call
+    return { sheetCurrencies: activeCurrencies };
+  }
+
+  const sheetId = expenseSheet.properties.sheetId;
+  const headerRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!1:1`);
+  const headerRow = headerRows[0];
+
+  if (isHeaderRowEmpty(headerRow)) {
+    const headers = buildExpenseHeaders(activeCurrencies);
+    const endCol = columnLetter(headers.length);
+    await updateValues(accessToken, spreadsheetId, `${SHEET_NAME}!A1:${endCol}1`, [headers]);
+    return { sheetCurrencies: activeCurrencies };
+  }
+
+  const existingCurrencies = parseSheetCurrencies(headerRow);
+  if (existingCurrencies === null) {
+    throw new Error("Cannot modify currencies: sheet header structure is unrecognized.");
+  }
+
+  // Determine which currencies need to be added (not yet in sheet)
+  const existingSet = new Set(existingCurrencies);
+  const toAdd = activeCurrencies.filter((code) => !existingSet.has(code));
+
+  if (toAdd.length === 0) {
+    return { sheetCurrencies: existingCurrencies };
+  }
+
+  // Check if sheet has data rows
+  const allRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A:A`);
+  const hasData = allRows.length > 1;
+
+  if (!hasData) {
+    // Rewrite header row directly
+    const newSheetCurrencies = [...existingCurrencies, ...toAdd];
+    const headers = buildExpenseHeaders(newSheetCurrencies);
+    const endCol = columnLetter(headers.length);
+    await updateValues(accessToken, spreadsheetId, `${SHEET_NAME}!A1:${endCol}1`, [headers]);
+    return { sheetCurrencies: newSheetCurrencies };
+  }
+
+  // Insert columns before USD (which is at index 1 + existingCurrencies.length)
+  const usdColumnIndex = 1 + existingCurrencies.length;
+
+  // Use batchUpdate to insert columns
+  const requests = [];
+  for (let i = 0; i < toAdd.length; i++) {
+    requests.push({
+      insertDimension: {
+        range: {
+          sheetId,
+          dimension: "COLUMNS",
+          startIndex: usdColumnIndex + i,
+          endIndex: usdColumnIndex + i + 1,
+        },
+        inheritFromBefore: false,
+      },
+    });
+  }
+
+  await requestJson(
+    accessToken,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+    {
+      method: "POST",
+      headers: createHeaders(accessToken, true),
+      body: JSON.stringify({ requests }),
+    },
+  );
+
+  // Write the new currency header names
+  const newSheetCurrencies = [...existingCurrencies, ...toAdd];
+  const newHeaders = buildExpenseHeaders(newSheetCurrencies);
+  const endCol = columnLetter(newHeaders.length);
+  await updateValues(accessToken, spreadsheetId, `${SHEET_NAME}!A1:${endCol}1`, [newHeaders]);
+
+  return { sheetCurrencies: newSheetCurrencies };
+}
+
+/** Convert 1-based column count to A1 letter (1→A, 26→Z, 27→AA, etc.) */
+function columnLetter(n) {
+  let result = "";
+  let num = n;
+  while (num > 0) {
+    num--;
+    result = String.fromCharCode(65 + (num % 26)) + result;
+    num = Math.floor(num / 26);
+  }
+  return result;
+}
+
 export async function loadExpenses(accessToken, spreadsheetId) {
-  await validateSpreadsheet(accessToken, spreadsheetId);
-  const rows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A:K`);
-  const records = mapRowsToExpenseRecords(rows.slice(1));
+  const report = await validateSpreadsheet(accessToken, spreadsheetId);
+  const sheetCurrencies = report.sheetCurrencies;
+  const headers = buildExpenseHeaders(sheetCurrencies);
+  const endCol = columnLetter(headers.length);
+  const rows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A:${endCol}`);
+  const records = mapRowsToExpenseRecords(rows.slice(1), sheetCurrencies);
   const payloadBytes = calculateJsonByteSize(records);
 
   if (payloadBytes > MAX_DATASET_BYTES) {
@@ -270,16 +425,19 @@ export async function loadExpenses(accessToken, spreadsheetId) {
   return {
     records,
     payloadBytes,
+    sheetCurrencies,
   };
 }
 
 export async function appendExpenseRow(accessToken, spreadsheetId, values) {
-  await validateSpreadsheet(accessToken, spreadsheetId);
+  const report = await validateSpreadsheet(accessToken, spreadsheetId);
+  const headers = buildExpenseHeaders(report.sheetCurrencies);
+  const endCol = columnLetter(headers.length);
 
   await requestNoContent(
     accessToken,
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(
-      `${SHEET_NAME}!A:K`,
+      `${SHEET_NAME}!A:${endCol}`,
     )}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
     {
       method: "POST",
@@ -290,4 +448,8 @@ export async function appendExpenseRow(accessToken, spreadsheetId, values) {
       }),
     },
   );
+
+  return { sheetCurrencies: report.sheetCurrencies };
 }
+
+export { VALID_CURRENCY_CODES, SHEET_NAME };
