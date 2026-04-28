@@ -627,7 +627,7 @@ button { cursor: pointer; }
 }
 
 .home-cta .btn {
-  height: 52px;
+  min-height: 100px;
   font-size: var(--font-size-lg);
 }
 
