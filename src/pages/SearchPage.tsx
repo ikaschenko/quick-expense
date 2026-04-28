@@ -53,7 +53,7 @@ export function SearchPage(): JSX.Element {
               trackEvent("search_performed", { result_count: outcome?.allMatches.length ?? 0 });
             }
           }}
-          placeholder="Search expenses…"
+          placeholder="Search… (use * between terms)"
           inputMode="text"
           aria-label="Search expenses"
         />

@@ -11,12 +11,15 @@ export function filterExpenses(records: ExpenseRecord[], filters: SearchFilters)
   const normalizedComment = filters.comment.trim().toLowerCase();
   const selectedCategories = new Set(filters.categories);
 
+  const parts = normalizedComment.split("*").filter((p) => p.length > 0);
+  const meaningfulChars = parts.join("").replace(/\s/g, "");
+
   const matches = records.filter((record) => {
     const categoryMatch =
       selectedCategories.size === 0 || selectedCategories.has(record.Category);
     const commentMatch =
-      normalizedComment.length === 0 ||
-      record.Comment.toLowerCase().includes(normalizedComment);
+      meaningfulChars.length < 2 ||
+      parts.every((p) => record.Comment.toLowerCase().includes(p));
 
     return categoryMatch && commentMatch;
   });
