@@ -664,6 +664,26 @@ button { cursor: pointer; }
   pointer-events: none;
 }
 
+.home-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 56px - 80px - 2 * var(--space-4));
+}
+
+.home-support-link {
+  display: block;
+  text-align: center;
+  margin-top: auto;
+  padding-top: var(--space-5);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-placeholder);
+  text-decoration: none;
+}
+.home-support-link:hover {
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+}
+
 /* ===== Add Expense Page ===== */
 .add-amount-field {
   text-align: center;

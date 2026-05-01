@@ -24,6 +24,7 @@ export function HomePage(): JSX.Element {
 
   return (
     <Layout title="Quick Expense">
+      <div className="home-wrapper">
       <p className="home-greeting">
         {getGreeting()}, {firstName} 👋
       </p>
@@ -85,6 +86,15 @@ export function HomePage(): JSX.Element {
             <span className="home-secondary-card-label">Find expense</span>
           </div>
         )}
+      </div>
+      <a
+        href="https://buymeacoffee.com/qexpensesux"
+        target="_blank"
+        rel="noreferrer"
+        className="home-support-link"
+      >
+        ☕ Like Quick Expense? Support the project
+      </a>
       </div>
     </Layout>
   );
