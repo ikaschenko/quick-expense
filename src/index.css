@@ -667,7 +667,7 @@ button { cursor: pointer; }
 .home-wrapper {
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 56px - 80px - 2 * var(--space-4));
+  min-height: calc(100dvh - 56px - 80px - 2 * var(--space-4));
 }
 
 .home-support-link {
