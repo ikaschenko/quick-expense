@@ -19,24 +19,13 @@ export function LoginPage(): JSX.Element {
   return (
     <div className="page-fullscreen">
       <div className="login-container">
-        <div className="login-logo">
-          <svg width="32" height="32" viewBox="0 0 120 120" fill="none">
-            <defs>
-              <linearGradient id="logoBg" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#5B21B6"/>
-                <stop offset="100%" stopColor="#4F46E5"/>
-              </linearGradient>
-            </defs>
-            <rect width="120" height="120" rx="27" fill="url(#logoBg)"/>
-            <path d="M40 22 L80 22 C82.2 22 84 23.8 84 26 L84 88 L79 84 L74 88 L69 84 L64 88 L59 84 L54 88 L49 84 L44 88 L44 88 L39 84 L36 88 L36 26 C36 23.8 37.8 22 40 22 Z" fill="white" opacity="0.95"/>
-            <rect x="44" y="34" width="28" height="3" rx="1.5" fill="#4338CA" opacity="0.6"/>
-            <rect x="44" y="44" width="22" height="3" rx="1.5" fill="#4338CA" opacity="0.4"/>
-            <rect x="44" y="54" width="26" height="3" rx="1.5" fill="#4338CA" opacity="0.6"/>
-            <rect x="44" y="64" width="18" height="3" rx="1.5" fill="#4338CA" opacity="0.4"/>
-            <circle cx="88" cy="86" r="17" fill="#10B981"/>
-            <polyline points="79.5,86 85,91.5 96.5,80" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </div>
+        <img
+          src="/QuickExpense_logo_512x512.png"
+          alt="Quick Expense"
+          className="login-logo"
+          width="80"
+          height="80"
+        />
 
         <h1 className="login-title">Quick Expense</h1>
         <p className="login-tagline">Track spending in seconds, not minutes.</p>

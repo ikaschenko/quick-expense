@@ -477,14 +477,11 @@ button { cursor: pointer; }
 }
 
 .login-logo {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 64px;
-  height: 64px;
+  display: block;
+  width: 80px;
+  height: 80px;
   border-radius: var(--radius-lg);
-  background: var(--color-accent-light);
-  margin-bottom: var(--space-6);
+  margin: 0 auto var(--space-6);
 }
 
 .login-title {
