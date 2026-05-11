@@ -1,0 +1,11 @@
+In case of a change for a product logo - don't forget to update in the following places for consistency.
+
+At the moment: 
+
+1. main app (favicon)
+2. landing page (favicon)
+3. gmail account for the product support (via accounts.google.com)
+4. google authentication form (via console.cloud.google.com -> OAuth -> Branding)
+5. product logo in the buyMeACoffee project entry
+
+

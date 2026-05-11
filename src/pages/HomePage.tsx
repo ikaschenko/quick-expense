@@ -93,7 +93,8 @@ export function HomePage(): JSX.Element {
         rel="noreferrer"
         className="home-support-link"
       >
-        ☕ Like Quick Expense? Support the project
+        <img src="/bmc-logo.svg" alt="Buy Me a Coffee" height="22" aria-hidden style={{ verticalAlign: 'middle', marginRight: '6px' }} />
+        Like Quick Expense? Support the project
       </a>
       </div>
     </Layout>
