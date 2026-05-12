@@ -2,7 +2,27 @@
 
 ## Project Overview
 
-Quick Expense is a React 18 + Vite SPA with an Express 4 backend for recording personal/family expenses via Google Sheets. Frontend is TypeScript (`src/`), backend is plain JS with ES modules (`server/`). See `architecture.md` at the repo root for the full system design, data model, and technology stack.
+Quick Expense is a React 18 + Vite SPA with an Express 4 backend for recording personal/family expenses via Google Sheets. Frontend is TypeScript (`src/`), backend is plain JS with ES modules (`server/`). See [architecture.md](../architecture.md) for the full system design, data model, and technology stack.
+
+## Quick Commands
+
+| Action | Command |
+|--------|---------|
+| Install deps | `npm install` |
+| Dev (client + server) | `npm run dev` |
+| Build (TS compile + Vite) | `npm run build` |
+| Unit tests (Vitest) | `npm test` |
+| Integration tests | `npm run test:integration` |
+| Security audit | `npm run security:audit` |
+
+Run `npm run build` after TypeScript changes and `npm test` after any logic change — both must pass before a task is complete.
+
+## Dev Environment
+
+- Copy `.env.example` → `.env` and fill in Google OAuth credentials — see [README.md](../README.md) for details.
+- PostgreSQL is required — see [db/README.md](../db/README.md) for local setup (native or Docker).
+- Vite dev server runs on `:5173` and proxies `/api` to the Express backend on `:3001`.
+- Node.js `20.19.0` (pinned in `.nvmrc`). Supported range: `^20.19.0 || ^22.12.0`.
 
 ## Core Engineering Principles
 
@@ -88,9 +108,12 @@ The test: every changed line should trace directly to the user's request.
 - Types are centralized in `src/types/expense.ts`. Constants in `src/constants/`.
 - Pure utility functions go in `src/utils/` — they must remain side-effect-free and testable.
 - Backend routes are all in `server/index.js`. Protected routes use `requireAuthenticatedUser` middleware.
+- Backend is **plain JavaScript with ES modules** — not TypeScript. Do not add `.ts` files under `server/`.
 - Mutating API endpoints require the `X-Requested-With: fetch` header (CSRF protection).
+- Styling uses plain CSS in `src/index.css` with design tokens (CSS custom properties in `:root`). No CSS modules, CSS-in-JS, or utility frameworks (Tailwind, etc.). Use existing `--color-*`, `--space-*`, `--font-size-*`, `--radius-*`, and `--shadow-*` variables.
 - Run `npm test` (Vitest) before considering any change complete. Tests live in `tests/`.
 - Run `npm run build` after TypeScript changes to verify compilation.
+- Deployment: Fly.io via Docker. CI runs in `.github/workflows/` — main app deploys on push to `main` (excluding `landing/`).
 
 ## Common Mistakes to Avoid
 
