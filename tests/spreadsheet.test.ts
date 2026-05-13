@@ -3,10 +3,12 @@ import {
   mapRowsToExpenseRecords,
   parseSpreadsheetUrl,
   validateHeaderRow,
+  validateColumnName,
 } from "../src/utils/spreadsheet";
 import { buildExpenseHeaders } from "../src/constants/expenses";
 
 const SAMPLE_CURRENCIES = ["PLN", "BYN", "EUR"];
+const SAMPLE_CUSTOM = ["SpentFor", "Channel", "Theme"];
 
 describe("spreadsheet utilities", () => {
   it("parses spreadsheet id from a Google Sheets URL", () => {
@@ -17,46 +19,90 @@ describe("spreadsheet utilities", () => {
     ).toBe("abc123DEF_456");
   });
 
-  it("validates exact header order with dynamic currencies", () => {
-    const headers = buildExpenseHeaders(SAMPLE_CURRENCIES);
-    expect(validateHeaderRow([...headers], SAMPLE_CURRENCIES)).toBe(true);
-    // Wrong order: Date missing currencies
-    expect(validateHeaderRow(["Date", "USD", "Category", "WhoSpent", "ForWhom", "Comment", "PaymentChannel", "Theme"], [])).toBe(true);
+  it("validates exact header order with dynamic currencies and custom columns", () => {
+    const headers = buildExpenseHeaders(SAMPLE_CURRENCIES, SAMPLE_CUSTOM);
+    expect(validateHeaderRow([...headers], SAMPLE_CURRENCIES, SAMPLE_CUSTOM)).toBe(true);
+    // No custom columns
+    const headersNoCust = buildExpenseHeaders(SAMPLE_CURRENCIES);
+    expect(validateHeaderRow([...headersNoCust], SAMPLE_CURRENCIES, [])).toBe(true);
+    // Wrong structure
     expect(validateHeaderRow(["Date", "PLN", "Category"], SAMPLE_CURRENCIES)).toBe(false);
   });
 
-  it("maps sheet rows to records with dynamic currencies", () => {
+  it("maps sheet rows to records with currencies and custom columns", () => {
     const records = mapRowsToExpenseRecords(
       [
-        ["2026-03-01", "12.34", "", "", "3.20", "Food", "a@example.com", "", "", "cash", ""],
-        ["2026-03-02", "", "", "", "5.00", "Travel", "b@example.com", "Family", "", "card", "Trip"],
-        ["2026-03-03", "", "", "", "7.00", "Food", "a@example.com", "", "", "cash", "Trip"],
+        ["2026-03-01", "12.34", "", "", "3.20", "Food", "a@example.com", "", "SpentFor-val", "card", "trip"],
+        ["2026-03-02", "", "", "", "5.00", "Travel", "b@example.com", "note", "", "", ""],
+        ["2026-03-03", "", "", "", "7.00", "Food", "a@example.com", "", "", "cash", "trip"],
       ],
       SAMPLE_CURRENCIES,
+      SAMPLE_CUSTOM,
     );
 
     expect(records[0].rowNumber).toBe(2);
     expect(records[0].USD).toBe("3.20");
     expect(records[0].currencyAmounts.PLN).toBe("12.34");
     expect(records[0].currencyAmounts.EUR).toBe("");
+    expect(records[0].SpentBy).toBe("a@example.com");
+    expect(records[0].customFields["SpentFor"]).toBe("SpentFor-val");
+    expect(records[0].customFields["Channel"]).toBe("card");
+    expect(records[0].customFields["Theme"]).toBe("trip");
 
-    expect(buildDistinctValues(records)).toEqual({
+    expect(buildDistinctValues(records, SAMPLE_CUSTOM)).toEqual({
       Category: ["Food", "Travel"],
-      WhoSpent: ["a@example.com", "b@example.com"],
-      ForWhom: ["Family"],
-      PaymentChannel: ["card", "cash"],
-      Theme: ["Trip"],
+      SpentBy: ["a@example.com", "b@example.com"],
+      customFields: {
+        SpentFor: ["SpentFor-val"],
+        Channel: ["card", "cash"],
+        Theme: ["trip"],
+      },
     });
   });
 
-  it("maps rows correctly with no optional currencies", () => {
+  it("maps rows correctly with no currencies and no custom columns", () => {
     const records = mapRowsToExpenseRecords(
-      [["2026-03-01", "5.00", "Food", "a@example.com", "", "", "cash", ""]],
+      [["2026-03-01", "5.00", "Food", "a@example.com", ""]],
+      [],
       [],
     );
 
     expect(records[0].USD).toBe("5.00");
     expect(records[0].Category).toBe("Food");
-    expect(records[0].currencyAmounts).toEqual({});
+    expect(records[0].SpentBy).toBe("a@example.com");
+    expect(records[0].customFields).toEqual({});
+  });
+
+  describe("validateColumnName", () => {
+    it("rejects empty names", () => {
+      expect(validateColumnName("", [])).not.toBeNull();
+      expect(validateColumnName("   ", [])).not.toBeNull();
+    });
+
+    it("rejects names over 30 characters", () => {
+      expect(validateColumnName("a".repeat(31), [])).not.toBeNull();
+      expect(validateColumnName("a".repeat(30), [])).toBeNull();
+    });
+
+    it("rejects reserved names (case-insensitive)", () => {
+      expect(validateColumnName("Date", [])).not.toBeNull();
+      expect(validateColumnName("USD", [])).not.toBeNull();
+      expect(validateColumnName("Category", [])).not.toBeNull();
+      expect(validateColumnName("spentby", [])).not.toBeNull();
+      expect(validateColumnName("COMMENT", [])).not.toBeNull();
+    });
+
+    it("rejects duplicate names (case-insensitive)", () => {
+      expect(validateColumnName("Channel", ["channel", "Theme"])).not.toBeNull();
+    });
+
+    it("allows renaming to the same name (excludeName)", () => {
+      expect(validateColumnName("Channel", ["Channel", "Theme"], "Channel")).toBeNull();
+    });
+
+    it("accepts valid names with special characters and non-ASCII", () => {
+      expect(validateColumnName("Канал", [])).toBeNull();
+      expect(validateColumnName("My Column #1", [])).toBeNull();
+    });
   });
 });

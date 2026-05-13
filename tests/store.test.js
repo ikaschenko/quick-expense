@@ -20,6 +20,14 @@ let getLatestFxRateBackup;
 let getActiveUserCurrencies;
 let setUserCurrencies;
 let initUserCurrenciesFromHeaders;
+let getActiveCustomColumns;
+let initCustomColumnsFromHeaders;
+let syncCurrenciesFromSheet;
+let syncCustomColumnsFromSheet;
+let addCustomColumn;
+let renameCustomColumn;
+let reorderCustomColumns;
+let removeCustomColumn;
 
 beforeAll(async () => {
   ({
@@ -30,6 +38,14 @@ beforeAll(async () => {
     getActiveUserCurrencies,
     setUserCurrencies,
     initUserCurrenciesFromHeaders,
+    getActiveCustomColumns,
+    initCustomColumnsFromHeaders,
+    syncCurrenciesFromSheet,
+    syncCustomColumnsFromSheet,
+    addCustomColumn,
+    renameCustomColumn,
+    reorderCustomColumns,
+    removeCustomColumn,
   } = await import("../server/store.js"));
 });
 
@@ -254,5 +270,184 @@ describe("initUserCurrenciesFromHeaders", () => {
     await initUserCurrenciesFromHeaders("user@test.com", ["PLN", "EUR"]);
 
     expect(mockQuery).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("syncCurrenciesFromSheet", () => {
+  it("hard-deletes DB currencies absent from sheet and inserts new ones", async () => {
+    mockClient.query
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockResolvedValueOnce({
+        rows: [{ currency_code: "PLN" }, { currency_code: "BYN" }],
+      }) // SELECT current
+      .mockResolvedValueOnce({}) // DELETE BYN
+      .mockResolvedValueOnce({}) // INSERT EUR
+      .mockResolvedValueOnce({}); // COMMIT
+
+    await syncCurrenciesFromSheet("user@test.com", ["PLN", "EUR"]);
+
+    const calls = mockClient.query.mock.calls.map((c) => c[0]);
+    expect(calls[0]).toBe("BEGIN");
+    const deleteCall = calls.find((q) => typeof q === "string" && q.includes("DELETE FROM user_currencies"));
+    expect(deleteCall).toBeTruthy();
+    const insertCall = calls.find((q) => typeof q === "string" && q.includes("INSERT INTO user_currencies"));
+    expect(insertCall).toBeTruthy();
+    expect(calls[calls.length - 1]).toBe("COMMIT");
+  });
+
+  it("is a no-op when sheet and DB match", async () => {
+    mockClient.query
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockResolvedValueOnce({ rows: [{ currency_code: "PLN" }] }) // SELECT current
+      .mockResolvedValueOnce({}); // COMMIT
+
+    await syncCurrenciesFromSheet("user@test.com", ["PLN"]);
+
+    const calls = mockClient.query.mock.calls.map((c) => c[0]);
+    expect(calls).not.toContain(expect.stringContaining("DELETE"));
+    expect(calls).not.toContain(expect.stringContaining("INSERT"));
+  });
+});
+
+describe("syncCustomColumnsFromSheet", () => {
+  it("hard-deletes DB columns absent from sheet and inserts new ones", async () => {
+    mockClient.query
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockResolvedValueOnce({
+        rows: [
+          { id: 1, column_name: "SpentFor" },
+          { id: 2, column_name: "OldCol" },
+        ],
+      }) // SELECT current
+      .mockResolvedValueOnce({}) // DELETE OldCol
+      .mockResolvedValueOnce({}) // UPDATE SpentFor position
+      .mockResolvedValueOnce({}) // INSERT Channel
+      .mockResolvedValueOnce({}); // COMMIT
+
+    await syncCustomColumnsFromSheet("user@test.com", ["SpentFor", "Channel"]);
+
+    const calls = mockClient.query.mock.calls.map((c) => c[0]);
+    expect(calls[0]).toBe("BEGIN");
+    const deleteCall = calls.find((q) => typeof q === "string" && q.includes("DELETE FROM user_custom_columns"));
+    expect(deleteCall).toBeTruthy();
+    const insertCall = calls.find((q) => typeof q === "string" && q.includes("INSERT INTO user_custom_columns"));
+    expect(insertCall).toBeTruthy();
+    expect(calls[calls.length - 1]).toBe("COMMIT");
+  });
+
+  it("updates casing when sheet name differs from DB name", async () => {
+    mockClient.query
+      .mockResolvedValueOnce({}) // BEGIN
+      .mockResolvedValueOnce({ rows: [{ id: 3, column_name: "spentfor" }] }) // SELECT
+      .mockResolvedValueOnce({}) // UPDATE (casing + position)
+      .mockResolvedValueOnce({}); // COMMIT
+
+    await syncCustomColumnsFromSheet("user@test.com", ["SpentFor"]);
+
+    const updateCall = mockClient.query.mock.calls.find(
+      (c) => typeof c[0] === "string" && c[0].includes("SET column_name"),
+    );
+    expect(updateCall).toBeTruthy();
+    expect(updateCall[1]).toContain("SpentFor");
+  });
+});
+
+describe("getActiveCustomColumns", () => {
+  it("returns active columns ordered by position", async () => {
+    mockQuery.mockResolvedValue({
+      rows: [
+        { id: 1, column_name: "SpentFor", position: 1 },
+        { id: 2, column_name: "Channel", position: 2 },
+      ],
+    });
+
+    const result = await getActiveCustomColumns("user@test.com");
+    expect(result).toEqual([
+      { id: 1, name: "SpentFor", position: 1 },
+      { id: 2, name: "Channel", position: 2 },
+    ]);
+    expect(mockQuery.mock.calls[0][0]).toContain("removed_at IS NULL");
+  });
+
+  it("returns empty array when no columns exist", async () => {
+    mockQuery.mockResolvedValue({ rows: [] });
+    const result = await getActiveCustomColumns("user@test.com");
+    expect(result).toEqual([]);
+  });
+});
+
+describe("initCustomColumnsFromHeaders", () => {
+  it("inserts columns when user has none", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ count: "0" }] })
+      .mockResolvedValue({});
+
+    await initCustomColumnsFromHeaders("user@test.com", ["SpentFor", "Channel", "Theme"]);
+
+    expect(mockQuery).toHaveBeenCalledTimes(4);
+    expect(mockQuery.mock.calls[1][0]).toContain("INSERT INTO user_custom_columns");
+  });
+
+  it("skips when user already has columns", async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [{ count: "3" }] });
+    await initCustomColumnsFromHeaders("user@test.com", ["SpentFor"]);
+    expect(mockQuery).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("addCustomColumn", () => {
+  it("inserts and returns the new column", async () => {
+    mockQuery.mockResolvedValue({
+      rows: [{ id: 5, column_name: "MyCol", position: 3 }],
+    });
+
+    const result = await addCustomColumn("user@test.com", "MyCol", 3);
+    expect(result).toEqual({ id: 5, name: "MyCol", position: 3 });
+    expect(mockQuery.mock.calls[0][0]).toContain("INSERT INTO user_custom_columns");
+  });
+});
+
+describe("renameCustomColumn", () => {
+  it("updates column name and returns updated column", async () => {
+    mockQuery.mockResolvedValue({
+      rows: [{ id: 5, column_name: "NewName", position: 3 }],
+    });
+
+    const result = await renameCustomColumn("user@test.com", 5, "NewName");
+    expect(result).toEqual({ id: 5, name: "NewName", position: 3 });
+    expect(mockQuery.mock.calls[0][0]).toContain("UPDATE user_custom_columns");
+  });
+
+  it("throws when column not found", async () => {
+    mockQuery.mockResolvedValue({ rows: [] });
+    await expect(renameCustomColumn("user@test.com", 99, "X")).rejects.toThrow("Column not found.");
+  });
+});
+
+describe("reorderCustomColumns", () => {
+  it("updates position for each id in a transaction", async () => {
+    mockClient.query.mockResolvedValue({});
+
+    await reorderCustomColumns("user@test.com", [3, 1, 2]);
+
+    const calls = mockClient.query.mock.calls.map((c) => c[0]);
+    expect(calls[0]).toBe("BEGIN");
+    expect(calls[1]).toContain("UPDATE user_custom_columns SET position");
+    expect(calls[calls.length - 1]).toBe("COMMIT");
+  });
+});
+
+describe("removeCustomColumn", () => {
+  it("soft-deletes the column", async () => {
+    mockQuery.mockResolvedValue({ rows: [{ id: 5 }] });
+
+    await removeCustomColumn("user@test.com", 5);
+
+    expect(mockQuery.mock.calls[0][0]).toContain("removed_at = now()");
+  });
+
+  it("throws when column not found", async () => {
+    mockQuery.mockResolvedValue({ rows: [] });
+    await expect(removeCustomColumn("user@test.com", 99)).rejects.toThrow("Column not found.");
   });
 });

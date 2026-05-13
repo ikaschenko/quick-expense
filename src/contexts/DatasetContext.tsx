@@ -31,10 +31,8 @@ interface DatasetContextValue {
 
 const emptyDistinctValues: DistinctValues = {
   Category: [],
-  WhoSpent: [],
-  ForWhom: [],
-  PaymentChannel: [],
-  Theme: [],
+  SpentBy: [],
+  customFields: {},
 };
 
 const DatasetContext = createContext<DatasetContextValue | null>(null);
@@ -79,9 +77,10 @@ export function DatasetProvider({ children }: PropsWithChildren): JSX.Element {
       try {
         auth.touchSession();
         const loaded = await googleSheetsService.loadExpenses();
+        const customColumnNames = config.customColumns?.map((c) => c.name) ?? [];
         const nextSnapshot: DatasetSnapshot = {
           records: loaded.records,
-          distinctValues: buildDistinctValues(loaded.records),
+          distinctValues: buildDistinctValues(loaded.records, customColumnNames),
           loadedAt: Date.now(),
           payloadBytes: loaded.payloadBytes,
         };

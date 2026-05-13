@@ -87,8 +87,8 @@ export function validateExpenseDraft(
     errors.Category = "Category is required.";
   }
 
-  if (!draft.WhoSpent.trim()) {
-    errors.WhoSpent = "WhoSpent is required.";
+  if (!draft.SpentBy.trim()) {
+    errors.SpentBy = "SpentBy is required.";
   }
 
   return errors;

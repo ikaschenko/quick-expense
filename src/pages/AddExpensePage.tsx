@@ -21,21 +21,23 @@ import { expenseDraftToRowValues } from "../utils/spreadsheet";
 import { parseOptionalDecimal, parsePositiveDecimal, validateExpenseDraft } from "../utils/validation";
 import { trackEvent } from "../services/analytics";
 
-function createInitialDraft(defaultEmail: string, currencies: string[]): ExpenseDraft {
+function createInitialDraft(defaultEmail: string, currencies: string[], customColumns: { name: string }[]): ExpenseDraft {
   const currencyAmounts: Record<string, string> = {};
   for (const code of currencies) {
     currencyAmounts[code] = "";
+  }
+  const customFields: Record<string, string> = {};
+  for (const col of customColumns) {
+    customFields[col.name] = "";
   }
   return {
     Date: getTodayLocalDate(),
     USD: "",
     Category: "",
-    WhoSpent: defaultEmail,
-    ForWhom: "",
+    SpentBy: defaultEmail,
     Comment: "",
-    PaymentChannel: "",
-    Theme: "",
     currencyAmounts,
+    customFields,
   };
 }
 
@@ -104,9 +106,10 @@ export function AddExpensePage(): JSX.Element {
 
   const activeCurrencies = useMemo(() => config?.currencies ?? [], [config?.currencies]);
   const sheetCurrencies = useMemo(() => config?.sheetCurrencies ?? [], [config?.sheetCurrencies]);
+  const customColumns = useMemo(() => config?.customColumns ?? [], [config?.customColumns]);
 
   const [draft, setDraft] = useState<ExpenseDraft>(
-    createInitialDraft(auth.session?.email ?? "", activeCurrencies),
+    createInitialDraft(auth.session?.email ?? "", activeCurrencies, customColumns),
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState<string | null>(null);
@@ -142,12 +145,12 @@ export function AddExpensePage(): JSX.Element {
   }, [dataset.snapshot, activeCurrencies]);
 
   useEffect(() => {
-    setDraft(createInitialDraft(auth.session?.email ?? "", activeCurrencies));
+    setDraft(createInitialDraft(auth.session?.email ?? "", activeCurrencies, customColumns));
     setManualFxRates(createEmptyFxRates(activeCurrencies));
     setFxErrors({});
     setActiveNonUsdCurrency(activeCurrencies[0] ?? null);
     setHasManuallySelectedCurrency(false);
-  }, [auth.session?.email, activeCurrencies]);
+  }, [auth.session?.email, activeCurrencies, customColumns]);
 
   useEffect(() => {
     if (hasManuallySelectedCurrency || !dataset.snapshot) {
@@ -239,7 +242,7 @@ export function AddExpensePage(): JSX.Element {
     return <Navigate to="/setup" replace />;
   }
 
-  const updateDraft = <K extends keyof Omit<ExpenseDraft, "currencyAmounts">>(
+  const updateDraft = <K extends keyof Omit<ExpenseDraft, "currencyAmounts" | "customFields">>(
     key: K,
     value: ExpenseDraft[K],
   ): void => {
@@ -258,6 +261,14 @@ export function AddExpensePage(): JSX.Element {
   const updateFxRate = (currency: string, value: string): void => {
     if (success) setSuccess(null);
     setManualFxRates((r) => ({ ...r, [currency]: value }));
+  };
+
+  const updateCustomField = (name: string, value: string): void => {
+    if (success) setSuccess(null);
+    setDraft((d) => ({
+      ...d,
+      customFields: { ...d.customFields, [name]: value },
+    }));
   };
 
   const selectNonUsdCurrency = (currency: string): void => {
@@ -336,11 +347,11 @@ export function AddExpensePage(): JSX.Element {
         ...draft,
         Date: draft.Date.trim(),
         Category: draft.Category.trim(),
-        WhoSpent: draft.WhoSpent.trim(),
-        ForWhom: draft.ForWhom.trim(),
+        SpentBy: draft.SpentBy.trim(),
         Comment: draft.Comment.trim(),
-        PaymentChannel: draft.PaymentChannel.trim(),
-        Theme: draft.Theme.trim(),
+        customFields: Object.fromEntries(
+          Object.entries(draft.customFields).map(([k, v]) => [k, v.trim()]),
+        ),
       };
 
       if (!normalizedDraft.USD.trim()) {
@@ -354,13 +365,13 @@ export function AddExpensePage(): JSX.Element {
       }
 
       await googleSheetsService.appendExpenseRow(
-        expenseDraftToRowValues(normalizedDraft, sheetCurrencies),
+        expenseDraftToRowValues(normalizedDraft, sheetCurrencies, customColumns.map((c) => c.name)),
         buildFxBackupPayload(normalizedDraft, manualFxRates, activeCurrencies),
       );
 
       const submittedCurrency = getPreferredCurrency(normalizedDraft, activeCurrencies);
       dataset.invalidateDataset();
-      setDraft(createInitialDraft(auth.session?.email ?? "", activeCurrencies));
+      setDraft(createInitialDraft(auth.session?.email ?? "", activeCurrencies, customColumns));
 
       // Preserve current FX rates
       const keptRates: ManualFxRates = {};
@@ -551,40 +562,23 @@ export function AddExpensePage(): JSX.Element {
           {errors.Date ? <div className="field-error">{errors.Date}</div> : null}
         </div>
 
-        {/* Who Spent / For Whom */}
-        <div className="add-fields-row">
-          <div className="input-group">
-            <label className="input-label" htmlFor="who-spent-field">Who spent</label>
-            <input
-              id="who-spent-field"
-              className="input"
-              list="who-spent-options"
-              value={draft.WhoSpent}
-              onChange={(event) => updateDraft("WhoSpent", event.target.value)}
-              required
-            />
-            <datalist id="who-spent-options">
-              {suggestionLists.WhoSpent.map((value) => (
-                <option key={value} value={value} />
-              ))}
-            </datalist>
-            {errors.WhoSpent ? <div className="field-error">{errors.WhoSpent}</div> : null}
-          </div>
-          <div className="input-group">
-            <label className="input-label" htmlFor="for-whom-field">For whom</label>
-            <input
-              id="for-whom-field"
-              className="input"
-              list="for-whom-options"
-              value={draft.ForWhom}
-              onChange={(event) => updateDraft("ForWhom", event.target.value)}
-            />
-            <datalist id="for-whom-options">
-              {suggestionLists.ForWhom.map((value) => (
-                <option key={value} value={value} />
-              ))}
-            </datalist>
-          </div>
+        {/* SpentBy */}
+        <div className="input-group">
+          <label className="input-label" htmlFor="spent-by-field">Who spent</label>
+          <input
+            id="spent-by-field"
+            className="input"
+            list="spent-by-options"
+            value={draft.SpentBy}
+            onChange={(event) => updateDraft("SpentBy", event.target.value)}
+            required
+          />
+          <datalist id="spent-by-options">
+            {(suggestionLists.SpentBy ?? []).map((value) => (
+              <option key={value} value={value} />
+            ))}
+          </datalist>
+          {errors.SpentBy ? <div className="field-error">{errors.SpentBy}</div> : null}
         </div>
 
         {/* Comment */}
@@ -599,39 +593,24 @@ export function AddExpensePage(): JSX.Element {
           />
         </div>
 
-        {/* PaymentChannel */}
-        <div className="input-group">
-          <label className="input-label" htmlFor="payment-channel-field">Payment Channel</label>
-          <input
-            id="payment-channel-field"
-            className="input"
-            list="payment-channel-options"
-            value={draft.PaymentChannel}
-            onChange={(event) => updateDraft("PaymentChannel", event.target.value)}
-          />
-          <datalist id="payment-channel-options">
-            {suggestionLists.PaymentChannel.map((value) => (
-              <option key={value} value={value} />
-            ))}
-          </datalist>
-        </div>
-
-        {/* Theme */}
-        <div className="input-group">
-          <label className="input-label" htmlFor="theme-field">Theme</label>
-          <input
-            id="theme-field"
-            className="input"
-            list="theme-options"
-            value={draft.Theme}
-            onChange={(event) => updateDraft("Theme", event.target.value)}
-          />
-          <datalist id="theme-options">
-            {suggestionLists.Theme.map((value) => (
-              <option key={value} value={value} />
-            ))}
-          </datalist>
-        </div>
+        {/* Custom columns */}
+        {customColumns.map((col) => (
+          <div key={col.id} className="input-group">
+            <label className="input-label" htmlFor={`custom-field-${col.id}`}>{col.name}</label>
+            <input
+              id={`custom-field-${col.id}`}
+              className="input"
+              list={`custom-field-options-${col.id}`}
+              value={draft.customFields[col.name] ?? ""}
+              onChange={(event) => updateCustomField(col.name, event.target.value)}
+            />
+            <datalist id={`custom-field-options-${col.id}`}>
+              {(suggestionLists.customFields?.[col.name] ?? []).map((value) => (
+                <option key={value} value={value} />
+              ))}
+            </datalist>
+          </div>
+        ))}
 
         {/* Spacer for sticky button */}
         <div style={{ height: 72 }} />

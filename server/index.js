@@ -22,6 +22,15 @@ import {
   validateSpreadsheet,
   applyUserCurrencies,
   VALID_CURRENCY_CODES,
+  insertCustomColumnInSheet,
+  renameColumnInSheet,
+  reorderCustomColumnsInSheet,
+  isCustomColumnEmpty,
+  deleteColumnFromSheet,
+  findColumnIndex,
+  DEFAULT_CUSTOM_COLUMNS,
+  MAX_CUSTOM_COLUMNS,
+  validateColumnName,
 } from "./google-sheets.js";
 import {
   checkDatabaseHealth,
@@ -40,6 +49,14 @@ import {
   getActiveUserCurrencies,
   setUserCurrencies,
   initUserCurrenciesFromHeaders,
+  syncCurrenciesFromSheet,
+  getActiveCustomColumns,
+  initCustomColumnsFromHeaders,
+  syncCustomColumnsFromSheet,
+  addCustomColumn,
+  renameCustomColumn,
+  reorderCustomColumns,
+  removeCustomColumn,
 } from "./store.js";
 import pool from "./db.js";
 
@@ -323,33 +340,46 @@ app.get("/api/config", requireAuthenticatedUser, async (req, res) => {
   }
 
   try {
-    const currencies = await getActiveUserCurrencies(userRecord.email);
+    let currencies = await getActiveUserCurrencies(userRecord.email);
+    let customColumns = await getActiveCustomColumns(userRecord.email);
+    const customColumnNames = customColumns.map((c) => c.name);
 
-    // Determine sheet currencies by peeking at headers
     let sheetCurrencies = [...currencies];
+    let syncError = null;
+
     try {
       const accessToken = await getAuthorizedAccessToken(userRecord);
-      const report = await validateSpreadsheet(accessToken, userRecord.spreadsheetId, currencies);
+      const report = await validateSpreadsheet(accessToken, userRecord.spreadsheetId, currencies, customColumnNames);
       sheetCurrencies = report.sheetCurrencies;
 
-      // Legacy migration: seed user_currencies from sheet if DB is empty
-      if (currencies.length === 0 && sheetCurrencies.length > 0) {
-        await initUserCurrenciesFromHeaders(userRecord.email, sheetCurrencies);
-        const refreshed = await getActiveUserCurrencies(userRecord.email);
-        res.json({
-          config: {
-            email: userRecord.email,
-            spreadsheetId: userRecord.spreadsheetId,
-            spreadsheetUrl: userRecord.spreadsheetUrl,
-            sheetName: "Expenses",
-            currencies: refreshed,
-            sheetCurrencies,
-          },
-        });
-        return;
+      // ── Currency sync ──────────────────────────────────────────────────────
+      const dbCurrSet = new Set(currencies);
+      const sheetCurrSet = new Set(sheetCurrencies);
+      const currenciesMismatch =
+        currencies.some((c) => !sheetCurrSet.has(c)) ||
+        sheetCurrencies.some((c) => !dbCurrSet.has(c));
+
+      if (currenciesMismatch) {
+        await syncCurrenciesFromSheet(userRecord.email, sheetCurrencies);
+        currencies = await getActiveUserCurrencies(userRecord.email);
       }
-    } catch {
-      // If sheet validation fails, still return config with DB currencies
+
+      // ── Custom column sync ─────────────────────────────────────────────────
+      const sheetColNames = report.customColumns;
+      const dbColNames = customColumns.map((c) => c.name);
+      const dbColSet = new Set(dbColNames.map((n) => n.toLowerCase()));
+      const sheetColSet = new Set(sheetColNames.map((n) => n.toLowerCase()));
+      const columnsMismatch =
+        dbColNames.some((n) => !sheetColSet.has(n.toLowerCase())) ||
+        sheetColNames.some((n) => !dbColSet.has(n.toLowerCase()));
+
+      if (columnsMismatch) {
+        await syncCustomColumnsFromSheet(userRecord.email, sheetColNames);
+        customColumns = await getActiveCustomColumns(userRecord.email);
+      }
+    } catch (sheetError) {
+      // Sheet unreachable — skip sync, surface error to client
+      syncError = sheetError.message;
     }
 
     res.json({
@@ -360,7 +390,9 @@ app.get("/api/config", requireAuthenticatedUser, async (req, res) => {
         sheetName: "Expenses",
         currencies,
         sheetCurrencies,
+        customColumns,
       },
+      ...(syncError ? { syncError } : {}),
     });
   } catch (error) {
     res.status(500).json({ message: (error).message });
@@ -378,13 +410,26 @@ app.post("/api/config", requireAuthenticatedUser, async (req, res) => {
 
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
     const currencies = await getActiveUserCurrencies(req.userRecord.email);
-    const setupReport = await validateSpreadsheet(accessToken, spreadsheetId, currencies);
+    const customColumns = await getActiveCustomColumns(req.userRecord.email);
+    const customColumnNames = customColumns.map((c) => c.name);
+    const setupReport = await validateSpreadsheet(accessToken, spreadsheetId, currencies, customColumnNames);
 
     // Legacy migration: seed user_currencies from sheet if DB is empty
     let activeCurrencies = currencies;
     if (currencies.length === 0 && setupReport.sheetCurrencies.length > 0) {
       await initUserCurrenciesFromHeaders(req.userRecord.email, setupReport.sheetCurrencies);
       activeCurrencies = await getActiveUserCurrencies(req.userRecord.email);
+    }
+
+    // Auto-detect and seed custom columns from sheet if DB has none
+    let activeCustomColumns = customColumns;
+    if (customColumns.length === 0 && setupReport.customColumns.length > 0) {
+      await initCustomColumnsFromHeaders(req.userRecord.email, setupReport.customColumns);
+      activeCustomColumns = await getActiveCustomColumns(req.userRecord.email);
+    } else if (customColumns.length === 0 && setupReport.headersAction === "created") {
+      // Sheet was just created with defaults — seed them
+      await initCustomColumnsFromHeaders(req.userRecord.email, DEFAULT_CUSTOM_COLUMNS);
+      activeCustomColumns = await getActiveCustomColumns(req.userRecord.email);
     }
 
     const updatedUser = await updateUserRecord(req.userRecord.email, (current) => ({
@@ -401,6 +446,7 @@ app.post("/api/config", requireAuthenticatedUser, async (req, res) => {
         sheetName: "Expenses",
         currencies: activeCurrencies,
         sheetCurrencies: setupReport.sheetCurrencies,
+        customColumns: activeCustomColumns,
       },
       setupReport,
     });
@@ -486,7 +532,9 @@ app.put("/api/currencies", requireAuthenticatedUser, async (req, res) => {
       sheetCurrencies,
     });
   } catch (error) {
-    res.status(400).json({ message: (error).message });
+    const body = { message: error.message };
+    if (error.headerDetails) body.headerDetails = error.headerDetails;
+    res.status(400).json(body);
   }
 });
 
@@ -498,7 +546,9 @@ app.get("/api/expenses", requireAuthenticatedUser, async (req, res) => {
     }
 
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    const snapshot = await loadExpenses(accessToken, req.userRecord.spreadsheetId);
+    const customColumns = await getActiveCustomColumns(req.userRecord.email);
+    const customColumnNames = customColumns.map((c) => c.name);
+    const snapshot = await loadExpenses(accessToken, req.userRecord.spreadsheetId, customColumnNames);
     res.json(snapshot);
   } catch (error) {
     res.status(400).json({ message: (error).message });
@@ -523,14 +573,171 @@ app.post("/api/expenses", requireAuthenticatedUser, async (req, res) => {
       return;
     }
 
-    const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    await appendExpenseRow(accessToken, req.userRecord.spreadsheetId, values);
+    const customColumns = await getActiveCustomColumns(req.userRecord.email);
+    const customColumnNames = customColumns.map((c) => c.name);
+    const accessToken = await getAuthorizedAccessToken(req.userRecord, customColumnNames);
 
     if (req.body?.fxRateBackup && typeof req.body.fxRateBackup === "object") {
       await saveFxRateBackup(req.userRecord.email, req.userRecord.spreadsheetId, req.body.fxRateBackup);
     }
 
     res.status(204).end();
+  } catch (error) {
+    res.status(400).json({ message: (error).message });
+  }
+});
+
+// ─── Custom Columns ───────────────────────────────────────────────────────────
+
+app.get("/api/columns", requireAuthenticatedUser, async (req, res) => {
+  try {
+    const columns = await getActiveCustomColumns(req.userRecord.email);
+    res.json({ columns });
+  } catch (error) {
+    res.status(500).json({ message: (error).message });
+  }
+});
+
+app.post("/api/columns", requireAuthenticatedUser, async (req, res) => {
+  try {
+    if (!req.userRecord.spreadsheetId) {
+      res.status(400).json({ message: "Connect a spreadsheet before adding columns." });
+      return;
+    }
+
+    const name = String(req.body?.name ?? "").trim();
+    const existing = await getActiveCustomColumns(req.userRecord.email);
+
+    if (existing.length >= MAX_CUSTOM_COLUMNS) {
+      res.status(400).json({ message: `You can have at most ${MAX_CUSTOM_COLUMNS} custom columns.` });
+      return;
+    }
+
+    const nameError = validateColumnName(name, existing.map((c) => c.name));
+    if (nameError) {
+      res.status(400).json({ message: nameError });
+      return;
+    }
+
+    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    await insertCustomColumnInSheet(accessToken, req.userRecord.spreadsheetId, name);
+
+    const position = existing.length + 1;
+    const column = await addCustomColumn(req.userRecord.email, name, position);
+    res.status(201).json({ column });
+  } catch (error) {
+    res.status(400).json({ message: (error).message });
+  }
+});
+
+app.patch("/api/columns/:id/rename", requireAuthenticatedUser, async (req, res) => {
+  try {
+    if (!req.userRecord.spreadsheetId) {
+      res.status(400).json({ message: "Spreadsheet is not configured." });
+      return;
+    }
+
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ message: "Invalid column id." });
+      return;
+    }
+
+    const newName = String(req.body?.name ?? "").trim();
+    const existing = await getActiveCustomColumns(req.userRecord.email);
+    const target = existing.find((c) => c.id === id);
+    if (!target) {
+      res.status(404).json({ message: "Column not found." });
+      return;
+    }
+
+    const nameError = validateColumnName(newName, existing.map((c) => c.name), target.name);
+    if (nameError) {
+      res.status(400).json({ message: nameError });
+      return;
+    }
+
+    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const colIndex = await findColumnIndex(accessToken, req.userRecord.spreadsheetId, target.name);
+    if (colIndex !== null) {
+      await renameColumnInSheet(accessToken, req.userRecord.spreadsheetId, colIndex, newName);
+    }
+
+    const column = await renameCustomColumn(req.userRecord.email, id, newName);
+    res.json({ column });
+  } catch (error) {
+    res.status(400).json({ message: (error).message });
+  }
+});
+
+app.put("/api/columns/reorder", requireAuthenticatedUser, async (req, res) => {
+  try {
+    if (!req.userRecord.spreadsheetId) {
+      res.status(400).json({ message: "Spreadsheet is not configured." });
+      return;
+    }
+
+    const orderedIds = req.body?.orderedIds;
+    if (!Array.isArray(orderedIds) || !orderedIds.every(Number.isInteger)) {
+      res.status(400).json({ message: "orderedIds must be an array of integers." });
+      return;
+    }
+
+    const existing = await getActiveCustomColumns(req.userRecord.email);
+    const existingIds = new Set(existing.map((c) => c.id));
+    if (orderedIds.length !== existing.length || !orderedIds.every((id) => existingIds.has(id))) {
+      res.status(400).json({ message: "orderedIds must contain all active column ids exactly once." });
+      return;
+    }
+
+    await reorderCustomColumns(req.userRecord.email, orderedIds);
+
+    // Reorder in the sheet too
+    const updatedColumns = await getActiveCustomColumns(req.userRecord.email);
+    const orderedNames = updatedColumns.map((c) => c.name);
+    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    await reorderCustomColumnsInSheet(accessToken, req.userRecord.spreadsheetId, orderedNames);
+
+    res.json({ columns: updatedColumns });
+  } catch (error) {
+    res.status(400).json({ message: (error).message });
+  }
+});
+
+app.delete("/api/columns/:id", requireAuthenticatedUser, async (req, res) => {
+  try {
+    if (!req.userRecord.spreadsheetId) {
+      res.status(400).json({ message: "Spreadsheet is not configured." });
+      return;
+    }
+
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ message: "Invalid column id." });
+      return;
+    }
+
+    const existing = await getActiveCustomColumns(req.userRecord.email);
+    const target = existing.find((c) => c.id === id);
+    if (!target) {
+      res.status(404).json({ message: "Column not found." });
+      return;
+    }
+
+    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const colIndex = await findColumnIndex(accessToken, req.userRecord.spreadsheetId, target.name);
+
+    let hardDeleted = false;
+    if (colIndex !== null) {
+      const empty = await isCustomColumnEmpty(accessToken, req.userRecord.spreadsheetId, colIndex);
+      if (empty) {
+        await deleteColumnFromSheet(accessToken, req.userRecord.spreadsheetId, colIndex);
+        hardDeleted = true;
+      }
+    }
+
+    await removeCustomColumn(req.userRecord.email, id);
+    res.json({ deleted: true, hardDeleted });
   } catch (error) {
     res.status(400).json({ message: (error).message });
   }

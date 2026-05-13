@@ -155,6 +155,7 @@ export function SearchPage(): JSX.Element {
                 emptyMessage="Nothing found."
                 sheetCurrencies={config?.sheetCurrencies}
                 activeCurrencies={config?.currencies}
+                customColumns={config?.customColumns}
               />
             </>
           )}

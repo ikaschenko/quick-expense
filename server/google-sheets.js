@@ -10,15 +10,9 @@ const currencyDictionary = JSON.parse(
 const VALID_CURRENCY_CODES = new Set(currencyDictionary.currencies.map((c) => c.code));
 
 const SHEET_NAME = "Expenses";
-const POST_CURRENCY_HEADERS = [
-  "USD",
-  "Category",
-  "WhoSpent",
-  "ForWhom",
-  "Comment",
-  "PaymentChannel",
-  "Theme",
-];
+// Fixed columns that always appear after the currency block, in this exact order.
+const POST_CURRENCY_FIXED = ["USD", "Category", "SpentBy", "Comment"];
+// Legacy header format (old column names, pre-custom-columns era)
 const LEGACY_EXPENSE_HEADERS = [
   "Date",
   "PLN",
@@ -32,36 +26,76 @@ const LEGACY_EXPENSE_HEADERS = [
   "PaymentChannel",
   "Theme",
 ];
+// Default custom columns written to a brand-new empty sheet
+const DEFAULT_CUSTOM_COLUMNS = ["SpentFor", "Channel", "Theme"];
+// Reserved column names (case-insensitive) that cannot be used for custom columns
+const RESERVED_COLUMN_NAMES = new Set(["date", "usd", "category", "spentby", "comment"]);
 const MAX_DATASET_BYTES = 10 * 1024 * 1024;
+const MAX_CUSTOM_COLUMNS = 10;
 
-function buildExpenseHeaders(sheetCurrencies) {
-  return ["Date", ...sheetCurrencies, ...POST_CURRENCY_HEADERS];
+function buildExpenseHeaders(sheetCurrencies, customColumns = []) {
+  return ["Date", ...sheetCurrencies, ...POST_CURRENCY_FIXED, ...customColumns];
 }
 
 /**
- * Parse the header row and extract the currency codes between Date and USD.
- * Returns null if the structure is invalid.
+ * Parse the header row into { currencies, customColumns }.
+ * currencies = codes between Date and USD.
+ * customColumns = names after Comment (case-insensitive anchor).
+ * Returns null if the fixed structure (Date ... USD Category SpentBy ... Comment) is not found.
+ * Comment is located by search, not fixed offset, so custom columns may appear before or after it.
  */
-function parseSheetCurrencies(headerRow) {
+function parseSheetStructure(headerRow) {
   const normalized = normalizeHeaders(headerRow);
-  if (normalized[0] !== "Date") return null;
+  if (normalized[0]?.toLowerCase() !== "date") return null;
 
-  const usdIndex = normalized.indexOf("USD");
-  if (usdIndex < 1) return null;
+  const usdIdx = normalized.findIndex((h) => h.toLowerCase() === "usd");
+  if (usdIdx < 1) return null;
 
-  const postHeaders = normalized.slice(usdIndex);
+  const categoryIdx = usdIdx + 1;
+  const spentByIdx = usdIdx + 2;
+
   if (
-    postHeaders.length !== POST_CURRENCY_HEADERS.length ||
-    !POST_CURRENCY_HEADERS.every((h, i) => postHeaders[i] === h)
+    normalized[categoryIdx]?.toLowerCase() !== "category" ||
+    normalized[spentByIdx]?.toLowerCase() !== "spentby"
   ) {
     return null;
   }
 
-  return normalized.slice(1, usdIndex);
+  // Comment may not be immediately after SpentBy (e.g. custom columns inserted before it)
+  const commentIdx = normalized.findIndex(
+    (h, i) => i > spentByIdx && h.toLowerCase() === "comment",
+  );
+  if (commentIdx === -1) return null;
+
+  const currencies = normalized.slice(1, usdIdx);
+  // Columns between SpentBy and Comment + columns after Comment are all custom columns
+  const customColumns = [
+    ...normalized.slice(spentByIdx + 1, commentIdx),
+    ...normalized.slice(commentIdx + 1),
+  ];
+  return { currencies, customColumns };
 }
 
 function normalizeHeaders(row = []) {
   return row.map((value) => value.trim());
+}
+
+/**
+ * Returns a human-readable explanation of why a header row failed to parse.
+ */
+function diagnoseSheetStructure(normalized) {
+  if (!normalized || normalized.length === 0) return "The header row is empty.";
+  if (normalized[0]?.toLowerCase() !== "date") return `First column must be "Date" but found "${normalized[0]}".`;
+  const usdIdx = normalized.findIndex((h) => h.toLowerCase() === "usd");
+  if (usdIdx < 1) return "Column \"USD\" was not found in the header row.";
+  if (normalized[usdIdx + 1]?.toLowerCase() !== "category")
+    return `Expected "Category" after "USD" but found "${normalized[usdIdx + 1] ?? "(missing)"}".`;
+  if (normalized[usdIdx + 2]?.toLowerCase() !== "spentby")
+    return `Expected "SpentBy" after "Category" but found "${normalized[usdIdx + 2] ?? "(missing)"}".`;
+  const spentByIdx = usdIdx + 2;
+  const hasComment = normalized.some((h, i) => i > spentByIdx && h.toLowerCase() === "comment");
+  if (!hasComment) return "Column \"Comment\" was not found after \"SpentBy\".";
+  return "Unrecognized structure.";
 }
 
 function validateHeaderRow(row) {
@@ -78,6 +112,23 @@ function validateLegacyHeaderRow(row) {
     normalized.length === LEGACY_EXPENSE_HEADERS.length &&
     LEGACY_EXPENSE_HEADERS.every((header, index) => normalized[index] === header)
   );
+}
+
+/**
+ * Validate column name against naming rules.
+ * Returns an error message string, or null if valid.
+ */
+export function validateColumnName(name, existingNames = [], excludeName = null) {
+  if (!name || !name.trim()) return "Column name cannot be empty.";
+  const trimmed = name.trim();
+  if (trimmed.length > 30) return "Column name must be 30 characters or less.";
+  if (RESERVED_COLUMN_NAMES.has(trimmed.toLowerCase())) return `"${trimmed}" is a reserved column name.`;
+  const lowerNew = trimmed.toLowerCase();
+  const duplicate = existingNames.some(
+    (n) => n.toLowerCase() === lowerNew && n.toLowerCase() !== excludeName?.toLowerCase(),
+  );
+  if (duplicate) return `A column named "${trimmed}" already exists.`;
+  return null;
 }
 
 function isHeaderRowEmpty(row) {
@@ -183,40 +234,48 @@ async function updateValues(accessToken, spreadsheetId, range, values) {
   );
 }
 
-function remapLegacyRowToCurrent(row = []) {
-  // Legacy: Date,PLN,BYN,USD,EUR,...  →  Current: Date,PLN,BYN,EUR,USD,...
+function remapLegacyRowToCurrent(row = [], customColumnCount) {
+  // Legacy: Date,PLN,BYN,USD,EUR,Category,WhoSpent,ForWhom,Comment,PaymentChannel,Theme
+  // New:    Date,PLN,BYN,EUR,USD,Category,SpentBy,Comment,[custom...]
   const padded = [...row];
   while (padded.length < LEGACY_EXPENSE_HEADERS.length) {
     padded.push("");
   }
-
-  return [
-    padded[0] ?? "",
-    padded[1] ?? "",
-    padded[2] ?? "",
-    padded[4] ?? "",
-    padded[3] ?? "",
-    padded[5] ?? "",
-    padded[6] ?? "",
-    padded[7] ?? "",
-    padded[8] ?? "",
-    padded[9] ?? "",
-    padded[10] ?? "",
+  const base = [
+    padded[0] ?? "", // Date
+    padded[1] ?? "", // PLN
+    padded[2] ?? "", // BYN
+    padded[4] ?? "", // EUR (was at index 4)
+    padded[3] ?? "", // USD (was at index 3)
+    padded[5] ?? "", // Category
+    padded[6] ?? "", // SpentBy (was WhoSpent)
+    padded[8] ?? "", // Comment (was at index 8)
   ];
+  // Custom columns: map ForWhom→SpentFor, PaymentChannel→Channel, Theme→Theme
+  // ForWhom=7, PaymentChannel=9, Theme=10
+  if (customColumnCount > 0) base.push(padded[7] ?? ""); // SpentFor
+  if (customColumnCount > 1) base.push(padded[9] ?? ""); // Channel
+  if (customColumnCount > 2) base.push(padded[10] ?? ""); // Theme
+  return base;
 }
 
-async function migrateLegacyColumnOrder(accessToken, spreadsheetId) {
-  const currentHeaders = ["Date", "PLN", "BYN", "EUR", ...POST_CURRENCY_HEADERS];
+async function migrateLegacyColumnOrder(accessToken, spreadsheetId, customColumns = []) {
+  const currentHeaders = buildExpenseHeaders(["PLN", "BYN", "EUR"], customColumns);
   const allRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A:K`);
   const migratedRows = allRows.map((row, index) =>
-    index === 0 ? [...currentHeaders] : remapLegacyRowToCurrent(row),
+    index === 0 ? currentHeaders : remapLegacyRowToCurrent(row, customColumns.length),
   );
 
-  await updateValues(accessToken, spreadsheetId, `${SHEET_NAME}!A1:K${migratedRows.length}`, migratedRows);
+  const endCol = columnLetter(currentHeaders.length);
+  await updateValues(accessToken, spreadsheetId, `${SHEET_NAME}!A1:${endCol}${migratedRows.length}`, migratedRows);
 }
 
-function mapRowsToExpenseRecords(rows, sheetCurrencies) {
-  const headers = buildExpenseHeaders(sheetCurrencies);
+/**
+ * Map raw sheet rows to expense records using the actual full header array.
+ * All columns after Comment are placed in customFields keyed by name.
+ */
+function mapRowsToExpenseRecords(rows, sheetCurrencies, customColumns = []) {
+  const headers = buildExpenseHeaders(sheetCurrencies, customColumns);
 
   return rows.map((row, index) => {
     const padded = [...row];
@@ -224,23 +283,25 @@ function mapRowsToExpenseRecords(rows, sheetCurrencies) {
       padded.push("");
     }
 
-    // Currency columns are between index 1 and (1 + sheetCurrencies.length)
     const currencyAmounts = {};
     for (let i = 0; i < sheetCurrencies.length; i++) {
       currencyAmounts[sheetCurrencies[i]] = padded[1 + i] ?? "";
     }
 
     const postStart = 1 + sheetCurrencies.length;
+    const customFields = {};
+    for (let i = 0; i < customColumns.length; i++) {
+      customFields[customColumns[i]] = padded[postStart + 4 + i] ?? "";
+    }
+
     return {
       Date: padded[0] ?? "",
       currencyAmounts,
       USD: padded[postStart] ?? "",
       Category: padded[postStart + 1] ?? "",
-      WhoSpent: padded[postStart + 2] ?? "",
-      ForWhom: padded[postStart + 3] ?? "",
-      Comment: padded[postStart + 4] ?? "",
-      PaymentChannel: padded[postStart + 5] ?? "",
-      Theme: padded[postStart + 6] ?? "",
+      SpentBy: padded[postStart + 2] ?? "",
+      Comment: padded[postStart + 3] ?? "",
+      customFields,
       rowNumber: index + 2,
     };
   });
@@ -255,8 +316,8 @@ export function parseSpreadsheetUrl(url) {
   return match?.[1] ?? null;
 }
 
-export async function validateSpreadsheet(accessToken, spreadsheetId, activeCurrencies = []) {
-  const report = { tabAction: "found", headersAction: "valid", sheetCurrencies: [] };
+export async function validateSpreadsheet(accessToken, spreadsheetId, activeCurrencies = [], activeCustomColumns = []) {
+  const report = { tabAction: "found", headersAction: "valid", sheetCurrencies: [], customColumns: [] };
 
   const metadata = await getMetadata(accessToken, spreadsheetId);
   const hasExpenseSheet = metadata.sheets?.some(
@@ -272,27 +333,36 @@ export async function validateSpreadsheet(accessToken, spreadsheetId, activeCurr
   const headerRow = headerRows[0];
 
   if (isHeaderRowEmpty(headerRow)) {
-    const headers = buildExpenseHeaders(activeCurrencies);
+    // New empty sheet: write default custom columns
+    const customCols = activeCustomColumns.length > 0 ? activeCustomColumns : DEFAULT_CUSTOM_COLUMNS;
+    const headers = buildExpenseHeaders(activeCurrencies, customCols);
     const endCol = columnLetter(headers.length);
     await updateValues(accessToken, spreadsheetId, `${SHEET_NAME}!A1:${endCol}1`, [headers]);
     report.headersAction = "created";
     report.sheetCurrencies = [...activeCurrencies];
+    report.customColumns = customCols;
     return report;
   }
 
   if (validateLegacyHeaderRow(headerRow)) {
-    await migrateLegacyColumnOrder(accessToken, spreadsheetId);
+    const customCols = activeCustomColumns.length > 0 ? activeCustomColumns : DEFAULT_CUSTOM_COLUMNS;
+    await migrateLegacyColumnOrder(accessToken, spreadsheetId, customCols);
     report.headersAction = "migrated";
     report.sheetCurrencies = ["PLN", "BYN", "EUR"];
+    report.customColumns = customCols;
     return report;
   }
 
   // Try to parse dynamic header structure
-  const sheetCurrencies = parseSheetCurrencies(headerRow);
-  if (sheetCurrencies === null) {
-    const expectedSample = buildExpenseHeaders(activeCurrencies.length > 0 ? activeCurrencies : ["(your currencies)"]);
+  const structure = parseSheetStructure(headerRow);
+  if (structure === null) {
+    const sampleCustom = activeCustomColumns.length > 0 ? activeCustomColumns : DEFAULT_CUSTOM_COLUMNS;
+    const expectedSample = buildExpenseHeaders(
+      activeCurrencies.length > 0 ? activeCurrencies : ["(your currencies)"],
+      sampleCustom,
+    );
     const error = new Error(
-      `The "${SHEET_NAME}" sheet header must start with "Date", have currency columns, then "USD, Category, WhoSpent, ForWhom, Comment, PaymentChannel, Theme".`,
+      `The "${SHEET_NAME}" sheet header must start with "Date", have currency columns, then "USD, Category, SpentBy, Comment", followed by any custom columns.`,
     );
     error.headerDetails = {
       expected: expectedSample,
@@ -301,7 +371,8 @@ export async function validateSpreadsheet(accessToken, spreadsheetId, activeCurr
     throw error;
   }
 
-  report.sheetCurrencies = sheetCurrencies;
+  report.sheetCurrencies = structure.currencies;
+  report.customColumns = structure.customColumns;
   return report;
 }
 
@@ -333,10 +404,16 @@ export async function applyUserCurrencies(accessToken, spreadsheetId, activeCurr
     return { sheetCurrencies: activeCurrencies };
   }
 
-  const existingCurrencies = parseSheetCurrencies(headerRow);
-  if (existingCurrencies === null) {
-    throw new Error("Cannot modify currencies: sheet header structure is unrecognized.");
+  const structure = parseSheetStructure(headerRow);
+  if (structure === null) {
+    const actual = normalizeHeaders(headerRow);
+    const reason = diagnoseSheetStructure(actual);
+    const error = new Error(`Cannot modify currencies: sheet header structure is unrecognized. ${reason}`);
+    error.headerDetails = { actual };
+    throw error;
   }
+  const existingCurrencies = structure.currencies;
+  const existingCustomColumns = structure.customColumns;
 
   // Determine which currencies need to be added (not yet in sheet)
   const existingSet = new Set(existingCurrencies);
@@ -353,7 +430,7 @@ export async function applyUserCurrencies(accessToken, spreadsheetId, activeCurr
   if (!hasData) {
     // Rewrite header row directly
     const newSheetCurrencies = [...existingCurrencies, ...toAdd];
-    const headers = buildExpenseHeaders(newSheetCurrencies);
+    const headers = buildExpenseHeaders(newSheetCurrencies, existingCustomColumns);
     const endCol = columnLetter(headers.length);
     await updateValues(accessToken, spreadsheetId, `${SHEET_NAME}!A1:${endCol}1`, [headers]);
     return { sheetCurrencies: newSheetCurrencies };
@@ -362,7 +439,6 @@ export async function applyUserCurrencies(accessToken, spreadsheetId, activeCurr
   // Insert columns before USD (which is at index 1 + existingCurrencies.length)
   const usdColumnIndex = 1 + existingCurrencies.length;
 
-  // Use batchUpdate to insert columns
   const requests = [];
   for (let i = 0; i < toAdd.length; i++) {
     requests.push({
@@ -388,13 +464,153 @@ export async function applyUserCurrencies(accessToken, spreadsheetId, activeCurr
     },
   );
 
-  // Write the new currency header names
   const newSheetCurrencies = [...existingCurrencies, ...toAdd];
-  const newHeaders = buildExpenseHeaders(newSheetCurrencies);
+  const newHeaders = buildExpenseHeaders(newSheetCurrencies, existingCustomColumns);
   const endCol = columnLetter(newHeaders.length);
   await updateValues(accessToken, spreadsheetId, `${SHEET_NAME}!A1:${endCol}1`, [newHeaders]);
 
   return { sheetCurrencies: newSheetCurrencies };
+}
+
+/** Insert a new custom column at the end of the sheet header. Returns the column index (1-based). */
+export async function insertCustomColumnInSheet(accessToken, spreadsheetId, columnName) {
+  const metadata = await getMetadata(accessToken, spreadsheetId);
+  const expenseSheet = metadata.sheets?.find((s) => s.properties?.title === SHEET_NAME);
+  if (!expenseSheet) throw new Error("Expenses sheet not found.");
+
+  const headerRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!1:1`);
+  const headerRow = normalizeHeaders(headerRows[0] ?? []);
+  const newColIndex = headerRow.length; // 0-based index for insertion
+
+  const allRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A:A`);
+  if (allRows.length > 1) {
+    // Sheet has data — insert a new dimension
+    const sheetId = expenseSheet.properties.sheetId;
+    await requestJson(
+      accessToken,
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+      {
+        method: "POST",
+        headers: createHeaders(accessToken, true),
+        body: JSON.stringify({
+          requests: [{
+            insertDimension: {
+              range: { sheetId, dimension: "COLUMNS", startIndex: newColIndex, endIndex: newColIndex + 1 },
+              inheritFromBefore: false,
+            },
+          }],
+        }),
+      },
+    );
+  }
+
+  const newColLetter = columnLetter(newColIndex + 1);
+  await updateValues(accessToken, spreadsheetId, `${SHEET_NAME}!${newColLetter}1`, [[columnName]]);
+  return newColIndex + 1; // 1-based
+}
+
+/** Rename a column header cell by 1-based column index. */
+export async function renameColumnInSheet(accessToken, spreadsheetId, colIndex1Based, newName) {
+  const colLetter = columnLetter(colIndex1Based);
+  await updateValues(accessToken, spreadsheetId, `${SHEET_NAME}!${colLetter}1`, [[newName]]);
+}
+
+/**
+ * Reorder custom columns in the sheet to match the given ordered list of names.
+ * Reads the current header, finds current positions, issues moveDimension requests.
+ */
+export async function reorderCustomColumnsInSheet(accessToken, spreadsheetId, orderedNames) {
+  const metadata = await getMetadata(accessToken, spreadsheetId);
+  const expenseSheet = metadata.sheets?.find((s) => s.properties?.title === SHEET_NAME);
+  if (!expenseSheet) throw new Error("Expenses sheet not found.");
+  const sheetId = expenseSheet.properties.sheetId;
+
+  const headerRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!1:1`);
+  const headerRow = normalizeHeaders(headerRows[0] ?? []);
+
+  const structure = parseSheetStructure(headerRow);
+  if (!structure) throw new Error("Cannot reorder: sheet header structure is unrecognized.");
+
+  const customStartIdx = headerRow.length - structure.customColumns.length; // 0-based
+
+  // Build moves using selection-sort logic to avoid index shifting issues.
+  // Each iteration: find where desired[i] currently is, move it to position customStartIdx+i.
+  const working = [...headerRow];
+  const requests = [];
+
+  for (let i = 0; i < orderedNames.length; i++) {
+    const targetIdx = customStartIdx + i;
+    const currentIdx = working.findIndex(
+      (h, j) => j >= targetIdx && h.toLowerCase() === orderedNames[i].toLowerCase(),
+    );
+    if (currentIdx === -1 || currentIdx === targetIdx) continue;
+
+    requests.push({
+      moveDimension: {
+        source: { sheetId, dimension: "COLUMNS", startIndex: currentIdx, endIndex: currentIdx + 1 },
+        destinationIndex: targetIdx,
+      },
+    });
+
+    // Update working array to reflect the move
+    const [moved] = working.splice(currentIdx, 1);
+    working.splice(targetIdx, 0, moved);
+  }
+
+  if (requests.length === 0) return;
+
+  await requestJson(
+    accessToken,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+    {
+      method: "POST",
+      headers: createHeaders(accessToken, true),
+      body: JSON.stringify({ requests }),
+    },
+  );
+}
+
+/**
+ * Check if a column (1-based index) has any data below the header row.
+ * Returns true if all cells below row 1 are empty.
+ */
+export async function isCustomColumnEmpty(accessToken, spreadsheetId, colIndex1Based) {
+  const colLetter = columnLetter(colIndex1Based);
+  const range = `${SHEET_NAME}!${colLetter}2:${colLetter}`;
+  const rows = await getValues(accessToken, spreadsheetId, range);
+  return rows.length === 0 || rows.every((row) => !row[0]?.trim());
+}
+
+/** Hard-delete a column (1-based index) from the sheet. */
+export async function deleteColumnFromSheet(accessToken, spreadsheetId, colIndex1Based) {
+  const metadata = await getMetadata(accessToken, spreadsheetId);
+  const expenseSheet = metadata.sheets?.find((s) => s.properties?.title === SHEET_NAME);
+  if (!expenseSheet) throw new Error("Expenses sheet not found.");
+  const sheetId = expenseSheet.properties.sheetId;
+  const idx0 = colIndex1Based - 1;
+  await requestJson(
+    accessToken,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+    {
+      method: "POST",
+      headers: createHeaders(accessToken, true),
+      body: JSON.stringify({
+        requests: [{
+          deleteDimension: {
+            range: { sheetId, dimension: "COLUMNS", startIndex: idx0, endIndex: idx0 + 1 },
+          },
+        }],
+      }),
+    },
+  );
+}
+
+/** Find the 1-based column index of a named column in the sheet header (case-insensitive). */
+export async function findColumnIndex(accessToken, spreadsheetId, columnName) {
+  const headerRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!1:1`);
+  const headerRow = normalizeHeaders(headerRows[0] ?? []);
+  const idx = headerRow.findIndex((h) => h.toLowerCase() === columnName.toLowerCase());
+  return idx === -1 ? null : idx + 1;
 }
 
 /** Convert 1-based column count to A1 letter (1→A, 26→Z, 27→AA, etc.) */
@@ -409,13 +625,14 @@ function columnLetter(n) {
   return result;
 }
 
-export async function loadExpenses(accessToken, spreadsheetId) {
-  const report = await validateSpreadsheet(accessToken, spreadsheetId);
+export async function loadExpenses(accessToken, spreadsheetId, activeCustomColumns = []) {
+  const report = await validateSpreadsheet(accessToken, spreadsheetId, [], activeCustomColumns);
   const sheetCurrencies = report.sheetCurrencies;
-  const headers = buildExpenseHeaders(sheetCurrencies);
+  const customColumns = report.customColumns;
+  const headers = buildExpenseHeaders(sheetCurrencies, customColumns);
   const endCol = columnLetter(headers.length);
   const rows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A:${endCol}`);
-  const records = mapRowsToExpenseRecords(rows.slice(1), sheetCurrencies);
+  const records = mapRowsToExpenseRecords(rows.slice(1), sheetCurrencies, customColumns);
   const payloadBytes = calculateJsonByteSize(records);
 
   if (payloadBytes > MAX_DATASET_BYTES) {
@@ -426,12 +643,13 @@ export async function loadExpenses(accessToken, spreadsheetId) {
     records,
     payloadBytes,
     sheetCurrencies,
+    customColumns,
   };
 }
 
-export async function appendExpenseRow(accessToken, spreadsheetId, values) {
-  const report = await validateSpreadsheet(accessToken, spreadsheetId);
-  const headers = buildExpenseHeaders(report.sheetCurrencies);
+export async function appendExpenseRow(accessToken, spreadsheetId, values, activeCustomColumns = []) {
+  const report = await validateSpreadsheet(accessToken, spreadsheetId, [], activeCustomColumns);
+  const headers = buildExpenseHeaders(report.sheetCurrencies, report.customColumns);
   const endCol = columnLetter(headers.length);
 
   await requestNoContent(
@@ -452,4 +670,4 @@ export async function appendExpenseRow(accessToken, spreadsheetId, values) {
   return { sheetCurrencies: report.sheetCurrencies };
 }
 
-export { VALID_CURRENCY_CODES, SHEET_NAME };
+export { VALID_CURRENCY_CODES, SHEET_NAME, DEFAULT_CUSTOM_COLUMNS, MAX_CUSTOM_COLUMNS };

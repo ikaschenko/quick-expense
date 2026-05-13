@@ -5,30 +5,29 @@ export const FIXED_HEADERS = [
   "Date",
   "USD",
   "Category",
-  "WhoSpent",
-  "ForWhom",
+  "SpentBy",
   "Comment",
-  "PaymentChannel",
-  "Theme",
 ] as const;
 
 /** Fixed headers that appear AFTER the currency block (USD onwards). */
 export const POST_CURRENCY_HEADERS = [
   "USD",
   "Category",
-  "WhoSpent",
-  "ForWhom",
+  "SpentBy",
   "Comment",
-  "PaymentChannel",
-  "Theme",
 ] as const;
+
+/** Reserved column names that cannot be used for custom columns (case-insensitive match). */
+export const RESERVED_COLUMN_NAMES = ["Date", "USD", "Category", "SpentBy", "Comment"] as const;
+
+export const MAX_CUSTOM_COLUMNS = 10;
 
 /**
  * Build the full header row for a sheet given the currency codes
- * that appear between Date and USD (in sheet order).
+ * that appear between Date and USD (in sheet order), and custom column names.
  */
-export function buildExpenseHeaders(sheetCurrencies: string[]): string[] {
-  return ["Date", ...sheetCurrencies, ...POST_CURRENCY_HEADERS];
+export function buildExpenseHeaders(sheetCurrencies: string[], customColumns: string[] = []): string[] {
+  return ["Date", ...sheetCurrencies, ...POST_CURRENCY_HEADERS, ...customColumns];
 }
 
 export const MAX_TAIL_RECORDS = 20;

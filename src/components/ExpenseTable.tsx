@@ -16,7 +16,7 @@ import {
   Dumbbell,
   Pill,
 } from "lucide-react";
-import { ExpenseRecord } from "../types/expense";
+import { CustomColumn, ExpenseRecord } from "../types/expense";
 
 import { LucideProps } from "lucide-react";
 
@@ -27,6 +27,8 @@ interface ExpenseTableProps {
   sheetCurrencies?: string[];
   /** User's currently active currencies. */
   activeCurrencies?: string[];
+  /** User's active custom column definitions. */
+  customColumns?: CustomColumn[];
 }
 
 const COMMENT_PREVIEW_LENGTH = 72;
@@ -85,35 +87,27 @@ function formatGroupDate(dateStr: string): string {
 }
 
 function getCommentPreview(record: ExpenseRecord): string {
-  const base = record.Comment || (record.ForWhom ? `For: ${record.ForWhom}` : "");
-  if (!base) {
-    return "";
-  }
-
+  const base = record.Comment;
+  if (!base) return "";
   return base.length > COMMENT_PREVIEW_LENGTH
     ? `${base.slice(0, COMMENT_PREVIEW_LENGTH)}...`
     : base;
 }
 
-function hasDetails(record: ExpenseRecord): boolean {
-  const base = record.Comment || (record.ForWhom ? `For: ${record.ForWhom}` : "");
+function hasDetails(record: ExpenseRecord, customColumns: CustomColumn[] = []): boolean {
   return (
-    base.length > COMMENT_PREVIEW_LENGTH ||
-    Boolean(record.PaymentChannel.trim()) ||
-    Boolean(record.Theme.trim()) ||
-    Boolean(record.ForWhom.trim() && record.Comment.trim())
+    record.Comment.length > COMMENT_PREVIEW_LENGTH ||
+    customColumns.some((col) => Boolean(record.customFields?.[col.name]?.trim()))
   );
 }
 
-function ExpenseDetails({ record }: { record: ExpenseRecord }): JSX.Element {
+function ExpenseDetails({ record, customColumns = [] }: { record: ExpenseRecord; customColumns?: CustomColumn[] }): JSX.Element {
   const [isOpen, setIsOpen] = useState(false);
   const preview = getCommentPreview(record);
 
-  if (!preview) {
-    return <></>;
-  }
+  if (!preview) return <></>;
 
-  if (!hasDetails(record)) {
+  if (!hasDetails(record, customColumns)) {
     return <span className="expense-card-comment">{preview}</span>;
   }
 
@@ -141,24 +135,16 @@ function ExpenseDetails({ record }: { record: ExpenseRecord }): JSX.Element {
               <span>{record.Comment}</span>
             </div>
           ) : null}
-          {record.ForWhom.trim() ? (
-            <div className="expense-card-tooltip-row">
-              <span className="expense-card-tooltip-label">For:</span>
-              <span>{record.ForWhom}</span>
-            </div>
-          ) : null}
-          {record.PaymentChannel.trim() ? (
-            <div className="expense-card-tooltip-row">
-              <span className="expense-card-tooltip-label">Channel:</span>
-              <span>{record.PaymentChannel}</span>
-            </div>
-          ) : null}
-          {record.Theme.trim() ? (
-            <div className="expense-card-tooltip-row">
-              <span className="expense-card-tooltip-label">Theme:</span>
-              <span>{record.Theme}</span>
-            </div>
-          ) : null}
+          {customColumns.map((col) => {
+            const val = record.customFields?.[col.name]?.trim();
+            if (!val) return null;
+            return (
+              <div key={col.id} className="expense-card-tooltip-row">
+                <span className="expense-card-tooltip-label">{col.name}:</span>
+                <span>{val}</span>
+              </div>
+            );
+          })}
         </div>
       ) : null}
     </div>
@@ -191,6 +177,7 @@ export function ExpenseTable({
   emptyMessage = "No records found.",
   sheetCurrencies = [],
   activeCurrencies = [],
+  customColumns = [],
 }: ExpenseTableProps): JSX.Element {
   const groups = useMemo(() => groupByDate(records), [records]);
 
@@ -219,15 +206,15 @@ export function ExpenseTable({
                   <div className="expense-card-top">
                     <span className="expense-card-category">
                       {record.Category}
-                      {record.WhoSpent ? (
-                        <span className="expense-card-who">{record.WhoSpent}</span>
+                      {record.SpentBy ? (
+                        <span className="expense-card-who">{record.SpentBy}</span>
                       ) : null}
                     </span>
                     <span className="expense-card-amount">{getDisplayAmount(record, sheetCurrencies)}</span>
                   </div>
-                  {record.Comment || record.ForWhom ? (
+                  {record.Comment || customColumns.some((col) => record.customFields?.[col.name]?.trim()) ? (
                     <div className="expense-card-bottom">
-                      <ExpenseDetails record={record} />
+                      <ExpenseDetails record={record} customColumns={customColumns} />
                     </div>
                   ) : null}
                 </div>

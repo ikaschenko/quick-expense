@@ -4,6 +4,8 @@ const LEGACY_EXPENSE_HEADERS = [
   "Date", "PLN", "BYN", "USD", "EUR",
   "Category", "WhoSpent", "ForWhom", "Comment", "PaymentChannel", "Theme",
 ];
+const NEW_FIXED_HEADERS_NOCURR = ["Date", "USD", "Category", "SpentBy", "Comment"];
+const DEFAULT_CUSTOM = ["SpentFor", "Channel", "Theme"];
 
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
@@ -79,11 +81,10 @@ describe("validateSpreadsheet", () => {
 
     const report = await validateSpreadsheet(TOKEN, SHEET_ID, ["PLN", "EUR"]);
 
-    expect(report).toEqual({
-      tabAction: "created",
-      headersAction: "created",
-      sheetCurrencies: ["PLN", "EUR"],
-    });
+    expect(report.tabAction).toBe("created");
+    expect(report.headersAction).toBe("created");
+    expect(report.sheetCurrencies).toEqual(["PLN", "EUR"]);
+    expect(report.customColumns).toEqual(DEFAULT_CUSTOM);
 
     // Verify addSheet was called (2nd fetch call)
     const addSheetCall = mockFetch.mock.calls[1];
@@ -104,15 +105,14 @@ describe("validateSpreadsheet", () => {
 
     const report = await validateSpreadsheet(TOKEN, SHEET_ID, ["PLN"]);
 
-    expect(report).toEqual({
-      tabAction: "found",
-      headersAction: "created",
-      sheetCurrencies: ["PLN"],
-    });
+    expect(report.tabAction).toBe("found");
+    expect(report.headersAction).toBe("created");
+    expect(report.sheetCurrencies).toEqual(["PLN"]);
+    expect(report.customColumns).toEqual(DEFAULT_CUSTOM);
   });
 
-  it("returns valid when Expenses tab has correct dynamic headers", async () => {
-    const dynamicHeaders = ["Date", "PLN", "BYN", "EUR", "USD", "Category", "WhoSpent", "ForWhom", "Comment", "PaymentChannel", "Theme"];
+  it("returns valid when Expenses tab has correct dynamic headers with custom columns", async () => {
+    const dynamicHeaders = ["Date", "PLN", "BYN", "EUR", "USD", "Category", "SpentBy", "Comment", "SpentFor", "Channel", "Theme"];
     setupFetchSequence([
       metadataResponse(["Expenses"]),
       headerResponse([...dynamicHeaders]),
@@ -120,11 +120,24 @@ describe("validateSpreadsheet", () => {
 
     const report = await validateSpreadsheet(TOKEN, SHEET_ID);
 
-    expect(report).toEqual({
-      tabAction: "found",
-      headersAction: "valid",
-      sheetCurrencies: ["PLN", "BYN", "EUR"],
-    });
+    expect(report.tabAction).toBe("found");
+    expect(report.headersAction).toBe("valid");
+    expect(report.sheetCurrencies).toEqual(["PLN", "BYN", "EUR"]);
+    expect(report.customColumns).toEqual(["SpentFor", "Channel", "Theme"]);
+  });
+
+  it("returns valid with no custom columns", async () => {
+    const headers = ["Date", "PLN", "USD", "Category", "SpentBy", "Comment"];
+    setupFetchSequence([
+      metadataResponse(["Expenses"]),
+      headerResponse([...headers]),
+    ]);
+
+    const report = await validateSpreadsheet(TOKEN, SHEET_ID);
+
+    expect(report.headersAction).toBe("valid");
+    expect(report.sheetCurrencies).toEqual(["PLN"]);
+    expect(report.customColumns).toEqual([]);
   });
 
   it("migrates legacy headers and reports migration", async () => {
@@ -140,15 +153,13 @@ describe("validateSpreadsheet", () => {
 
     const report = await validateSpreadsheet(TOKEN, SHEET_ID);
 
-    expect(report).toEqual({
-      tabAction: "found",
-      headersAction: "migrated",
-      sheetCurrencies: ["PLN", "BYN", "EUR"],
-    });
+    expect(report.tabAction).toBe("found");
+    expect(report.headersAction).toBe("migrated");
+    expect(report.sheetCurrencies).toEqual(["PLN", "BYN", "EUR"]);
   });
 
-  it("throws with headerDetails when headers are invalid", async () => {
-    const badHeaders = ["Date", "USD", "PLN", "BYN", "EUR", "Cat", "Who", "For", "Note", "Pay", "Tag"];
+  it("throws with headerDetails when headers are invalid (missing SpentBy)", async () => {
+    const badHeaders = ["Date", "USD", "Category", "WhoSpent", "Comment"];
 
     setupFetchSequence([
       metadataResponse(["Expenses"]),

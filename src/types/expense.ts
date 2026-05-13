@@ -2,6 +2,12 @@ import { FIXED_HEADERS, SHEET_NAME } from "../constants/expenses";
 
 export type FixedHeaderName = (typeof FIXED_HEADERS)[number];
 
+export interface CustomColumn {
+  id: number;
+  name: string;
+  position: number;
+}
+
 export interface CurrencyEntry {
   code: string;
   name: string;
@@ -16,35 +22,31 @@ export interface ExpenseDraft {
   Date: string;
   USD: string;
   Category: string;
-  WhoSpent: string;
-  ForWhom: string;
+  SpentBy: string;
   Comment: string;
-  PaymentChannel: string;
-  Theme: string;
   /** Dynamic non-USD currency amounts, keyed by currency code. */
   currencyAmounts: Record<string, string>;
+  /** Dynamic custom column values, keyed by column name. */
+  customFields: Record<string, string>;
 }
 
 export interface ExpenseRecord {
   Date: string;
   USD: string;
   Category: string;
-  WhoSpent: string;
-  ForWhom: string;
+  SpentBy: string;
   Comment: string;
-  PaymentChannel: string;
-  Theme: string;
   /** Dynamic currency amounts (active + archived), keyed by code. */
   currencyAmounts: Record<string, string>;
+  /** Dynamic custom column values, keyed by column name. */
+  customFields: Record<string, string>;
   rowNumber: number;
 }
 
 export interface DistinctValues {
   Category: string[];
-  WhoSpent: string[];
-  ForWhom: string[];
-  PaymentChannel: string[];
-  Theme: string[];
+  SpentBy: string[];
+  customFields: Record<string, string[]>;
 }
 
 export interface SpreadsheetConfig {
@@ -56,11 +58,19 @@ export interface SpreadsheetConfig {
   currencies: string[];
   /** All currency columns in the sheet (active + archived), in sheet order. */
   sheetCurrencies: string[];
+  /** User's active custom column definitions, ordered by position. */
+  customColumns: CustomColumn[];
 }
 
 export interface SetupReport {
   tabAction: "created" | "found";
   headersAction: "created" | "migrated" | "valid";
+}
+
+export interface ConfigResponse {
+  config: SpreadsheetConfig | null;
+  /** Present when the sheet was unreachable during sync; DB values are returned as-is. */
+  syncError?: string;
 }
 
 export interface HeaderDetails {

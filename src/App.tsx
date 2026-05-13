@@ -6,6 +6,7 @@ import { ConfigProvider } from "./contexts/ConfigContext";
 import { DatasetProvider } from "./contexts/DatasetContext";
 import { AddExpensePage } from "./pages/AddExpensePage";
 import { AuthCallbackPage } from "./pages/AuthCallbackPage";
+import { CustomColumnsPage } from "./pages/CustomColumnsPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { SearchPage } from "./pages/SearchPage";
@@ -58,6 +59,14 @@ export default function App(): JSX.Element {
               element={
                 <ProtectedRoute>
                   <SearchPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/columns"
+              element={
+                <ProtectedRoute>
+                  <CustomColumnsPage />
                 </ProtectedRoute>
               }
             />

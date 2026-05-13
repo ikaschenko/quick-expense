@@ -1,5 +1,7 @@
 import {
+  ConfigResponse,
   CurrencyDictionary,
+  CustomColumn,
   ExpenseRecord,
   FxRateBackupPayload,
   FxRateBackupRecord,
@@ -13,9 +15,8 @@ export const googleSheetsService = {
     return requestJson("/api/auth/picker-config");
   },
 
-  async getConfig(): Promise<SpreadsheetConfig | null> {
-    const response = await requestJson<{ config: SpreadsheetConfig | null }>("/api/config");
-    return response.config;
+  async getConfig(): Promise<ConfigResponse> {
+    return requestJson<ConfigResponse>("/api/config");
   },
 
   async saveConfig(spreadsheetUrl: string): Promise<{ config: SpreadsheetConfig; setupReport: SetupReport }> {
@@ -64,6 +65,41 @@ export const googleSheetsService = {
     return requestJson("/api/currencies", {
       method: "PUT",
       body: JSON.stringify({ currencies: codes }),
+    });
+  },
+
+  async getCustomColumns(): Promise<CustomColumn[]> {
+    const response = await requestJson<{ columns: CustomColumn[] }>("/api/columns");
+    return response.columns;
+  },
+
+  async addCustomColumn(name: string): Promise<CustomColumn> {
+    const response = await requestJson<{ column: CustomColumn }>("/api/columns", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    });
+    return response.column;
+  },
+
+  async renameCustomColumn(id: number, newName: string): Promise<CustomColumn> {
+    const response = await requestJson<{ column: CustomColumn }>(`/api/columns/${id}/rename`, {
+      method: "PATCH",
+      body: JSON.stringify({ name: newName }),
+    });
+    return response.column;
+  },
+
+  async reorderCustomColumns(orderedIds: number[]): Promise<CustomColumn[]> {
+    const response = await requestJson<{ columns: CustomColumn[] }>("/api/columns/reorder", {
+      method: "PUT",
+      body: JSON.stringify({ orderedIds }),
+    });
+    return response.columns;
+  },
+
+  async removeCustomColumn(id: number): Promise<{ deleted: boolean; hardDeleted: boolean }> {
+    return requestJson(`/api/columns/${id}`, {
+      method: "DELETE",
     });
   },
 };

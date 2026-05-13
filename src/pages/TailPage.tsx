@@ -62,6 +62,7 @@ export function TailPage(): JSX.Element {
           records={visibleRecords}
           sheetCurrencies={config?.sheetCurrencies}
           activeCurrencies={config?.currencies}
+          customColumns={config?.customColumns}
         />
       ) : null}
     </Layout>

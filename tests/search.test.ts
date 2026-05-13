@@ -8,11 +8,9 @@ const records: ExpenseRecord[] = [
     USD: "10.00",
     currencyAmounts: {},
     Category: "Food",
-    WhoSpent: "ivan@example.com",
-    ForWhom: "Family",
+    SpentBy: "ivan@example.com",
     Comment: "Dinner at home",
-    PaymentChannel: "cash",
-    Theme: "Daily",
+    customFields: { SpentFor: "Family", Channel: "cash", Theme: "Daily" },
   },
   {
     rowNumber: 3,
@@ -20,11 +18,9 @@ const records: ExpenseRecord[] = [
     USD: "20.00",
     currencyAmounts: {},
     Category: "Travel",
-    WhoSpent: "ivan@example.com",
-    ForWhom: "",
+    SpentBy: "ivan@example.com",
     Comment: "Airport taxi",
-    PaymentChannel: "card",
-    Theme: "Trip",
+    customFields: { SpentFor: "", Channel: "card", Theme: "Trip" },
   },
 ];
 

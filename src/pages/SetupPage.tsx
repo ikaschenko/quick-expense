@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { FileSpreadsheet, Info, Coins, X } from "lucide-react";
 import { Layout } from "../components/Layout";
 import { LoadingBlock } from "../components/LoadingBlock";
@@ -370,6 +370,15 @@ export function SetupPage(): JSX.Element {
         <Info size={16} aria-hidden />
         <span>Your data stays in your spreadsheet. We never store your expenses.</span>
       </div>
+
+      {/* Customize Columns link — visible only when spreadsheet is connected */}
+      {config?.spreadsheetId ? (
+        <div style={{ marginTop: "var(--space-4)" }}>
+          <Link to="/columns" className="btn btn-secondary">
+            Customize columns →
+          </Link>
+        </div>
+      ) : null}
 
       {busy ? <LoadingBlock label={isPicking ? "Opening file picker…" : "Validating spreadsheet…"} /> : null}
     </Layout>

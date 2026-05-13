@@ -9,7 +9,7 @@ import {
 } from "react";
 import { googleSheetsService } from "../services/googleSheets";
 import { RetryBackoff } from "../services/retryBackoff";
-import { SpreadsheetConfig } from "../types/expense";
+import { CustomColumn, SpreadsheetConfig } from "../types/expense";
 import { useAuth } from "./AuthContext";
 
 interface ConfigContextValue {
@@ -21,6 +21,7 @@ interface ConfigContextValue {
   clearError: () => void;
   refreshConfig: () => void;
   saveCurrencies: (currencies: string[], sheetCurrencies: string[]) => void;
+  saveCustomColumns: (customColumns: CustomColumn[]) => void;
 }
 
 const ConfigContext = createContext<ConfigContextValue | null>(null);
@@ -51,13 +52,14 @@ export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
     setError(null);
     void googleSheetsService
       .getConfig()
-      .then((nextConfig) => {
+      .then(({ config: nextConfig, syncError }) => {
         setConfig(nextConfig);
-        retryBackoffRef.current.reset(); // Clear retry backoff on success
+        if (syncError) setError(syncError);
+        retryBackoffRef.current.reset();
       })
       .catch((err) => {
         setConfig(null);
-        retryBackoffRef.current.recordFailure(); // Increment backoff on failure
+        retryBackoffRef.current.recordFailure();
         const message = (err as Error).message;
         setError(message);
         console.error("[ConfigContext] getConfig failed:", message);
@@ -96,7 +98,10 @@ export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
         setError(null);
         void googleSheetsService
           .getConfig()
-          .then((nextConfig) => setConfig(nextConfig))
+          .then(({ config: nextConfig, syncError }) => {
+            setConfig(nextConfig);
+            if (syncError) setError(syncError);
+          })
           .catch((err) => {
             setConfig(null);
             const message = (err as Error).message;
@@ -108,6 +113,11 @@ export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
       saveCurrencies: (currencies, sheetCurrencies) => {
         setConfig((prev) =>
           prev ? { ...prev, currencies, sheetCurrencies } : prev,
+        );
+      },
+      saveCustomColumns: (customColumns) => {
+        setConfig((prev) =>
+          prev ? { ...prev, customColumns } : prev,
         );
       },
     };
