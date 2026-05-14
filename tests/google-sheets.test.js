@@ -14,9 +14,10 @@ let validateSpreadsheet;
 let parseSpreadsheetUrl;
 let loadExpenses;
 let appendExpenseRow;
+let hasExactItemSet;
 
 beforeAll(async () => {
-  ({ validateSpreadsheet, parseSpreadsheetUrl, loadExpenses, appendExpenseRow } = await import("../server/google-sheets.js"));
+  ({ validateSpreadsheet, parseSpreadsheetUrl, loadExpenses, appendExpenseRow, hasExactItemSet } = await import("../server/google-sheets.js"));
 });
 
 beforeEach(() => {
@@ -245,6 +246,23 @@ describe("loadExpenses", () => {
     expect(record.customFields.SpentFor).toBe("Self");
     expect(record.customFields.Channel).toBe("card");
   });
+
+  it("maps records correctly when the sheet header casing differs", async () => {
+    const header = ["Date", "pln", "USD", "Category", "spent by", "SpentFor", "comment", "Channel", "Theme"];
+    const dataRow = ["2026-01-01", "100", "25", "Food", "ivan@x.com", "Family", "samsung galaxy", "cash", "Tech"];
+
+    setupFetchSequence([
+      metadataResponse(["Expenses"]),
+      valuesResponse([header]),
+      valuesResponse([header, dataRow]),
+    ]);
+
+    const result = await loadExpenses(TOKEN, SHEET_ID, ["SpentFor", "Channel", "Theme"]);
+
+    expect(result.records).toHaveLength(1);
+    expect(result.records[0].spentBy).toBe("ivan@x.com");
+    expect(result.records[0].Comment).toBe("samsung galaxy");
+  });
 });
 
 describe("appendExpenseRow", () => {
@@ -336,5 +354,53 @@ describe("appendExpenseRow", () => {
     const appendCall = mockFetch.mock.calls[3];
     const body = JSON.parse(appendCall[1].body);
     expect(body.values[0]).toEqual(canonicalValues);
+  });
+
+  it("aligns outgoing row values when actual header casing differs", async () => {
+    const header = ["Date", "pln", "USD", "Category", "spent by", "SpentFor", "comment", "Channel", "Theme"];
+    const canonicalValues = [
+      "2026-01-04",
+      "77",
+      "19",
+      "Other",
+      "ivan@x.com",
+      "note text",
+      "Family",
+      "cash",
+      "Trip",
+    ];
+
+    setupFetchSequence([
+      metadataResponse(["Expenses"]),
+      valuesResponse([header]),
+      valuesResponse([header]),
+      appendResponse(),
+    ]);
+
+    await appendExpenseRow(TOKEN, SHEET_ID, canonicalValues);
+
+    const appendCall = mockFetch.mock.calls[3];
+    const body = JSON.parse(appendCall[1].body);
+    expect(body.values[0]).toEqual([
+      "2026-01-04",
+      "77",
+      "19",
+      "Other",
+      "ivan@x.com",
+      "Family",
+      "note text",
+      "cash",
+      "Trip",
+    ]);
+  });
+});
+
+describe("hasExactItemSet", () => {
+  it("rejects duplicate entries even when the unique items match", () => {
+    expect(hasExactItemSet(["A", "B"], ["A", "A"])).toBe(false);
+  });
+
+  it("accepts the same items in a different order", () => {
+    expect(hasExactItemSet(["A", "B", "C"], ["c", "b", "a"])).toBe(true);
   });
 });

@@ -1,5 +1,5 @@
 {
-  "maxOptional": 3,
+  "maxOptional": 10,
   "currencies": [
     { "code": "AED", "name": "UAE Dirham" },
     { "code": "AUD", "name": "Australian Dollar" },

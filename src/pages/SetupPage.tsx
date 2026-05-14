@@ -43,7 +43,6 @@ function typeLabel(type: ColumnType): string {
   }
 }
 
-const MAX_OPTIONAL_CURRENCIES = 10;
 const MAX_CUSTOM_COLUMNS = 10;
 
 export function SetupPage(): JSX.Element {
@@ -99,6 +98,7 @@ export function SetupPage(): JSX.Element {
 
   const currencies = config?.currencies ?? [];
   const customColumns = config?.customColumns ?? [];
+  const maxOptionalCurrencies = currencyDictionary?.maxOptional ?? 0;
 
   function clearActionBanners() {
     setActionError(null);
@@ -662,9 +662,13 @@ export function SetupPage(): JSX.Element {
               <button
                 className="btn btn-secondary"
                 type="button"
-                disabled={actionBusy || currencies.length >= MAX_OPTIONAL_CURRENCIES}
+                disabled={actionBusy || !currencyDictionary || currencies.length >= maxOptionalCurrencies}
                 onClick={startAddingCurrency}
-                title={currencies.length >= MAX_OPTIONAL_CURRENCIES ? `Maximum of ${MAX_OPTIONAL_CURRENCIES} currencies reached` : undefined}
+                title={
+                  currencyDictionary && currencies.length >= maxOptionalCurrencies
+                    ? `Maximum of ${maxOptionalCurrencies} currencies reached`
+                    : undefined
+                }
               >
                 <Plus size={16} aria-hidden />
                 Add currency

@@ -20,6 +20,7 @@ import {
   loadExpenses,
   parseSpreadsheetUrl,
   validateSpreadsheet,
+  hasExactItemSet,
   insertCurrencyColumnInSheet,
   insertCustomColumnInSheet,
   renameColumnInSheet,
@@ -572,13 +573,7 @@ app.put("/api/sheet/columns/reorder", requireAuthenticatedUser, async (req, res)
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
     const report = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId);
 
-    // Validate that orderedNames matches current custom columns (case-insensitive)
-    const currentSet = new Set(report.customColumns.map((n) => n.toLowerCase()));
-    const inputSet = new Set(orderedNames.map((n) => n.toLowerCase()));
-    if (
-      orderedNames.length !== report.customColumns.length ||
-      ![...inputSet].every((n) => currentSet.has(n))
-    ) {
+    if (!hasExactItemSet(report.customColumns, orderedNames)) {
       res.status(400).json({ message: "orderedNames must contain all custom columns exactly once." });
       return;
     }
@@ -608,12 +603,7 @@ app.put("/api/sheet/currencies/reorder", requireAuthenticatedUser, async (req, r
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
     const report = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId);
 
-    const currentSet = new Set(report.sheetCurrencies.map((n) => n.toLowerCase()));
-    const inputSet = new Set(orderedCodes.map((n) => n.toLowerCase()));
-    if (
-      orderedCodes.length !== report.sheetCurrencies.length ||
-      ![...inputSet].every((n) => currentSet.has(n))
-    ) {
+    if (!hasExactItemSet(report.sheetCurrencies, orderedCodes)) {
       res.status(400).json({ message: "orderedCodes must contain all currency columns exactly once." });
       return;
     }

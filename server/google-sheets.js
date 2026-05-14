@@ -132,6 +132,26 @@ export function validateColumnName(name, existingNames = [], excludeName = null)
   return null;
 }
 
+export function hasExactItemSet(expectedItems = [], actualItems = []) {
+  if (expectedItems.length !== actualItems.length) return false;
+
+  const normalize = (value) => value.trim().toLowerCase();
+  const expectedSet = new Set(expectedItems.map(normalize));
+  const actualSet = new Set(actualItems.map(normalize));
+
+  if (expectedSet.size !== expectedItems.length || actualSet.size !== actualItems.length) {
+    return false;
+  }
+
+  if (expectedSet.size !== actualSet.size) return false;
+
+  for (const value of expectedSet) {
+    if (!actualSet.has(value)) return false;
+  }
+
+  return true;
+}
+
 function isHeaderRowEmpty(row) {
   return !row || row.every((value) => value.trim() === "");
 }
@@ -707,10 +727,10 @@ export async function appendExpenseRow(accessToken, spreadsheetId, values) {
 
   const valueByCanonicalHeader = new Map();
   for (let index = 0; index < canonicalHeaders.length; index += 1) {
-    valueByCanonicalHeader.set(canonicalHeaders[index], values[index] ?? "");
+    valueByCanonicalHeader.set(canonicalHeaders[index].toLowerCase(), values[index] ?? "");
   }
 
-  const alignedValues = targetHeaders.map((header) => valueByCanonicalHeader.get(header) ?? "");
+  const alignedValues = targetHeaders.map((header) => valueByCanonicalHeader.get(header.toLowerCase()) ?? "");
 
   await requestNoContent(
     accessToken,
