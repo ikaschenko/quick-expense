@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { FileSpreadsheet, Info, Coins, X } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { FileSpreadsheet, Coins, X, Plus, Pencil, Trash2, ChevronUp, ChevronDown, Check, TableProperties, CircleHelp } from "lucide-react";
 import { Layout } from "../components/Layout";
 import { LoadingBlock } from "../components/LoadingBlock";
 import { StatusBanner } from "../components/StatusBanner";
@@ -8,11 +8,13 @@ import { useConfig } from "../contexts/ConfigContext";
 import { openSpreadsheetPicker } from "../services/googlePicker";
 import { googleSheetsService } from "../services/googleSheets";
 import { trackEvent } from "../services/analytics";
-import { AppError, CurrencyDictionary, CurrencyEntry, HeaderDetails, SetupReport } from "../types/expense";
+import { AppError, CustomColumn, CurrencyDictionary, CurrencyEntry, HeaderDetails, SetupReport } from "../types/expense";
 import { resolveSetupBannerState } from "../utils/setupStatus";
+import { validateColumnName } from "../utils/spreadsheet";
+import { MAX_CUSTOM_COLUMNS } from "../constants/expenses";
 
 export function SetupPage(): JSX.Element {
-  const { config, isConfigLoading, error: configError, saveConfig, refreshConfig, saveCurrencies } = useConfig();
+  const { config, isConfigLoading, error: configError, saveConfig, refreshConfig, saveCurrencies, saveCustomColumns } = useConfig();
   const navigate = useNavigate();
   const [spreadsheetUrl, setSpreadsheetUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +34,19 @@ export function SetupPage(): JSX.Element {
   const [currencySuccess, setCurrencySuccess] = useState<string | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Custom fields state
+  const [columns, setColumns] = useState<CustomColumn[]>(config?.customColumns ?? []);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [isAdding, setIsAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  const [bannerError, setBannerError] = useState<string | null>(null);
+  const [bannerSuccess, setBannerSuccess] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [confirmRemoveId, setConfirmRemoveId] = useState<number | null>(null);
+  const [showColumnsHelp, setShowColumnsHelp] = useState(false);
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
@@ -58,6 +73,10 @@ export function SetupPage(): JSX.Element {
       setSelectedCurrencies(config.currencies);
     }
   }, [config?.currencies]);
+
+  useEffect(() => {
+    setColumns(config?.customColumns ?? []);
+  }, [config?.customColumns]);
 
   const currencyMap = useMemo(() => {
     if (!dictionary) return new Map<string, CurrencyEntry>();
@@ -100,6 +119,138 @@ export function SetupPage(): JSX.Element {
       setCurrencyError((err as Error).message);
     } finally {
       setIsSavingCurrencies(false);
+    }
+  };
+
+  function clearBanners() {
+    setBannerError(null);
+    setBannerSuccess(null);
+  }
+
+  // ─── Add ──────────────────────────────────────────────────────────────────
+
+  const startAdding = () => {
+    clearBanners();
+    setEditingId(null);
+    setFieldError(null);
+    setNewName("");
+    setIsAdding(true);
+  };
+
+  const cancelAdding = () => {
+    setIsAdding(false);
+    setNewName("");
+    setFieldError(null);
+  };
+
+  const submitAdd = async (e: FormEvent): Promise<void> => {
+    e.preventDefault();
+    const err = validateColumnName(newName, columns.map((c) => c.name));
+    if (err) { setFieldError(err); return; }
+    setSaving(true);
+    setFieldError(null);
+    try {
+      const added = await googleSheetsService.addCustomColumn(newName.trim());
+      const next = [...columns, added];
+      setColumns(next);
+      saveCustomColumns(next);
+      setIsAdding(false);
+      setNewName("");
+      setBannerSuccess(`Column "${added.name}" added.`);
+    } catch (err) {
+      setBannerError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ─── Rename ───────────────────────────────────────────────────────────────
+
+  const startEditing = (col: CustomColumn) => {
+    clearBanners();
+    setIsAdding(false);
+    setFieldError(null);
+    setEditingId(col.id);
+    setEditName(col.name);
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditName("");
+    setFieldError(null);
+  };
+
+  const submitRename = async (e: FormEvent): Promise<void> => {
+    e.preventDefault();
+    if (editingId === null) return;
+    const target = columns.find((c) => c.id === editingId);
+    if (!target) return;
+    const err = validateColumnName(editName, columns.map((c) => c.name), target.name);
+    if (err) { setFieldError(err); return; }
+    setSaving(true);
+    setFieldError(null);
+    try {
+      const renamed = await googleSheetsService.renameCustomColumn(editingId, editName.trim());
+      const next = columns.map((c) => c.id === editingId ? renamed : c);
+      setColumns(next);
+      saveCustomColumns(next);
+      setEditingId(null);
+      setBannerSuccess(`Column renamed to "${renamed.name}".`);
+    } catch (err) {
+      setBannerError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ─── Reorder ──────────────────────────────────────────────────────────────
+
+  const moveColumn = async (index: number, direction: -1 | 1): Promise<void> => {
+    const swapIndex = index + direction;
+    if (swapIndex < 0 || swapIndex >= columns.length) return;
+    clearBanners();
+    const next = [...columns];
+    [next[index], next[swapIndex]] = [next[swapIndex], next[index]];
+    setSaving(true);
+    try {
+      const reordered = await googleSheetsService.reorderCustomColumns(next.map((c) => c.id));
+      setColumns(reordered);
+      saveCustomColumns(reordered);
+    } catch (err) {
+      setBannerError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ─── Remove ───────────────────────────────────────────────────────────────
+
+  const confirmRemove = (col: CustomColumn) => {
+    clearBanners();
+    setConfirmRemoveId(col.id);
+  };
+
+  const executeRemove = async (): Promise<void> => {
+    if (confirmRemoveId === null) return;
+    const target = columns.find((c) => c.id === confirmRemoveId);
+    if (!target) return;
+    setSaving(true);
+    try {
+      const result = await googleSheetsService.removeCustomColumn(confirmRemoveId);
+      const next = columns.filter((c) => c.id !== confirmRemoveId);
+      setColumns(next);
+      saveCustomColumns(next);
+      setConfirmRemoveId(null);
+      setBannerSuccess(
+        result.hardDeleted
+          ? `Column "${target.name}" deleted.`
+          : `Column "${target.name}" hidden (data preserved in spreadsheet).`,
+      );
+    } catch (err) {
+      setBannerError((err as Error).message);
+      setConfirmRemoveId(null);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -159,6 +310,7 @@ export function SetupPage(): JSX.Element {
     }
   };
 
+  const atLimit = columns.length >= MAX_CUSTOM_COLUMNS;
   const busy = isSaving || isPicking;
   const setupBanner = resolveSetupBannerState({
     isConfigLoading,
@@ -279,7 +431,7 @@ export function SetupPage(): JSX.Element {
         <div className="card setup-card" style={{ marginTop: "var(--space-4)" }}>
           <div className="setup-card-icon">
             <Coins size={24} aria-hidden />
-            <span className="setup-card-title">Currency Configuration</span>
+            <span className="setup-card-title">Currencies</span>
           </div>
 
           <div className="input-group">
@@ -366,17 +518,160 @@ export function SetupPage(): JSX.Element {
         </div>
       ) : null}
 
-      <div className="setup-trust">
-        <Info size={16} aria-hidden />
-        <span>Your data stays in your spreadsheet. We never store your expenses.</span>
-      </div>
-
-      {/* Customize Columns link — visible only when spreadsheet is connected */}
+      {/* Custom fields card — visible only when spreadsheet is connected */}
       {config?.spreadsheetId ? (
-        <div style={{ marginTop: "var(--space-4)" }}>
-          <Link to="/columns" className="btn btn-secondary">
-            Customize columns →
-          </Link>
+        <div className="card setup-card" style={{ marginTop: "var(--space-4)" }}>
+          <div className="setup-card-icon">
+            <TableProperties size={24} aria-hidden />
+            <span className="setup-card-title">Custom fields</span>
+            <button
+              type="button"
+              className="section-help-btn"
+              onClick={() => setShowColumnsHelp((v) => !v)}
+              aria-label="About custom fields"
+            >
+              <CircleHelp size={16} />
+            </button>
+          </div>
+
+          {showColumnsHelp ? (
+            <div className="section-help-popover">
+              Here you may define Custom Columns for your spreadsheet. Custom Columns appear after the
+              fixed fields (Date, Amount, Category, SpentBy, Comment) on the &ldquo;Add Expense&rdquo;
+              screen and in your spreadsheet. You may add up to {MAX_CUSTOM_COLUMNS} custom columns,
+              names must be unique.
+            </div>
+          ) : null}
+
+          {bannerError ? <StatusBanner variant="error" message={bannerError} /> : null}
+          {bannerSuccess ? <StatusBanner variant="success" message={bannerSuccess} /> : null}
+
+          {columns.length === 0 && !isAdding ? (
+            <p style={{ color: "var(--color-text-muted)", marginBottom: "var(--space-3)" }}>
+              No custom fields yet.
+            </p>
+          ) : null}
+
+          <ul className="custom-columns-list">
+            {columns.map((col, index) => (
+              <li key={col.id} className="custom-columns-row">
+                {editingId === col.id ? (
+                  <form onSubmit={(e) => void submitRename(e)} className="custom-columns-edit-form">
+                    <input
+                      className="input custom-columns-name-input"
+                      value={editName}
+                      autoFocus
+                      maxLength={30}
+                      onChange={(e) => { setEditName(e.target.value); setFieldError(null); }}
+                    />
+                    {fieldError ? <div className="field-error">{fieldError}</div> : null}
+                    <div className="custom-columns-edit-actions">
+                      <button className="btn-icon" type="submit" disabled={saving} aria-label="Save rename">
+                        <Check size={16} />
+                      </button>
+                      <button className="btn-icon" type="button" onClick={cancelEditing} aria-label="Cancel rename">
+                        <X size={16} />
+                      </button>
+                    </div>
+                  </form>
+                ) : confirmRemoveId === col.id ? (
+                  <div className="custom-columns-confirm">
+                    <span className="custom-columns-confirm-text">
+                      Remove &ldquo;{col.name}&rdquo;?
+                    </span>
+                    <button className="btn btn-danger btn-sm" type="button" disabled={saving} onClick={() => void executeRemove()}>
+                      Remove
+                    </button>
+                    <button className="btn btn-secondary btn-sm" type="button" onClick={() => setConfirmRemoveId(null)}>
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <span className="custom-columns-name">{col.name}</span>
+                    <div className="custom-columns-actions">
+                      <button
+                        className="btn-icon"
+                        type="button"
+                        disabled={saving || index === 0}
+                        onClick={() => void moveColumn(index, -1)}
+                        aria-label="Move up"
+                      >
+                        <ChevronUp size={16} />
+                      </button>
+                      <button
+                        className="btn-icon"
+                        type="button"
+                        disabled={saving || index === columns.length - 1}
+                        onClick={() => void moveColumn(index, 1)}
+                        aria-label="Move down"
+                      >
+                        <ChevronDown size={16} />
+                      </button>
+                      <button
+                        className="btn-icon"
+                        type="button"
+                        disabled={saving}
+                        onClick={() => startEditing(col)}
+                        aria-label={`Rename ${col.name}`}
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button
+                        className="btn-icon btn-icon-danger"
+                        type="button"
+                        disabled={saving}
+                        onClick={() => confirmRemove(col)}
+                        aria-label={`Remove ${col.name}`}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+
+          {isAdding ? (
+            <form onSubmit={(e) => void submitAdd(e)} className="custom-columns-add-form" style={{ marginTop: "var(--space-3)" }}>
+              <input
+                className="input custom-columns-name-input"
+                value={newName}
+                autoFocus
+                maxLength={30}
+                placeholder="New field name…"
+                onChange={(e) => { setNewName(e.target.value); setFieldError(null); }}
+              />
+              {fieldError ? <div className="field-error">{fieldError}</div> : null}
+              <div className="custom-columns-edit-actions">
+                <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>
+                  Add
+                </button>
+                <button className="btn btn-secondary btn-sm" type="button" onClick={cancelAdding}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <button
+              className="btn btn-secondary"
+              type="button"
+              disabled={saving || atLimit}
+              onClick={startAdding}
+              style={{ marginTop: columns.length > 0 ? "var(--space-3)" : undefined }}
+              title={atLimit ? `Maximum of ${MAX_CUSTOM_COLUMNS} custom fields reached` : undefined}
+            >
+              <Plus size={16} aria-hidden />
+              Add field
+            </button>
+          )}
+
+          {atLimit ? (
+            <p style={{ color: "var(--color-text-muted)", marginTop: "var(--space-2)", fontSize: "var(--font-size-sm)" }}>
+              Maximum of {MAX_CUSTOM_COLUMNS} custom fields reached.
+            </p>
+          ) : null}
         </div>
       ) : null}
 
