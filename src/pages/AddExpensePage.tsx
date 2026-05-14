@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { Check, Calendar } from "lucide-react";
 import DatePicker from "react-datepicker";
@@ -129,6 +129,9 @@ export function AddExpensePage(): JSX.Element {
   );
   const [hasManuallySelectedCurrency, setHasManuallySelectedCurrency] = useState(false);
   const [currencyDictionary, setCurrencyDictionary] = useState<CurrencyDictionary | null>(null);
+  const amountInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { amountInputRef.current?.focus(); }, []);
 
   // Load currency dictionary for tooltips
   useEffect(() => {
@@ -388,6 +391,7 @@ export function AddExpensePage(): JSX.Element {
       setErrors({});
       setFxErrors({});
       setSuccess("Expense saved successfully.");
+      amountInputRef.current?.focus();
       trackEvent("expense_added", { currency: submittedCurrency ?? "USD" });
     } catch (submitError) {
       setError((submitError as Error).message);
@@ -421,6 +425,7 @@ export function AddExpensePage(): JSX.Element {
         {activeNonUsdCurrency ? (
           <div className="add-amount-field">
             <input
+              ref={amountInputRef}
               className="add-amount-input"
               inputMode="decimal"
               value={draft.currencyAmounts[activeNonUsdCurrency] ?? ""}
@@ -435,6 +440,7 @@ export function AddExpensePage(): JSX.Element {
         ) : (
           <div className="add-amount-field">
             <input
+              ref={amountInputRef}
               className="add-amount-input"
               inputMode="decimal"
               value={draft.USD}

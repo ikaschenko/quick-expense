@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search as SearchIcon, SearchX, RefreshCw } from "lucide-react";
 import { ExpenseTable } from "../components/ExpenseTable";
@@ -15,6 +15,9 @@ export function SearchPage(): JSX.Element {
   const dataset = useDataset();
   const navigate = useNavigate();
   const [hasSearched, setHasSearched] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { searchInputRef.current?.focus(); }, []);
 
   useEffect(() => {
     if (!config) {
@@ -41,6 +44,7 @@ export function SearchPage(): JSX.Element {
       <div className="search-hero-input">
         <SearchIcon size={18} className="search-icon" aria-hidden />
         <input
+          ref={searchInputRef}
           className="input"
           value={dataset.searchFilters.comment}
           onChange={(event) => {
