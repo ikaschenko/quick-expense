@@ -1,7 +1,6 @@
 import {
   ConfigResponse,
   CurrencyDictionary,
-  CustomColumn,
   ExpenseRecord,
   FxRateBackupPayload,
   FxRateBackupRecord,
@@ -9,6 +8,11 @@ import {
   SpreadsheetConfig,
 } from "../types/expense";
 import { requestJson, requestNoContent } from "./http";
+
+interface SheetStructure {
+  currencies: string[];
+  customColumns: string[];
+}
 
 export const googleSheetsService = {
   async getPickerConfig(): Promise<{ accessToken: string; apiKey: string; appId: string }> {
@@ -36,6 +40,7 @@ export const googleSheetsService = {
     records: ExpenseRecord[];
     payloadBytes: number;
     sheetCurrencies: string[];
+    customColumns: string[];
   }> {
     return requestJson("/api/expenses");
   },
@@ -53,53 +58,50 @@ export const googleSheetsService = {
   },
 
   async getAvailableCurrencies(): Promise<CurrencyDictionary> {
-    return requestJson("/api/currencies/available");
+    return requestJson("/currencies.json");
   },
 
-  async getUserCurrencies(): Promise<string[]> {
-    const response = await requestJson<{ currencies: string[] }>("/api/currencies");
-    return response.currencies;
-  },
+  // ─── Sheet Structure Management ──────────────────────────────────────────
 
-  async saveUserCurrencies(codes: string[]): Promise<{ currencies: string[]; sheetCurrencies: string[] }> {
-    return requestJson("/api/currencies", {
-      method: "PUT",
-      body: JSON.stringify({ currencies: codes }),
+  async addSheetCurrency(code: string): Promise<SheetStructure> {
+    return requestJson("/api/sheet/currency", {
+      method: "POST",
+      body: JSON.stringify({ code }),
     });
   },
 
-  async getCustomColumns(): Promise<CustomColumn[]> {
-    const response = await requestJson<{ columns: CustomColumn[] }>("/api/columns");
-    return response.columns;
-  },
-
-  async addCustomColumn(name: string): Promise<CustomColumn> {
-    const response = await requestJson<{ column: CustomColumn }>("/api/columns", {
+  async addSheetColumn(name: string): Promise<SheetStructure> {
+    return requestJson("/api/sheet/column", {
       method: "POST",
       body: JSON.stringify({ name }),
     });
-    return response.column;
   },
 
-  async renameCustomColumn(id: number, newName: string): Promise<CustomColumn> {
-    const response = await requestJson<{ column: CustomColumn }>(`/api/columns/${id}/rename`, {
+  async renameSheetColumn(currentName: string, newName: string): Promise<SheetStructure> {
+    return requestJson("/api/sheet/column/rename", {
       method: "PATCH",
-      body: JSON.stringify({ name: newName }),
+      body: JSON.stringify({ currentName, newName }),
     });
-    return response.column;
   },
 
-  async reorderCustomColumns(orderedIds: number[]): Promise<CustomColumn[]> {
-    const response = await requestJson<{ columns: CustomColumn[] }>("/api/columns/reorder", {
+  async reorderSheetColumns(orderedNames: string[]): Promise<SheetStructure> {
+    return requestJson("/api/sheet/columns/reorder", {
       method: "PUT",
-      body: JSON.stringify({ orderedIds }),
+      body: JSON.stringify({ orderedNames }),
     });
-    return response.columns;
   },
 
-  async removeCustomColumn(id: number): Promise<{ deleted: boolean; hardDeleted: boolean }> {
-    return requestJson(`/api/columns/${id}`, {
+  async reorderSheetCurrencies(orderedCodes: string[]): Promise<SheetStructure> {
+    return requestJson("/api/sheet/currencies/reorder", {
+      method: "PUT",
+      body: JSON.stringify({ orderedCodes }),
+    });
+  },
+
+  async removeSheetColumn(name: string): Promise<SheetStructure> {
+    return requestJson("/api/sheet/column", {
       method: "DELETE",
+      body: JSON.stringify({ name }),
     });
   },
 };

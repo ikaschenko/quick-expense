@@ -16,7 +16,7 @@ import {
   Dumbbell,
   Pill,
 } from "lucide-react";
-import { CustomColumn, ExpenseRecord } from "../types/expense";
+import { ExpenseRecord } from "../types/expense";
 
 import { LucideProps } from "lucide-react";
 
@@ -27,8 +27,8 @@ interface ExpenseTableProps {
   sheetCurrencies?: string[];
   /** User's currently active currencies. */
   activeCurrencies?: string[];
-  /** User's active custom column definitions. */
-  customColumns?: CustomColumn[];
+  /** User's active custom column names. */
+  customColumns?: string[];
 }
 
 const COMMENT_PREVIEW_LENGTH = 72;
@@ -102,17 +102,17 @@ function getCommentPreview(record: ExpenseRecord): string {
     : base;
 }
 
-export function hasDetails(record: ExpenseRecord, customColumns: CustomColumn[] = []): boolean {
+export function hasDetails(record: ExpenseRecord, customColumns: string[] = []): boolean {
   return (
     record.Comment.length > COMMENT_PREVIEW_LENGTH ||
-    customColumns.some((col) => Boolean(record.customFields?.[col.name]?.trim()))
+    customColumns.some((col) => Boolean(record.customFields?.[col]?.trim()))
   );
 }
 
 interface ExpenseCardProps {
   record: ExpenseRecord;
   sheetCurrencies: string[];
-  customColumns: CustomColumn[];
+  customColumns: string[];
 }
 
 function ExpenseCard({ record, sheetCurrencies, customColumns }: ExpenseCardProps): JSX.Element {
@@ -121,7 +121,7 @@ function ExpenseCard({ record, sheetCurrencies, customColumns }: ExpenseCardProp
   const Icon = getCategoryIcon(record.Category);
   const cardHasDetails = hasDetails(record, customColumns);
   const preview = getCommentPreview(record);
-  const hasBottom = Boolean(preview) || customColumns.some((col) => record.customFields?.[col.name]?.trim());
+  const hasBottom = Boolean(preview) || customColumns.some((col) => record.customFields?.[col]?.trim());
 
   return (
     <div
@@ -138,8 +138,8 @@ function ExpenseCard({ record, sheetCurrencies, customColumns }: ExpenseCardProp
         <div className="expense-card-top">
           <span className="expense-card-category">
             {record.Category}
-            {record.SpentBy ? (
-              <span className="expense-card-who">{record.SpentBy}</span>
+            {record.spentBy ? (
+              <span className="expense-card-who">{record.spentBy}</span>
             ) : null}
           </span>
           <span className="expense-card-amount">{getDisplayAmount(record, sheetCurrencies)}</span>
@@ -157,11 +157,11 @@ function ExpenseCard({ record, sheetCurrencies, customColumns }: ExpenseCardProp
                     </div>
                   ) : null}
                   {customColumns.map((col) => {
-                    const val = record.customFields?.[col.name]?.trim();
+                    const val = record.customFields?.[col]?.trim();
                     if (!val) return null;
                     return (
-                      <div key={col.id} className="expense-card-tooltip-row">
-                        <span className="expense-card-tooltip-label">{getCustomColumnLabel(col.name)}:</span>
+                      <div key={col} className="expense-card-tooltip-row">
+                        <span className="expense-card-tooltip-label">{getCustomColumnLabel(col)}:</span>
                         <span>{val}</span>
                       </div>
                     );

@@ -9,7 +9,7 @@ import {
 } from "react";
 import { googleSheetsService } from "../services/googleSheets";
 import { RetryBackoff } from "../services/retryBackoff";
-import { CustomColumn, SpreadsheetConfig } from "../types/expense";
+import { SpreadsheetConfig } from "../types/expense";
 import { useAuth } from "./AuthContext";
 
 interface ConfigContextValue {
@@ -20,8 +20,7 @@ interface ConfigContextValue {
   clearConfig: () => void;
   clearError: () => void;
   refreshConfig: () => void;
-  saveCurrencies: (currencies: string[], sheetCurrencies: string[]) => void;
-  saveCustomColumns: (customColumns: CustomColumn[]) => void;
+  updateStructure: (currencies: string[], customColumns: string[]) => void;
 }
 
 const ConfigContext = createContext<ConfigContextValue | null>(null);
@@ -52,9 +51,8 @@ export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
     setError(null);
     void googleSheetsService
       .getConfig()
-      .then(({ config: nextConfig, syncError }) => {
+      .then(({ config: nextConfig }) => {
         setConfig(nextConfig);
-        if (syncError) setError(syncError);
         retryBackoffRef.current.reset();
       })
       .catch((err) => {
@@ -98,9 +96,8 @@ export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
         setError(null);
         void googleSheetsService
           .getConfig()
-          .then(({ config: nextConfig, syncError }) => {
+          .then(({ config: nextConfig }) => {
             setConfig(nextConfig);
-            if (syncError) setError(syncError);
           })
           .catch((err) => {
             setConfig(null);
@@ -110,14 +107,9 @@ export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
           })
           .finally(() => setIsConfigLoading(false));
       },
-      saveCurrencies: (currencies, sheetCurrencies) => {
+      updateStructure: (currencies, customColumns) => {
         setConfig((prev) =>
-          prev ? { ...prev, currencies, sheetCurrencies } : prev,
-        );
-      },
-      saveCustomColumns: (customColumns) => {
-        setConfig((prev) =>
-          prev ? { ...prev, customColumns } : prev,
+          prev ? { ...prev, currencies, customColumns } : prev,
         );
       },
     };

@@ -4,7 +4,7 @@ const LEGACY_EXPENSE_HEADERS = [
   "Date", "PLN", "BYN", "USD", "EUR",
   "Category", "WhoSpent", "ForWhom", "Comment", "PaymentChannel", "Theme",
 ];
-const NEW_FIXED_HEADERS_NOCURR = ["Date", "USD", "Category", "SpentBy", "Comment"];
+const NEW_FIXED_HEADERS_NOCURR = ["Date", "USD", "Category", "Spent By", "Comment"];
 const DEFAULT_CUSTOM = ["SpentFor", "Channel", "Theme"];
 
 const mockFetch = vi.fn();
@@ -13,9 +13,11 @@ global.fetch = mockFetch;
 let validateSpreadsheet;
 let parseSpreadsheetUrl;
 let loadExpenses;
+let appendExpenseRow;
+let hasExactItemSet;
 
 beforeAll(async () => {
-  ({ validateSpreadsheet, parseSpreadsheetUrl, loadExpenses } = await import("../server/google-sheets.js"));
+  ({ validateSpreadsheet, parseSpreadsheetUrl, loadExpenses, appendExpenseRow, hasExactItemSet } = await import("../server/google-sheets.js"));
 });
 
 beforeEach(() => {
@@ -80,11 +82,11 @@ describe("validateSpreadsheet", () => {
       updateValuesResponse(),
     ]);
 
-    const report = await validateSpreadsheet(TOKEN, SHEET_ID, ["PLN", "EUR"]);
+    const report = await validateSpreadsheet(TOKEN, SHEET_ID);
 
     expect(report.tabAction).toBe("created");
     expect(report.headersAction).toBe("created");
-    expect(report.sheetCurrencies).toEqual(["PLN", "EUR"]);
+    expect(report.sheetCurrencies).toEqual([]);
     expect(report.customColumns).toEqual(DEFAULT_CUSTOM);
 
     // Verify addSheet was called (2nd fetch call)
@@ -104,16 +106,16 @@ describe("validateSpreadsheet", () => {
       updateValuesResponse(),
     ]);
 
-    const report = await validateSpreadsheet(TOKEN, SHEET_ID, ["PLN"]);
+    const report = await validateSpreadsheet(TOKEN, SHEET_ID);
 
     expect(report.tabAction).toBe("found");
     expect(report.headersAction).toBe("created");
-    expect(report.sheetCurrencies).toEqual(["PLN"]);
+    expect(report.sheetCurrencies).toEqual([]);
     expect(report.customColumns).toEqual(DEFAULT_CUSTOM);
   });
 
   it("returns valid when Expenses tab has correct dynamic headers with custom columns", async () => {
-    const dynamicHeaders = ["Date", "PLN", "BYN", "EUR", "USD", "Category", "SpentBy", "Comment", "SpentFor", "Channel", "Theme"];
+    const dynamicHeaders = ["Date", "PLN", "BYN", "EUR", "USD", "Category", "Spent By", "Comment", "SpentFor", "Channel", "Theme"];
     setupFetchSequence([
       metadataResponse(["Expenses"]),
       headerResponse([...dynamicHeaders]),
@@ -128,7 +130,7 @@ describe("validateSpreadsheet", () => {
   });
 
   it("returns valid with no custom columns", async () => {
-    const headers = ["Date", "PLN", "USD", "Category", "SpentBy", "Comment"];
+    const headers = ["Date", "PLN", "USD", "Category", "Spent By", "Comment"];
     setupFetchSequence([
       metadataResponse(["Expenses"]),
       headerResponse([...headers]),
@@ -201,7 +203,7 @@ describe("loadExpenses", () => {
   it("maps Comment correctly when custom columns appear before Comment in the sheet", async () => {
     // Sheet header: Date, PLN, USD, Category, SpentBy, SpentFor, Comment, Channel, Theme
     // SpentFor is BEFORE Comment — this was the bug case
-    const header = ["Date", "PLN", "USD", "Category", "SpentBy", "SpentFor", "Comment", "Channel", "Theme"];
+    const header = ["Date", "PLN", "USD", "Category", "Spent By", "SpentFor", "Comment", "Channel", "Theme"];
     const dataRow = ["2026-01-01", "100", "25", "Food", "ivan@x.com", "Family", "samsung galaxy", "cash", "Tech"];
 
     setupFetchSequence([
@@ -227,7 +229,7 @@ describe("loadExpenses", () => {
 
   it("maps Comment correctly when custom columns appear after Comment in the sheet (standard order)", async () => {
     // Standard header: Date, PLN, USD, Category, SpentBy, Comment, SpentFor, Channel, Theme
-    const header = ["Date", "PLN", "USD", "Category", "SpentBy", "Comment", "SpentFor", "Channel", "Theme"];
+    const header = ["Date", "PLN", "USD", "Category", "Spent By", "Comment", "SpentFor", "Channel", "Theme"];
     const dataRow = ["2026-01-01", "100", "25", "Travel", "ivan@x.com", "allegro order", "Self", "card", "Trip"];
 
     setupFetchSequence([
@@ -243,5 +245,162 @@ describe("loadExpenses", () => {
     expect(record.Comment).toBe("allegro order");
     expect(record.customFields.SpentFor).toBe("Self");
     expect(record.customFields.Channel).toBe("card");
+  });
+
+  it("maps records correctly when the sheet header casing differs", async () => {
+    const header = ["Date", "pln", "USD", "Category", "spent by", "SpentFor", "comment", "Channel", "Theme"];
+    const dataRow = ["2026-01-01", "100", "25", "Food", "ivan@x.com", "Family", "samsung galaxy", "cash", "Tech"];
+
+    setupFetchSequence([
+      metadataResponse(["Expenses"]),
+      valuesResponse([header]),
+      valuesResponse([header, dataRow]),
+    ]);
+
+    const result = await loadExpenses(TOKEN, SHEET_ID, ["SpentFor", "Channel", "Theme"]);
+
+    expect(result.records).toHaveLength(1);
+    expect(result.records[0].spentBy).toBe("ivan@x.com");
+    expect(result.records[0].Comment).toBe("samsung galaxy");
+  });
+});
+
+describe("appendExpenseRow", () => {
+  const TOKEN = "test-token";
+  const SHEET_ID = "spreadsheet-123";
+
+  function metadataResponse(sheetNames) {
+    return jsonResponse({
+      sheets: sheetNames.map((title, i) => ({ properties: { sheetId: i, title } })),
+    });
+  }
+
+  function valuesResponse(rows) {
+    return jsonResponse({ values: rows });
+  }
+
+  function appendResponse() {
+    return { ok: true, status: 200, json: () => Promise.resolve({}) };
+  }
+
+  it("aligns outgoing row values to actual header order when custom columns appear before Comment", async () => {
+    const header = ["Date", "PLN", "USD", "Category", "Spent By", "SpentFor", "Comment", "Channel", "Theme"];
+    const canonicalValues = [
+      "2026-01-02",
+      "120",
+      "30",
+      "Food",
+      "ivan@x.com",
+      "samsung galaxy",
+      "Family",
+      "cash",
+      "Tech",
+    ];
+
+    setupFetchSequence([
+      // validateSpreadsheet
+      metadataResponse(["Expenses"]),
+      valuesResponse([header]),
+      // appendExpenseRow alignment read
+      valuesResponse([header]),
+      // append call
+      appendResponse(),
+    ]);
+
+    await appendExpenseRow(TOKEN, SHEET_ID, canonicalValues);
+
+    const appendCall = mockFetch.mock.calls[3];
+    expect(appendCall[0]).toContain(":append");
+    const body = JSON.parse(appendCall[1].body);
+
+    // Expected order by actual header:
+    // Date, PLN, USD, Category, Spent By, SpentFor, Comment, Channel, Theme
+    expect(body.values[0]).toEqual([
+      "2026-01-02",
+      "120",
+      "30",
+      "Food",
+      "ivan@x.com",
+      "Family",
+      "samsung galaxy",
+      "cash",
+      "Tech",
+    ]);
+  });
+
+  it("keeps canonical value order when sheet header is already standard", async () => {
+    const header = ["Date", "PLN", "USD", "Category", "Spent By", "Comment", "SpentFor", "Channel", "Theme"];
+    const canonicalValues = [
+      "2026-01-03",
+      "90",
+      "22",
+      "Travel",
+      "ivan@x.com",
+      "allegro order",
+      "Self",
+      "card",
+      "Trip",
+    ];
+
+    setupFetchSequence([
+      metadataResponse(["Expenses"]),
+      valuesResponse([header]),
+      valuesResponse([header]),
+      appendResponse(),
+    ]);
+
+    await appendExpenseRow(TOKEN, SHEET_ID, canonicalValues);
+
+    const appendCall = mockFetch.mock.calls[3];
+    const body = JSON.parse(appendCall[1].body);
+    expect(body.values[0]).toEqual(canonicalValues);
+  });
+
+  it("aligns outgoing row values when actual header casing differs", async () => {
+    const header = ["Date", "pln", "USD", "Category", "spent by", "SpentFor", "comment", "Channel", "Theme"];
+    const canonicalValues = [
+      "2026-01-04",
+      "77",
+      "19",
+      "Other",
+      "ivan@x.com",
+      "note text",
+      "Family",
+      "cash",
+      "Trip",
+    ];
+
+    setupFetchSequence([
+      metadataResponse(["Expenses"]),
+      valuesResponse([header]),
+      valuesResponse([header]),
+      appendResponse(),
+    ]);
+
+    await appendExpenseRow(TOKEN, SHEET_ID, canonicalValues);
+
+    const appendCall = mockFetch.mock.calls[3];
+    const body = JSON.parse(appendCall[1].body);
+    expect(body.values[0]).toEqual([
+      "2026-01-04",
+      "77",
+      "19",
+      "Other",
+      "ivan@x.com",
+      "Family",
+      "note text",
+      "cash",
+      "Trip",
+    ]);
+  });
+});
+
+describe("hasExactItemSet", () => {
+  it("rejects duplicate entries even when the unique items match", () => {
+    expect(hasExactItemSet(["A", "B"], ["A", "A"])).toBe(false);
+  });
+
+  it("accepts the same items in a different order", () => {
+    expect(hasExactItemSet(["A", "B", "C"], ["c", "b", "a"])).toBe(true);
   });
 });

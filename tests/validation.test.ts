@@ -7,7 +7,7 @@ function makeDraft(overrides: Record<string, unknown> = {}) {
     Date: "",
     USD: "",
     Category: "",
-    SpentBy: "",
+    spentBy: "",
     Comment: "",
     currencyAmounts: { PLN: "", BYN: "", EUR: "" },
     customFields: {},
@@ -16,13 +16,13 @@ function makeDraft(overrides: Record<string, unknown> = {}) {
 }
 
 describe("expense validation", () => {
-  it("requires date, at least one currency, category, and SpentBy", () => {
+  it("requires date, at least one currency, category, and Spent By", () => {
     const errors = validateExpenseDraft(makeDraft(), ACTIVE_CURRENCIES);
 
     expect(errors.Date).toContain("YYYY-MM-DD");
     expect(errors.USD).toContain("at least one");
     expect(errors.Category).toContain("required");
-    expect(errors.SpentBy).toContain("required");
+    expect(errors.spentBy).toContain("required");
   });
 
   it("accepts valid decimal currency fields", () => {
@@ -30,7 +30,7 @@ describe("expense validation", () => {
       makeDraft({
         Date: "2026-03-14",
         Category: "Misc",
-        SpentBy: "ivan@example.com",
+        spentBy: "ivan@example.com",
         currencyAmounts: { PLN: "-10.25", BYN: "", EUR: "" },
       }),
       ACTIVE_CURRENCIES,
@@ -44,7 +44,7 @@ describe("expense validation", () => {
       makeDraft({
         Date: "2026-03-14",
         Category: "Misc",
-        SpentBy: "ivan@example.com",
+        spentBy: "ivan@example.com",
         currencyAmounts: { PLN: "10.25", BYN: "5", EUR: "" },
       }),
       ACTIVE_CURRENCIES,
@@ -61,7 +61,7 @@ describe("expense validation", () => {
         Date: "2026-03-14",
         USD: "2.80",
         Category: "Misc",
-        SpentBy: "ivan@example.com",
+        spentBy: "ivan@example.com",
         currencyAmounts: { PLN: "10.25", BYN: "", EUR: "" },
       }),
       ACTIVE_CURRENCIES,
@@ -76,7 +76,7 @@ describe("expense validation", () => {
         Date: "2026-03-14",
         USD: "5.00",
         Category: "Misc",
-        SpentBy: "ivan@example.com",
+        spentBy: "ivan@example.com",
         currencyAmounts: {},
       }),
       [],

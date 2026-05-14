@@ -1,23 +1,19 @@
 import { describe, it, expect } from "vitest";
 import { getCustomColumnLabel, hasDetails } from "../src/components/ExpenseTable";
-import { CustomColumn, ExpenseRecord } from "../src/types/expense";
+import { ExpenseRecord } from "../src/types/expense";
 
 function makeRecord(overrides: Partial<ExpenseRecord> = {}): ExpenseRecord {
   return {
     Date: "2026-01-01",
     USD: "10.00",
     Category: "Food",
-    SpentBy: "a@example.com",
+    spentBy: "a@example.com",
     Comment: "",
     currencyAmounts: {},
     customFields: {},
     rowNumber: 1,
     ...overrides,
   };
-}
-
-function makeCol(name: string): CustomColumn {
-  return { id: 1, name, position: 1 };
 }
 
 describe("getCustomColumnLabel", () => {
@@ -35,12 +31,12 @@ describe("getCustomColumnLabel", () => {
 describe("hasDetails", () => {
   it("returns false when comment is short and no custom fields", () => {
     const record = makeRecord({ Comment: "short" });
-    expect(hasDetails(record, [makeCol("SpentFor")])).toBe(false);
+    expect(hasDetails(record, ["SpentFor"])).toBe(false);
   });
 
   it("returns false when comment is empty and all custom field values are empty", () => {
     const record = makeRecord({ Comment: "", customFields: { SpentFor: "  " } });
-    expect(hasDetails(record, [makeCol("SpentFor")])).toBe(false);
+    expect(hasDetails(record, ["SpentFor"])).toBe(false);
   });
 
   it("returns true when comment exceeds preview length", () => {
@@ -50,11 +46,11 @@ describe("hasDetails", () => {
 
   it("returns true when comment is empty but a custom field has a value", () => {
     const record = makeRecord({ Comment: "", customFields: { SpentFor: "Family" } });
-    expect(hasDetails(record, [makeCol("SpentFor")])).toBe(true);
+    expect(hasDetails(record, ["SpentFor"])).toBe(true);
   });
 
   it("returns true when comment is short but a custom field has a value", () => {
     const record = makeRecord({ Comment: "short", customFields: { SpentFor: "Family" } });
-    expect(hasDetails(record, [makeCol("SpentFor")])).toBe(true);
+    expect(hasDetails(record, ["SpentFor"])).toBe(true);
   });
 });

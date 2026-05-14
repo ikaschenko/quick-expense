@@ -1,7 +1,7 @@
 import { buildExpenseHeaders, MAX_DATASET_BYTES, POST_CURRENCY_HEADERS, RESERVED_COLUMN_NAMES, SHEET_NAME } from "../constants/expenses";
-import { CustomColumn, DistinctValues, ExpenseDraft, ExpenseRecord } from "../types/expense";
+import { DistinctValues, ExpenseDraft, ExpenseRecord } from "../types/expense";
 
-const distinctFixedKeys = ["Category", "SpentBy"] as const;
+const distinctFixedKeys = ["Category", "spentBy"] as const;
 
 export function validateColumnName(
   name: string,
@@ -35,30 +35,21 @@ export function isHeaderRowEmpty(row: string[] | undefined): boolean {
   return !row || row.every((value) => value.trim() === "");
 }
 
-export function validateHeaderRow(row: string[] | undefined, sheetCurrencies: string[], customColumns: string[] = []): boolean {
-  const normalized = normalizeHeaderRow(row);
-  const expected = buildExpenseHeaders(sheetCurrencies, customColumns);
-  return (
-    normalized.length === expected.length &&
-    expected.every((header, index) => normalized[index] === header)
-  );
-}
-
-export function createEmptyExpenseDraft(defaultEmail = "", currencies: string[] = [], customColumns: CustomColumn[] = []): ExpenseDraft {
+export function createEmptyExpenseDraft(defaultEmail = "", currencies: string[] = [], customColumns: string[] = []): ExpenseDraft {
   const currencyAmounts: Record<string, string> = {};
   for (const code of currencies) {
     currencyAmounts[code] = "";
   }
   const customFields: Record<string, string> = {};
   for (const col of customColumns) {
-    customFields[col.name] = "";
+    customFields[col] = "";
   }
 
   return {
     Date: new Date().toISOString().slice(0, 10),
     USD: "",
     Category: "",
-    SpentBy: defaultEmail,
+    spentBy: defaultEmail,
     Comment: "",
     currencyAmounts,
     customFields,
@@ -90,7 +81,7 @@ export function mapRowsToExpenseRecords(rows: string[][], sheetCurrencies: strin
       currencyAmounts,
       USD: padded[postStart] ?? "",
       Category: padded[postStart + 1] ?? "",
-      SpentBy: padded[postStart + 2] ?? "",
+      spentBy: padded[postStart + 2] ?? "",
       Comment: padded[postStart + 3] ?? "",
       customFields,
       rowNumber: index + 2,
@@ -106,14 +97,14 @@ export function expenseDraftToRowValues(draft: ExpenseDraft, sheetCurrencies: st
     ...currencyValues,
     draft.USD,
     draft.Category,
-    draft.SpentBy,
+    draft.spentBy,
     draft.Comment,
     ...customValues,
   ];
 }
 
 export function buildDistinctValues(records: ExpenseRecord[], customColumns: string[] = []): DistinctValues {
-  const fixedSets: Record<string, Set<string>> = { Category: new Set(), SpentBy: new Set() };
+  const fixedSets: Record<string, Set<string>> = { Category: new Set(), spentBy: new Set() };
   const customSets: Record<string, Set<string>> = {};
   for (const col of customColumns) {
     customSets[col] = new Set();
@@ -137,7 +128,7 @@ export function buildDistinctValues(records: ExpenseRecord[], customColumns: str
 
   return {
     Category: [...fixedSets.Category].sort((a, b) => a.localeCompare(b)),
-    SpentBy: [...fixedSets.SpentBy].sort((a, b) => a.localeCompare(b)),
+    spentBy: [...fixedSets.spentBy].sort((a, b) => a.localeCompare(b)),
     customFields,
   };
 }

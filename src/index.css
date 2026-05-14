@@ -26,6 +26,14 @@
   --color-warning: #F59E0B;
   --color-warning-light: #FFFBEB;
 
+  /* Column type tags */
+  --color-tag-mandatory-bg: #EEF2FF;
+  --color-tag-mandatory-fg: #4F46E5;
+  --color-tag-currency-bg: #DBEAFE;
+  --color-tag-currency-fg: #1D4ED8;
+  --color-tag-custom-bg: #E0F2FE;
+  --color-tag-custom-fg: #0369A1;
+
   /* Spacing scale */
   --space-1: 4px;
   --space-2: 8px;
@@ -1219,6 +1227,39 @@ button { cursor: pointer; }
 .custom-columns-name {
   flex: 1;
   font-size: var(--font-size-sm);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.custom-columns-type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  background: var(--color-surface-raised);
+  color: var(--color-text-secondary);
+}
+.custom-columns-type-badge--mandatory-field {
+  background: var(--color-surface-raised);
+  color: var(--color-text-secondary);
+}
+.custom-columns-type-badge--mandatory-currency {
+  background: var(--color-tag-mandatory-bg);
+  color: var(--color-tag-mandatory-fg);
+}
+.custom-columns-type-badge--optional-currency {
+  background: var(--color-tag-currency-bg);
+  color: var(--color-tag-currency-fg);
+}
+.custom-columns-type-badge--custom-column {
+  background: var(--color-tag-custom-bg);
+  color: var(--color-tag-custom-fg);
 }
 .custom-columns-actions {
   display: flex;
