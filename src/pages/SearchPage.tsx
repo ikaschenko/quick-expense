@@ -157,7 +157,7 @@ export function SearchPage(): JSX.Element {
               <ExpenseTable
                 records={outcome.visibleMatches}
                 emptyMessage="Nothing found."
-                sheetCurrencies={config?.sheetCurrencies}
+                sheetCurrencies={config?.currencies}
                 activeCurrencies={config?.currencies}
                 customColumns={config?.customColumns}
               />

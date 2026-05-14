@@ -2,12 +2,6 @@ import { FIXED_HEADERS, SHEET_NAME } from "../constants/expenses";
 
 export type FixedHeaderName = (typeof FIXED_HEADERS)[number];
 
-export interface CustomColumn {
-  id: number;
-  name: string;
-  position: number;
-}
-
 export interface CurrencyEntry {
   code: string;
   name: string;
@@ -22,7 +16,7 @@ export interface ExpenseDraft {
   Date: string;
   USD: string;
   Category: string;
-  SpentBy: string;
+  spentBy: string;
   Comment: string;
   /** Dynamic non-USD currency amounts, keyed by currency code. */
   currencyAmounts: Record<string, string>;
@@ -34,7 +28,7 @@ export interface ExpenseRecord {
   Date: string;
   USD: string;
   Category: string;
-  SpentBy: string;
+  spentBy: string;
   Comment: string;
   /** Dynamic currency amounts (active + archived), keyed by code. */
   currencyAmounts: Record<string, string>;
@@ -45,7 +39,7 @@ export interface ExpenseRecord {
 
 export interface DistinctValues {
   Category: string[];
-  SpentBy: string[];
+  spentBy: string[];
   customFields: Record<string, string[]>;
 }
 
@@ -54,12 +48,10 @@ export interface SpreadsheetConfig {
   spreadsheetUrl: string;
   spreadsheetId: string;
   sheetName: typeof SHEET_NAME;
-  /** User's currently active non-USD currency codes. */
+  /** Optional currency codes from sheet header (0–10), in sheet order. */
   currencies: string[];
-  /** All currency columns in the sheet (active + archived), in sheet order. */
-  sheetCurrencies: string[];
-  /** User's active custom column definitions, ordered by position. */
-  customColumns: CustomColumn[];
+  /** Custom column names from sheet header (0–10), in sheet order. */
+  customColumns: string[];
 }
 
 export interface SetupReport {
@@ -69,8 +61,6 @@ export interface SetupReport {
 
 export interface ConfigResponse {
   config: SpreadsheetConfig | null;
-  /** Present when the sheet was unreachable during sync; DB values are returned as-is. */
-  syncError?: string;
 }
 
 export interface HeaderDetails {

@@ -25,20 +25,20 @@ function formatColumnLabel(name: string): string {
   return name.replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2");
 }
 
-function createInitialDraft(defaultEmail: string, currencies: string[], customColumns: { name: string }[]): ExpenseDraft {
+function createInitialDraft(defaultEmail: string, currencies: string[], customColumns: string[]): ExpenseDraft {
   const currencyAmounts: Record<string, string> = {};
   for (const code of currencies) {
     currencyAmounts[code] = "";
   }
   const customFields: Record<string, string> = {};
   for (const col of customColumns) {
-    customFields[col.name] = "";
+    customFields[col] = "";
   }
   return {
     Date: getTodayLocalDate(),
     USD: "",
     Category: "",
-    SpentBy: defaultEmail,
+    spentBy: defaultEmail,
     Comment: "",
     currencyAmounts,
     customFields,
@@ -109,7 +109,6 @@ export function AddExpensePage(): JSX.Element {
   const navigate = useNavigate();
 
   const activeCurrencies = useMemo(() => config?.currencies ?? [], [config?.currencies]);
-  const sheetCurrencies = useMemo(() => config?.sheetCurrencies ?? [], [config?.sheetCurrencies]);
   const customColumns = useMemo(() => config?.customColumns ?? [], [config?.customColumns]);
 
   const [draft, setDraft] = useState<ExpenseDraft>(
@@ -354,7 +353,7 @@ export function AddExpensePage(): JSX.Element {
         ...draft,
         Date: draft.Date.trim(),
         Category: draft.Category.trim(),
-        SpentBy: draft.SpentBy.trim(),
+        spentBy: draft.spentBy.trim(),
         Comment: draft.Comment.trim(),
         customFields: Object.fromEntries(
           Object.entries(draft.customFields).map(([k, v]) => [k, v.trim()]),
@@ -372,7 +371,7 @@ export function AddExpensePage(): JSX.Element {
       }
 
       await googleSheetsService.appendExpenseRow(
-        expenseDraftToRowValues(normalizedDraft, sheetCurrencies, customColumns.map((c) => c.name)),
+        expenseDraftToRowValues(normalizedDraft, activeCurrencies, customColumns),
         buildFxBackupPayload(normalizedDraft, manualFxRates, activeCurrencies),
       );
 
@@ -574,21 +573,21 @@ export function AddExpensePage(): JSX.Element {
 
         {/* SpentBy */}
         <div className="input-group">
-          <label className="input-label" htmlFor="spent-by-field">Who spent</label>
+          <label className="input-label" htmlFor="spent-by-field">Spent By</label>
           <input
             id="spent-by-field"
             className="input"
             list="spent-by-options"
-            value={draft.SpentBy}
-            onChange={(event) => updateDraft("SpentBy", event.target.value)}
+            value={draft.spentBy}
+            onChange={(event) => updateDraft("spentBy", event.target.value)}
             required
           />
           <datalist id="spent-by-options">
-            {(suggestionLists.SpentBy ?? []).map((value) => (
+            {(suggestionLists.spentBy ?? []).map((value) => (
               <option key={value} value={value} />
             ))}
           </datalist>
-          {errors.SpentBy ? <div className="field-error">{errors.SpentBy}</div> : null}
+          {errors.spentBy ? <div className="field-error">{errors.spentBy}</div> : null}
         </div>
 
         {/* Comment */}
@@ -605,17 +604,17 @@ export function AddExpensePage(): JSX.Element {
 
         {/* Custom columns */}
         {customColumns.map((col) => (
-          <div key={col.id} className="input-group">
-            <label className="input-label" htmlFor={`custom-field-${col.id}`}>{formatColumnLabel(col.name)}</label>
+          <div key={col} className="input-group">
+            <label className="input-label" htmlFor={`custom-field-${col}`}>{formatColumnLabel(col)}</label>
             <input
-              id={`custom-field-${col.id}`}
+              id={`custom-field-${col}`}
               className="input"
-              list={`custom-field-options-${col.id}`}
-              value={draft.customFields[col.name] ?? ""}
-              onChange={(event) => updateCustomField(col.name, event.target.value)}
+              list={`custom-field-options-${col}`}
+              value={draft.customFields[col] ?? ""}
+              onChange={(event) => updateCustomField(col, event.target.value)}
             />
-            <datalist id={`custom-field-options-${col.id}`}>
-              {(suggestionLists.customFields?.[col.name] ?? []).map((value) => (
+            <datalist id={`custom-field-options-${col}`}>
+              {(suggestionLists.customFields?.[col] ?? []).map((value) => (
                 <option key={value} value={value} />
               ))}
             </datalist>

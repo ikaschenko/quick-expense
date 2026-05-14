@@ -4,7 +4,7 @@ const LEGACY_EXPENSE_HEADERS = [
   "Date", "PLN", "BYN", "USD", "EUR",
   "Category", "WhoSpent", "ForWhom", "Comment", "PaymentChannel", "Theme",
 ];
-const NEW_FIXED_HEADERS_NOCURR = ["Date", "USD", "Category", "SpentBy", "Comment"];
+const NEW_FIXED_HEADERS_NOCURR = ["Date", "USD", "Category", "Spent By", "Comment"];
 const DEFAULT_CUSTOM = ["SpentFor", "Channel", "Theme"];
 
 const mockFetch = vi.fn();
@@ -80,11 +80,11 @@ describe("validateSpreadsheet", () => {
       updateValuesResponse(),
     ]);
 
-    const report = await validateSpreadsheet(TOKEN, SHEET_ID, ["PLN", "EUR"]);
+    const report = await validateSpreadsheet(TOKEN, SHEET_ID);
 
     expect(report.tabAction).toBe("created");
     expect(report.headersAction).toBe("created");
-    expect(report.sheetCurrencies).toEqual(["PLN", "EUR"]);
+    expect(report.sheetCurrencies).toEqual([]);
     expect(report.customColumns).toEqual(DEFAULT_CUSTOM);
 
     // Verify addSheet was called (2nd fetch call)
@@ -104,16 +104,16 @@ describe("validateSpreadsheet", () => {
       updateValuesResponse(),
     ]);
 
-    const report = await validateSpreadsheet(TOKEN, SHEET_ID, ["PLN"]);
+    const report = await validateSpreadsheet(TOKEN, SHEET_ID);
 
     expect(report.tabAction).toBe("found");
     expect(report.headersAction).toBe("created");
-    expect(report.sheetCurrencies).toEqual(["PLN"]);
+    expect(report.sheetCurrencies).toEqual([]);
     expect(report.customColumns).toEqual(DEFAULT_CUSTOM);
   });
 
   it("returns valid when Expenses tab has correct dynamic headers with custom columns", async () => {
-    const dynamicHeaders = ["Date", "PLN", "BYN", "EUR", "USD", "Category", "SpentBy", "Comment", "SpentFor", "Channel", "Theme"];
+    const dynamicHeaders = ["Date", "PLN", "BYN", "EUR", "USD", "Category", "Spent By", "Comment", "SpentFor", "Channel", "Theme"];
     setupFetchSequence([
       metadataResponse(["Expenses"]),
       headerResponse([...dynamicHeaders]),
@@ -128,7 +128,7 @@ describe("validateSpreadsheet", () => {
   });
 
   it("returns valid with no custom columns", async () => {
-    const headers = ["Date", "PLN", "USD", "Category", "SpentBy", "Comment"];
+    const headers = ["Date", "PLN", "USD", "Category", "Spent By", "Comment"];
     setupFetchSequence([
       metadataResponse(["Expenses"]),
       headerResponse([...headers]),
@@ -201,7 +201,7 @@ describe("loadExpenses", () => {
   it("maps Comment correctly when custom columns appear before Comment in the sheet", async () => {
     // Sheet header: Date, PLN, USD, Category, SpentBy, SpentFor, Comment, Channel, Theme
     // SpentFor is BEFORE Comment — this was the bug case
-    const header = ["Date", "PLN", "USD", "Category", "SpentBy", "SpentFor", "Comment", "Channel", "Theme"];
+    const header = ["Date", "PLN", "USD", "Category", "Spent By", "SpentFor", "Comment", "Channel", "Theme"];
     const dataRow = ["2026-01-01", "100", "25", "Food", "ivan@x.com", "Family", "samsung galaxy", "cash", "Tech"];
 
     setupFetchSequence([
@@ -227,7 +227,7 @@ describe("loadExpenses", () => {
 
   it("maps Comment correctly when custom columns appear after Comment in the sheet (standard order)", async () => {
     // Standard header: Date, PLN, USD, Category, SpentBy, Comment, SpentFor, Channel, Theme
-    const header = ["Date", "PLN", "USD", "Category", "SpentBy", "Comment", "SpentFor", "Channel", "Theme"];
+    const header = ["Date", "PLN", "USD", "Category", "Spent By", "Comment", "SpentFor", "Channel", "Theme"];
     const dataRow = ["2026-01-01", "100", "25", "Travel", "ivan@x.com", "allegro order", "Self", "card", "Trip"];
 
     setupFetchSequence([

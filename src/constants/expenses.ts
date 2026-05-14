@@ -5,7 +5,7 @@ export const FIXED_HEADERS = [
   "Date",
   "USD",
   "Category",
-  "SpentBy",
+  "Spent By",
   "Comment",
 ] as const;
 
@@ -13,12 +13,12 @@ export const FIXED_HEADERS = [
 export const POST_CURRENCY_HEADERS = [
   "USD",
   "Category",
-  "SpentBy",
+  "Spent By",
   "Comment",
 ] as const;
 
 /** Reserved column names that cannot be used for custom columns (case-insensitive match). */
-export const RESERVED_COLUMN_NAMES = ["Date", "USD", "Category", "SpentBy", "Comment"] as const;
+export const RESERVED_COLUMN_NAMES = ["Date", "USD", "Category", "Spent By", "Comment"] as const;
 
 export const MAX_CUSTOM_COLUMNS = 10;
 
