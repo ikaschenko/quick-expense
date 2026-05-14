@@ -272,14 +272,33 @@ async function migrateLegacyColumnOrder(accessToken, spreadsheetId, customColumn
 
 /**
  * Map raw sheet rows to expense records using the actual full header array.
- * All columns after Comment are placed in customFields keyed by name.
+ * Column positions are derived from the actual header row so that custom columns
+ * inserted before Comment (legacy sheets) are mapped correctly.
  */
-function mapRowsToExpenseRecords(rows, sheetCurrencies, customColumns = []) {
-  const headers = buildExpenseHeaders(sheetCurrencies, customColumns);
+function mapRowsToExpenseRecords(rows, sheetCurrencies, customColumns = [], actualHeaderRow = []) {
+  const postStart = 1 + sheetCurrencies.length; // assumed index of USD (fallback)
+
+  // Build a lookup: lowercase column name → actual column index
+  const headerMap = new Map();
+  normalizeHeaders(actualHeaderRow).forEach((h, i) => headerMap.set(h.toLowerCase(), i));
+
+  const getIdx = (name, fallback) => {
+    const idx = headerMap.get(name.toLowerCase());
+    return idx !== undefined ? idx : fallback;
+  };
+
+  const usdIdx      = getIdx("usd",      postStart);
+  const categoryIdx = getIdx("category", postStart + 1);
+  const spentByIdx  = getIdx("spentby",  postStart + 2);
+  const commentIdx  = getIdx("comment",  postStart + 3);
+
+  const paddingTarget = actualHeaderRow.length > 0
+    ? actualHeaderRow.length
+    : postStart + 4 + customColumns.length;
 
   return rows.map((row, index) => {
     const padded = [...row];
-    while (padded.length < headers.length) {
+    while (padded.length < paddingTarget) {
       padded.push("");
     }
 
@@ -288,19 +307,21 @@ function mapRowsToExpenseRecords(rows, sheetCurrencies, customColumns = []) {
       currencyAmounts[sheetCurrencies[i]] = padded[1 + i] ?? "";
     }
 
-    const postStart = 1 + sheetCurrencies.length;
     const customFields = {};
-    for (let i = 0; i < customColumns.length; i++) {
-      customFields[customColumns[i]] = padded[postStart + 4 + i] ?? "";
+    for (const colName of customColumns) {
+      const colIdx = getIdx(colName, null);
+      if (colIdx !== null) {
+        customFields[colName] = padded[colIdx] ?? "";
+      }
     }
 
     return {
       Date: padded[0] ?? "",
       currencyAmounts,
-      USD: padded[postStart] ?? "",
-      Category: padded[postStart + 1] ?? "",
-      SpentBy: padded[postStart + 2] ?? "",
-      Comment: padded[postStart + 3] ?? "",
+      USD: padded[usdIdx] ?? "",
+      Category: padded[categoryIdx] ?? "",
+      SpentBy: padded[spentByIdx] ?? "",
+      Comment: padded[commentIdx] ?? "",
       customFields,
       rowNumber: index + 2,
     };
@@ -632,7 +653,7 @@ export async function loadExpenses(accessToken, spreadsheetId, activeCustomColum
   const headers = buildExpenseHeaders(sheetCurrencies, customColumns);
   const endCol = columnLetter(headers.length);
   const rows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A:${endCol}`);
-  const records = mapRowsToExpenseRecords(rows.slice(1), sheetCurrencies, customColumns);
+  const records = mapRowsToExpenseRecords(rows.slice(1), sheetCurrencies, customColumns, rows[0]);
   const payloadBytes = calculateJsonByteSize(records);
 
   if (payloadBytes > MAX_DATASET_BYTES) {

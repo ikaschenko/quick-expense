@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   ShoppingCart,
   Bus,
@@ -63,6 +63,14 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
   fitness: Dumbbell,
 };
 
+const CUSTOM_COLUMN_LABELS: Record<string, string> = {
+  SpentFor: "Spent For",
+};
+
+export function getCustomColumnLabel(name: string): string {
+  return CUSTOM_COLUMN_LABELS[name] ?? name;
+}
+
 function getCategoryIcon(category: string): LucideIcon {
   const lower = category.toLowerCase();
   for (const [key, Icon] of Object.entries(CATEGORY_ICONS)) {
@@ -94,59 +102,76 @@ function getCommentPreview(record: ExpenseRecord): string {
     : base;
 }
 
-function hasDetails(record: ExpenseRecord, customColumns: CustomColumn[] = []): boolean {
+export function hasDetails(record: ExpenseRecord, customColumns: CustomColumn[] = []): boolean {
   return (
     record.Comment.length > COMMENT_PREVIEW_LENGTH ||
     customColumns.some((col) => Boolean(record.customFields?.[col.name]?.trim()))
   );
 }
 
-function ExpenseDetails({ record, customColumns = [] }: { record: ExpenseRecord; customColumns?: CustomColumn[] }): JSX.Element {
+interface ExpenseCardProps {
+  record: ExpenseRecord;
+  sheetCurrencies: string[];
+  customColumns: CustomColumn[];
+}
+
+function ExpenseCard({ record, sheetCurrencies, customColumns }: ExpenseCardProps): JSX.Element {
   const [isOpen, setIsOpen] = useState(false);
+  const lastTouchRef = useRef(0);
+  const Icon = getCategoryIcon(record.Category);
+  const cardHasDetails = hasDetails(record, customColumns);
   const preview = getCommentPreview(record);
-
-  if (!preview) return <></>;
-
-  if (!hasDetails(record, customColumns)) {
-    return <span className="expense-card-comment">{preview}</span>;
-  }
+  const hasBottom = Boolean(preview) || customColumns.some((col) => record.customFields?.[col.name]?.trim());
 
   return (
     <div
-      className="expense-card-details"
-      onMouseEnter={() => setIsOpen(true)}
-      onMouseLeave={() => setIsOpen(false)}
+      className={`expense-card${cardHasDetails ? " expense-card--interactive" : ""}`}
+      onTouchStart={() => { lastTouchRef.current = Date.now(); }}
+      onMouseEnter={() => { if (Date.now() - lastTouchRef.current > 500) setIsOpen(true); }}
+      onMouseLeave={() => { if (Date.now() - lastTouchRef.current > 500) setIsOpen(false); }}
+      onClick={() => { if (cardHasDetails) setIsOpen((prev) => !prev); }}
     >
-      <button
-        type="button"
-        className="expense-card-comment-trigger"
-        onClick={() => setIsOpen((prev) => !prev)}
-        onBlur={() => setIsOpen(false)}
-        aria-expanded={isOpen}
-        aria-label="Show full expense details"
-      >
-        {preview}
-      </button>
-      {isOpen ? (
-        <div className="expense-card-tooltip" role="tooltip">
-          {record.Comment.trim() ? (
-            <div className="expense-card-tooltip-row">
-              <span className="expense-card-tooltip-label">Comment:</span>
-              <span>{record.Comment}</span>
-            </div>
-          ) : null}
-          {customColumns.map((col) => {
-            const val = record.customFields?.[col.name]?.trim();
-            if (!val) return null;
-            return (
-              <div key={col.id} className="expense-card-tooltip-row">
-                <span className="expense-card-tooltip-label">{col.name}:</span>
-                <span>{val}</span>
-              </div>
-            );
-          })}
+      <div className="expense-card-icon">
+        <Icon size={18} />
+      </div>
+      <div className="expense-card-body">
+        <div className="expense-card-top">
+          <span className="expense-card-category">
+            {record.Category}
+            {record.SpentBy ? (
+              <span className="expense-card-who">{record.SpentBy}</span>
+            ) : null}
+          </span>
+          <span className="expense-card-amount">{getDisplayAmount(record, sheetCurrencies)}</span>
         </div>
-      ) : null}
+        {hasBottom ? (
+          <div className="expense-card-bottom">
+            <div className="expense-card-details">
+              {preview ? <span className="expense-card-comment">{preview}</span> : null}
+              {isOpen ? (
+                <div className="expense-card-tooltip" role="tooltip">
+                  {record.Comment.trim() ? (
+                    <div className="expense-card-tooltip-row">
+                      <span className="expense-card-tooltip-label">Comment:</span>
+                      <span>{record.Comment}</span>
+                    </div>
+                  ) : null}
+                  {customColumns.map((col) => {
+                    const val = record.customFields?.[col.name]?.trim();
+                    if (!val) return null;
+                    return (
+                      <div key={col.id} className="expense-card-tooltip-row">
+                        <span className="expense-card-tooltip-label">{getCustomColumnLabel(col.name)}:</span>
+                        <span>{val}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -195,32 +220,14 @@ export function ExpenseTable({
       {groups.map((group) => (
         <div key={group.date} className="expense-date-group">
           <div className="expense-date-header">{formatGroupDate(group.date)}</div>
-          {group.records.map((record) => {
-            const Icon = getCategoryIcon(record.Category);
-            return (
-              <div key={record.rowNumber} className="expense-card">
-                <div className="expense-card-icon">
-                  <Icon size={18} />
-                </div>
-                <div className="expense-card-body">
-                  <div className="expense-card-top">
-                    <span className="expense-card-category">
-                      {record.Category}
-                      {record.SpentBy ? (
-                        <span className="expense-card-who">{record.SpentBy}</span>
-                      ) : null}
-                    </span>
-                    <span className="expense-card-amount">{getDisplayAmount(record, sheetCurrencies)}</span>
-                  </div>
-                  {record.Comment || customColumns.some((col) => record.customFields?.[col.name]?.trim()) ? (
-                    <div className="expense-card-bottom">
-                      <ExpenseDetails record={record} customColumns={customColumns} />
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            );
-          })}
+          {group.records.map((record) => (
+            <ExpenseCard
+              key={record.rowNumber}
+              record={record}
+              sheetCurrencies={sheetCurrencies}
+              customColumns={customColumns}
+            />
+          ))}
         </div>
       ))}
     </div>

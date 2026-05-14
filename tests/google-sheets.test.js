@@ -12,9 +12,10 @@ global.fetch = mockFetch;
 
 let validateSpreadsheet;
 let parseSpreadsheetUrl;
+let loadExpenses;
 
 beforeAll(async () => {
-  ({ validateSpreadsheet, parseSpreadsheetUrl } = await import("../server/google-sheets.js"));
+  ({ validateSpreadsheet, parseSpreadsheetUrl, loadExpenses } = await import("../server/google-sheets.js"));
 });
 
 beforeEach(() => {
@@ -180,5 +181,67 @@ describe("validateSpreadsheet", () => {
     );
 
     await expect(validateSpreadsheet(TOKEN, SHEET_ID)).rejects.toThrow("Spreadsheet not found");
+  });
+});
+
+describe("loadExpenses", () => {
+  const TOKEN = "test-token";
+  const SHEET_ID = "spreadsheet-123";
+
+  function metadataResponse(sheetNames) {
+    return jsonResponse({
+      sheets: sheetNames.map((title, i) => ({ properties: { sheetId: i, title } })),
+    });
+  }
+
+  function valuesResponse(rows) {
+    return jsonResponse({ values: rows });
+  }
+
+  it("maps Comment correctly when custom columns appear before Comment in the sheet", async () => {
+    // Sheet header: Date, PLN, USD, Category, SpentBy, SpentFor, Comment, Channel, Theme
+    // SpentFor is BEFORE Comment — this was the bug case
+    const header = ["Date", "PLN", "USD", "Category", "SpentBy", "SpentFor", "Comment", "Channel", "Theme"];
+    const dataRow = ["2026-01-01", "100", "25", "Food", "ivan@x.com", "Family", "samsung galaxy", "cash", "Tech"];
+
+    setupFetchSequence([
+      // validateSpreadsheet: getMetadata
+      metadataResponse(["Expenses"]),
+      // validateSpreadsheet: getValues for header row
+      valuesResponse([header]),
+      // loadExpenses: getValues for all rows
+      valuesResponse([header, dataRow]),
+    ]);
+
+    const result = await loadExpenses(TOKEN, SHEET_ID, ["SpentFor", "Channel", "Theme"]);
+
+    expect(result.records).toHaveLength(1);
+    const record = result.records[0];
+    expect(record.Comment).toBe("samsung galaxy");
+    expect(record.customFields.SpentFor).toBe("Family");
+    expect(record.customFields.Channel).toBe("cash");
+    expect(record.customFields.Theme).toBe("Tech");
+    expect(record.Category).toBe("Food");
+    expect(record.USD).toBe("25");
+  });
+
+  it("maps Comment correctly when custom columns appear after Comment in the sheet (standard order)", async () => {
+    // Standard header: Date, PLN, USD, Category, SpentBy, Comment, SpentFor, Channel, Theme
+    const header = ["Date", "PLN", "USD", "Category", "SpentBy", "Comment", "SpentFor", "Channel", "Theme"];
+    const dataRow = ["2026-01-01", "100", "25", "Travel", "ivan@x.com", "allegro order", "Self", "card", "Trip"];
+
+    setupFetchSequence([
+      metadataResponse(["Expenses"]),
+      valuesResponse([header]),
+      valuesResponse([header, dataRow]),
+    ]);
+
+    const result = await loadExpenses(TOKEN, SHEET_ID, ["SpentFor", "Channel", "Theme"]);
+
+    expect(result.records).toHaveLength(1);
+    const record = result.records[0];
+    expect(record.Comment).toBe("allegro order");
+    expect(record.customFields.SpentFor).toBe("Self");
+    expect(record.customFields.Channel).toBe("card");
   });
 });

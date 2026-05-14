@@ -917,6 +917,10 @@ button { cursor: pointer; }
   margin-bottom: var(--space-2);
 }
 
+.expense-card--interactive {
+  cursor: pointer;
+}
+
 .expense-card-icon {
   display: flex;
   align-items: center;
@@ -986,28 +990,6 @@ button { cursor: pointer; }
   position: relative;
   flex: 1;
   min-width: 0;
-}
-
-.expense-card-comment-trigger {
-  display: block;
-  width: 100%;
-  border: none;
-  background: transparent;
-  padding: 0;
-  margin: 0;
-  text-align: left;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.expense-card-comment-trigger:focus-visible {
-  outline: none;
-  border-radius: var(--radius-sm);
-  box-shadow: 0 0 0 3px rgba(79,70,229,0.12);
 }
 
 .expense-card-tooltip {

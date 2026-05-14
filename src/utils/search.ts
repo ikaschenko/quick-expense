@@ -11,8 +11,8 @@ export function filterExpenses(records: ExpenseRecord[], filters: SearchFilters)
   const normalizedComment = filters.comment.trim().toLowerCase();
   const selectedCategories = new Set(filters.categories);
 
-  const parts = normalizedComment.split("*").filter((p) => p.length > 0);
-  const meaningfulChars = parts.join("").replace(/\s/g, "");
+  const parts = normalizedComment.split(/\s+/).filter((p) => p.length > 0);
+  const meaningfulChars = parts.join("");
 
   const matches = records.filter((record) => {
     const categoryMatch =
