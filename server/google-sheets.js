@@ -321,7 +321,7 @@ function mapRowsToExpenseRecords(rows, sheetCurrencies, customColumns = [], actu
       currencyAmounts,
       USD: padded[usdIdx] ?? "",
       Category: padded[categoryIdx] ?? "",
-      "Spent By": padded[spentByIdx] ?? "",
+      "spentBy": padded[spentByIdx] ?? "",
       Comment: padded[commentIdx] ?? "",
       customFields,
       rowNumber: index + 2,
