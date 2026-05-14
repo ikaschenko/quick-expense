@@ -21,6 +21,10 @@ import { expenseDraftToRowValues } from "../utils/spreadsheet";
 import { parseOptionalDecimal, parsePositiveDecimal, validateExpenseDraft } from "../utils/validation";
 import { trackEvent } from "../services/analytics";
 
+function formatColumnLabel(name: string): string {
+  return name.replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2");
+}
+
 function createInitialDraft(defaultEmail: string, currencies: string[], customColumns: { name: string }[]): ExpenseDraft {
   const currencyAmounts: Record<string, string> = {};
   for (const code of currencies) {
@@ -596,7 +600,7 @@ export function AddExpensePage(): JSX.Element {
         {/* Custom columns */}
         {customColumns.map((col) => (
           <div key={col.id} className="input-group">
-            <label className="input-label" htmlFor={`custom-field-${col.id}`}>{col.name}</label>
+            <label className="input-label" htmlFor={`custom-field-${col.id}`}>{formatColumnLabel(col.name)}</label>
             <input
               id={`custom-field-${col.id}`}
               className="input"

@@ -575,7 +575,9 @@ app.post("/api/expenses", requireAuthenticatedUser, async (req, res) => {
 
     const customColumns = await getActiveCustomColumns(req.userRecord.email);
     const customColumnNames = customColumns.map((c) => c.name);
-    const accessToken = await getAuthorizedAccessToken(req.userRecord, customColumnNames);
+    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+
+    await appendExpenseRow(accessToken, req.userRecord.spreadsheetId, values, customColumnNames);
 
     if (req.body?.fxRateBackup && typeof req.body.fxRateBackup === "object") {
       await saveFxRateBackup(req.userRecord.email, req.userRecord.spreadsheetId, req.body.fxRateBackup);
