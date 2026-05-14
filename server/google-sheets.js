@@ -696,8 +696,21 @@ export async function loadExpenses(accessToken, spreadsheetId) {
 
 export async function appendExpenseRow(accessToken, spreadsheetId, values) {
   const report = await validateSpreadsheet(accessToken, spreadsheetId);
-  const headers = buildExpenseHeaders(report.sheetCurrencies, report.customColumns);
-  const endCol = columnLetter(headers.length);
+  const canonicalHeaders = buildExpenseHeaders(report.sheetCurrencies, report.customColumns);
+
+  // Align outgoing row values to the actual sheet header order.
+  // Some legacy sheets can have custom columns before Comment.
+  const headerRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!1:1`);
+  const actualHeaders = normalizeHeaders(headerRows[0] ?? []);
+  const targetHeaders = actualHeaders.length > 0 ? actualHeaders : canonicalHeaders;
+  const endCol = columnLetter(targetHeaders.length);
+
+  const valueByCanonicalHeader = new Map();
+  for (let index = 0; index < canonicalHeaders.length; index += 1) {
+    valueByCanonicalHeader.set(canonicalHeaders[index], values[index] ?? "");
+  }
+
+  const alignedValues = targetHeaders.map((header) => valueByCanonicalHeader.get(header) ?? "");
 
   await requestNoContent(
     accessToken,
@@ -709,7 +722,7 @@ export async function appendExpenseRow(accessToken, spreadsheetId, values) {
       headers: createHeaders(accessToken, true),
       body: JSON.stringify({
         majorDimension: "ROWS",
-        values: [values],
+        values: [alignedValues],
       }),
     },
   );

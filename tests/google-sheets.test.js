@@ -13,9 +13,10 @@ global.fetch = mockFetch;
 let validateSpreadsheet;
 let parseSpreadsheetUrl;
 let loadExpenses;
+let appendExpenseRow;
 
 beforeAll(async () => {
-  ({ validateSpreadsheet, parseSpreadsheetUrl, loadExpenses } = await import("../server/google-sheets.js"));
+  ({ validateSpreadsheet, parseSpreadsheetUrl, loadExpenses, appendExpenseRow } = await import("../server/google-sheets.js"));
 });
 
 beforeEach(() => {
@@ -243,5 +244,97 @@ describe("loadExpenses", () => {
     expect(record.Comment).toBe("allegro order");
     expect(record.customFields.SpentFor).toBe("Self");
     expect(record.customFields.Channel).toBe("card");
+  });
+});
+
+describe("appendExpenseRow", () => {
+  const TOKEN = "test-token";
+  const SHEET_ID = "spreadsheet-123";
+
+  function metadataResponse(sheetNames) {
+    return jsonResponse({
+      sheets: sheetNames.map((title, i) => ({ properties: { sheetId: i, title } })),
+    });
+  }
+
+  function valuesResponse(rows) {
+    return jsonResponse({ values: rows });
+  }
+
+  function appendResponse() {
+    return { ok: true, status: 200, json: () => Promise.resolve({}) };
+  }
+
+  it("aligns outgoing row values to actual header order when custom columns appear before Comment", async () => {
+    const header = ["Date", "PLN", "USD", "Category", "Spent By", "SpentFor", "Comment", "Channel", "Theme"];
+    const canonicalValues = [
+      "2026-01-02",
+      "120",
+      "30",
+      "Food",
+      "ivan@x.com",
+      "samsung galaxy",
+      "Family",
+      "cash",
+      "Tech",
+    ];
+
+    setupFetchSequence([
+      // validateSpreadsheet
+      metadataResponse(["Expenses"]),
+      valuesResponse([header]),
+      // appendExpenseRow alignment read
+      valuesResponse([header]),
+      // append call
+      appendResponse(),
+    ]);
+
+    await appendExpenseRow(TOKEN, SHEET_ID, canonicalValues);
+
+    const appendCall = mockFetch.mock.calls[3];
+    expect(appendCall[0]).toContain(":append");
+    const body = JSON.parse(appendCall[1].body);
+
+    // Expected order by actual header:
+    // Date, PLN, USD, Category, Spent By, SpentFor, Comment, Channel, Theme
+    expect(body.values[0]).toEqual([
+      "2026-01-02",
+      "120",
+      "30",
+      "Food",
+      "ivan@x.com",
+      "Family",
+      "samsung galaxy",
+      "cash",
+      "Tech",
+    ]);
+  });
+
+  it("keeps canonical value order when sheet header is already standard", async () => {
+    const header = ["Date", "PLN", "USD", "Category", "Spent By", "Comment", "SpentFor", "Channel", "Theme"];
+    const canonicalValues = [
+      "2026-01-03",
+      "90",
+      "22",
+      "Travel",
+      "ivan@x.com",
+      "allegro order",
+      "Self",
+      "card",
+      "Trip",
+    ];
+
+    setupFetchSequence([
+      metadataResponse(["Expenses"]),
+      valuesResponse([header]),
+      valuesResponse([header]),
+      appendResponse(),
+    ]);
+
+    await appendExpenseRow(TOKEN, SHEET_ID, canonicalValues);
+
+    const appendCall = mockFetch.mock.calls[3];
+    const body = JSON.parse(appendCall[1].body);
+    expect(body.values[0]).toEqual(canonicalValues);
   });
 });
