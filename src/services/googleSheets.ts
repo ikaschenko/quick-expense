@@ -1,4 +1,6 @@
 import {
+  ColumnMapping,
+  ConfigMode,
   ConfigResponse,
   CurrencyDictionary,
   ExpenseRecord,
@@ -109,6 +111,17 @@ export const googleSheetsService = {
     return requestJson<{ config: SpreadsheetConfig; setupReport: SetupReport }>("/api/config/create-spreadsheet", {
       method: "POST",
       body: JSON.stringify({ name }),
+    });
+  },
+
+  async getColumnMapping(): Promise<{ mapping: ColumnMapping | null; mode: ConfigMode }> {
+    return requestJson("/api/config/mapping");
+  },
+
+  async saveColumnMapping(mapping: ColumnMapping): Promise<{ mapping: ColumnMapping; mode: ConfigMode }> {
+    return requestJson("/api/config/mapping", {
+      method: "POST",
+      body: JSON.stringify({ mapping, confirmed: true }),
     });
   },
 };

@@ -15,9 +15,14 @@ let parseSpreadsheetUrl;
 let loadExpenses;
 let appendExpenseRow;
 let hasExactItemSet;
+let readConfigSheetMapping;
+let writeConfigSheetMapping;
 
 beforeAll(async () => {
-  ({ validateSpreadsheet, parseSpreadsheetUrl, loadExpenses, appendExpenseRow, hasExactItemSet } = await import("../server/google-sheets.js"));
+  ({
+    validateSpreadsheet, parseSpreadsheetUrl, loadExpenses, appendExpenseRow, hasExactItemSet,
+    readConfigSheetMapping, writeConfigSheetMapping,
+  } = await import("../server/google-sheets.js"));
 });
 
 beforeEach(() => {
@@ -215,7 +220,7 @@ describe("loadExpenses", () => {
       valuesResponse([header, dataRow]),
     ]);
 
-    const result = await loadExpenses(TOKEN, SHEET_ID, ["SpentFor", "Channel", "Theme"]);
+    const result = await loadExpenses(TOKEN, SHEET_ID);
 
     expect(result.records).toHaveLength(1);
     const record = result.records[0];
@@ -238,7 +243,7 @@ describe("loadExpenses", () => {
       valuesResponse([header, dataRow]),
     ]);
 
-    const result = await loadExpenses(TOKEN, SHEET_ID, ["SpentFor", "Channel", "Theme"]);
+    const result = await loadExpenses(TOKEN, SHEET_ID);
 
     expect(result.records).toHaveLength(1);
     const record = result.records[0];
@@ -257,7 +262,7 @@ describe("loadExpenses", () => {
       valuesResponse([header, dataRow]),
     ]);
 
-    const result = await loadExpenses(TOKEN, SHEET_ID, ["SpentFor", "Channel", "Theme"]);
+    const result = await loadExpenses(TOKEN, SHEET_ID);
 
     expect(result.records).toHaveLength(1);
     expect(result.records[0].spentBy).toBe("ivan@x.com");
@@ -402,5 +407,96 @@ describe("hasExactItemSet", () => {
 
   it("accepts the same items in a different order", () => {
     expect(hasExactItemSet(["A", "B", "C"], ["c", "b", "a"])).toBe(true);
+  });
+});
+
+describe("readConfigSheetMapping", () => {
+  const TOKEN = "test-token";
+  const SHEET_ID = "spreadsheet-123";
+
+  function metadataResponse(sheetNames) {
+    return jsonResponse({
+      sheets: sheetNames.map((title, i) => ({ properties: { sheetId: i, title } })),
+    });
+  }
+
+  function valuesResponse(rows) {
+    return jsonResponse({ values: rows });
+  }
+
+  it("returns null when Config sheet does not exist", async () => {
+    setupFetchSequence([metadataResponse(["Expenses"])]);
+    const result = await readConfigSheetMapping(TOKEN, SHEET_ID);
+    expect(result).toBeNull();
+  });
+
+  it("returns the parsed mapping when Config sheet has a valid column_mapping row", async () => {
+    const mapping = { USD: "Amount", "Spent By": "WhoSpent" };
+    setupFetchSequence([
+      metadataResponse(["Expenses", "Config"]),
+      valuesResponse([["schema_version", "1"], ["column_mapping", JSON.stringify(mapping)]]),
+    ]);
+    const result = await readConfigSheetMapping(TOKEN, SHEET_ID);
+    expect(result).toEqual(mapping);
+  });
+
+  it("returns { error: 'invalid' } when column_mapping row is missing", async () => {
+    setupFetchSequence([
+      metadataResponse(["Expenses", "Config"]),
+      valuesResponse([["schema_version", "1"]]),
+    ]);
+    const result = await readConfigSheetMapping(TOKEN, SHEET_ID);
+    expect(result).toEqual({ error: "invalid" });
+  });
+
+  it("returns { error: 'invalid' } when column_mapping value is malformed JSON", async () => {
+    setupFetchSequence([
+      metadataResponse(["Expenses", "Config"]),
+      valuesResponse([["column_mapping", "not-json"]]),
+    ]);
+    const result = await readConfigSheetMapping(TOKEN, SHEET_ID);
+    expect(result).toEqual({ error: "invalid" });
+  });
+
+  it("returns null (never throws) when a network error occurs", async () => {
+    mockFetch.mockRejectedValueOnce(new Error("network failure"));
+    const result = await readConfigSheetMapping(TOKEN, SHEET_ID);
+    expect(result).toBeNull();
+  });
+});
+
+describe("loadExpenses with column mapping", () => {
+  const TOKEN = "test-token";
+  const SHEET_ID = "spreadsheet-123";
+
+  function metadataResponse(sheetNames) {
+    return jsonResponse({
+      sheets: sheetNames.map((title, i) => ({ properties: { sheetId: i, title } })),
+    });
+  }
+
+  function valuesResponse(rows) {
+    return jsonResponse({ values: rows });
+  }
+
+  it("reads data using user column names and returns QE field names", async () => {
+    // User sheet has "Amount" instead of "USD" and "WhoSpent" instead of "Spent By"
+    const header = ["Date", "Amount", "Category", "WhoSpent", "Comment"];
+    const dataRow = ["2026-01-01", "42", "Food", "alice", "lunch"];
+    const mapping = { USD: "Amount", "Spent By": "WhoSpent" };
+
+    setupFetchSequence([
+      metadataResponse(["Expenses"]),
+      valuesResponse([header]),
+      valuesResponse([header, dataRow]),
+    ]);
+
+    const result = await loadExpenses(TOKEN, SHEET_ID, mapping);
+    expect(result.records).toHaveLength(1);
+    const record = result.records[0];
+    expect(record.USD).toBe("42");
+    expect(record.spentBy).toBe("alice");
+    expect(record.Comment).toBe("lunch");
+    expect(record.Category).toBe("Food");
   });
 });

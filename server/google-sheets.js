@@ -297,13 +297,25 @@ async function migrateLegacyColumnOrder(accessToken, spreadsheetId, customColumn
  * Map raw sheet rows to expense records using the actual full header array.
  * Column positions are derived from the actual header row so that custom columns
  * inserted before Comment (legacy sheets) are mapped correctly.
+ * When a mapping is provided, QE field name lookups are aliased to the user's
+ * actual column names so returned records always use QE field names.
  */
-function mapRowsToExpenseRecords(rows, sheetCurrencies, customColumns = [], actualHeaderRow = []) {
+function mapRowsToExpenseRecords(rows, sheetCurrencies, customColumns = [], actualHeaderRow = [], mapping = null) {
   const postStart = 1 + sheetCurrencies.length; // assumed index of USD (fallback)
 
   // Build a lookup: lowercase column name → actual column index
   const headerMap = new Map();
   normalizeHeaders(actualHeaderRow).forEach((h, i) => headerMap.set(h.toLowerCase(), i));
+
+  // Add mapping aliases: QE field name (lowercase) → index of user's actual column
+  if (mapping) {
+    for (const [qeField, userCol] of Object.entries(mapping)) {
+      const idx = headerMap.get(userCol.toLowerCase());
+      if (idx !== undefined) {
+        headerMap.set(qeField.toLowerCase(), idx);
+      }
+    }
+  }
 
   const getIdx = (name, fallback) => {
     const idx = headerMap.get(name.toLowerCase());
@@ -378,7 +390,68 @@ export function parseSpreadsheetUrl(url) {
   return match?.[1] ?? null;
 }
 
-export async function validateSpreadsheet(accessToken, spreadsheetId) {
+/**
+ * Apply a column mapping (QE field → user column name) to a normalized header row.
+ * Replaces each user column name with its QE field equivalent where a mapping entry exists.
+ * Columns not in the mapping are returned unchanged.
+ */
+function applyMappingToHeader(normalizedHeader, mapping) {
+  const inverseMapping = new Map();
+  for (const [qeField, userCol] of Object.entries(mapping)) {
+    inverseMapping.set(userCol.toLowerCase(), qeField);
+  }
+  return normalizedHeader.map((h) => inverseMapping.get(h.toLowerCase()) ?? h);
+}
+
+/**
+ * Read the column mapping from the Config sheet.
+ * Returns:
+ *   null              — Config sheet does not exist (or read failed)
+ *   { error: "invalid" } — Config sheet exists but mapping is absent or malformed
+ *   Record<string,string> — the parsed mapping (QE field → user column name)
+ * Never throws — callers handle null / error gracefully.
+ */
+export async function readConfigSheetMapping(accessToken, spreadsheetId) {
+  try {
+    const metadata = await getMetadata(accessToken, spreadsheetId);
+    const configSheet = metadata.sheets?.find((s) => s.properties?.title === "Config");
+    if (!configSheet) return null;
+
+    const rows = await getValues(accessToken, spreadsheetId, "Config!A:B");
+    const mappingRow = rows.find((r) => r[0] === "column_mapping");
+    if (!mappingRow || !mappingRow[1]) return { error: "invalid" };
+
+    try {
+      const parsed = JSON.parse(mappingRow[1]);
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        return { error: "invalid" };
+      }
+      return parsed;
+    } catch {
+      return { error: "invalid" };
+    }
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Write the column mapping to the Config sheet.
+ * Creates the Config sheet if it does not exist (the one and only place it is created).
+ */
+export async function writeConfigSheetMapping(accessToken, spreadsheetId, mapping) {
+  const metadata = await getMetadata(accessToken, spreadsheetId);
+  const configSheet = metadata.sheets?.find((s) => s.properties?.title === "Config");
+  if (!configSheet) {
+    await addSheet(accessToken, spreadsheetId, "Config");
+  }
+  await updateValues(accessToken, spreadsheetId, "Config!A1:B2", [
+    ["schema_version", "1"],
+    ["column_mapping", JSON.stringify(mapping)],
+  ]);
+}
+
+export async function validateSpreadsheet(accessToken, spreadsheetId, mapping = null) {
   const report = { tabAction: "found", headersAction: "valid", sheetCurrencies: [], customColumns: [] };
 
   const metadata = await getMetadata(accessToken, spreadsheetId);
@@ -395,6 +468,18 @@ export async function validateSpreadsheet(accessToken, spreadsheetId) {
   const headerRow = headerRows[0];
 
   if (isHeaderRowEmpty(headerRow)) {
+    if (mapping) {
+      // With a mapping in place the Expenses tab must already have column headers.
+      const error = new Error(
+        `The "${SHEET_NAME}" tab header row is empty. Cannot apply column mapping to a sheet without headers.`,
+      );
+      error.headerDetails = {
+        expected: ["Date", "(currencies...)", "USD", "Category", "Spent By", "Comment", "(custom columns...)"],
+        actual: [],
+        detectedColumns: [],
+      };
+      throw error;
+    }
     // New empty sheet: write default headers
     const headers = buildExpenseHeaders([], DEFAULT_CUSTOM_COLUMNS);
     const endCol = columnLetter(headers.length);
@@ -405,7 +490,7 @@ export async function validateSpreadsheet(accessToken, spreadsheetId) {
     return report;
   }
 
-  if (validateLegacyHeaderRow(headerRow)) {
+  if (!mapping && validateLegacyHeaderRow(headerRow)) {
     const customCols = DEFAULT_CUSTOM_COLUMNS;
     await migrateLegacyColumnOrder(accessToken, spreadsheetId, customCols);
     report.headersAction = "migrated";
@@ -414,15 +499,20 @@ export async function validateSpreadsheet(accessToken, spreadsheetId) {
     return report;
   }
 
+  const normalizedHeader = normalizeHeaders(headerRow);
+  // When a mapping is provided, translate user column names to QE field names before parsing.
+  const effectiveHeader = mapping ? applyMappingToHeader(normalizedHeader, mapping) : normalizedHeader;
+
   // Try to parse dynamic header structure
-  const structure = parseSheetStructure(headerRow);
+  const structure = parseSheetStructure(effectiveHeader);
   if (structure === null) {
     const error = new Error(
       `The "${SHEET_NAME}" sheet header must start with "Date", have currency columns, then "USD, Category, Spent By, Comment", followed by any custom columns.`,
     );
     error.headerDetails = {
       expected: ["Date", "(currencies...)", "USD", "Category", "Spent By", "Comment", "(custom columns...)"],
-      actual: normalizeHeaders(headerRow),
+      actual: normalizedHeader,
+      detectedColumns: normalizedHeader,
     };
     throw error;
   }
@@ -712,14 +802,14 @@ function columnLetter(n) {
   return result;
 }
 
-export async function loadExpenses(accessToken, spreadsheetId) {
-  const report = await validateSpreadsheet(accessToken, spreadsheetId);
+export async function loadExpenses(accessToken, spreadsheetId, mapping = null) {
+  const report = await validateSpreadsheet(accessToken, spreadsheetId, mapping);
   const sheetCurrencies = report.sheetCurrencies;
   const customColumns = report.customColumns;
   const headers = buildExpenseHeaders(sheetCurrencies, customColumns);
   const endCol = columnLetter(headers.length);
   const rows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A:${endCol}`);
-  const records = mapRowsToExpenseRecords(rows.slice(1), sheetCurrencies, customColumns, rows[0]);
+  const records = mapRowsToExpenseRecords(rows.slice(1), sheetCurrencies, customColumns, rows[0], mapping);
   const payloadBytes = calculateJsonByteSize(records);
 
   if (payloadBytes > MAX_DATASET_BYTES) {
@@ -734,8 +824,8 @@ export async function loadExpenses(accessToken, spreadsheetId) {
   };
 }
 
-export async function appendExpenseRow(accessToken, spreadsheetId, values) {
-  const report = await validateSpreadsheet(accessToken, spreadsheetId);
+export async function appendExpenseRow(accessToken, spreadsheetId, values, mapping = null) {
+  const report = await validateSpreadsheet(accessToken, spreadsheetId, mapping);
   const canonicalHeaders = buildExpenseHeaders(report.sheetCurrencies, report.customColumns);
 
   // Align outgoing row values to the actual sheet header order.
@@ -748,6 +838,19 @@ export async function appendExpenseRow(accessToken, spreadsheetId, values) {
   const valueByCanonicalHeader = new Map();
   for (let index = 0; index < canonicalHeaders.length; index += 1) {
     valueByCanonicalHeader.set(canonicalHeaders[index].toLowerCase(), values[index] ?? "");
+  }
+
+  // When mapping is provided, also index values by the user's actual column names.
+  if (mapping) {
+    for (const [qeField, userCol] of Object.entries(mapping)) {
+      if (!targetHeaders.some((h) => h.toLowerCase() === userCol.toLowerCase())) {
+        throw new Error(`Column '${userCol}' (mapped from '${qeField}') not found in sheet.`);
+      }
+      const val = valueByCanonicalHeader.get(qeField.toLowerCase());
+      if (val !== undefined) {
+        valueByCanonicalHeader.set(userCol.toLowerCase(), val);
+      }
+    }
   }
 
   const alignedValues = targetHeaders.map((header) => valueByCanonicalHeader.get(header.toLowerCase()) ?? "");

@@ -1121,6 +1121,12 @@ button { cursor: pointer; }
   font-weight: 600;
 }
 
+.setup-card-title-warning {
+  margin-left: var(--space-2);
+  color: var(--color-warning);
+  font-size: var(--font-size-base);
+}
+
 .setup-divider {
   display: flex;
   align-items: center;
@@ -1437,6 +1443,66 @@ button { cursor: pointer; }
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
   margin: 0;
+}
+
+/* ===== Column Mapping Editor ===== */
+.column-mapping-editor {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.column-mapping-editor-intro {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-4);
+}
+
+.column-mapping-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--space-4);
+}
+
+.column-mapping-table th,
+.column-mapping-table td {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.column-mapping-table th {
+  background: var(--color-surface-raised);
+  font-weight: 600;
+}
+
+.column-mapping-field-name {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.column-mapping-select {
+  width: 100%;
+  min-height: 36px;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.column-mapping-editor-actions {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.column-mapping-confirm-notice {
+  background: var(--color-accent-light);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--space-4);
+  color: var(--color-text-primary);
 }
 
 .setup-report {

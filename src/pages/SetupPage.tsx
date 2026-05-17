@@ -4,6 +4,7 @@ import { FileSpreadsheet, Wand2, ChevronDown, ChevronUp, X, Plus, Pencil, Trash2
 import { Layout } from "../components/Layout";
 import { LoadingBlock } from "../components/LoadingBlock";
 import { StatusBanner } from "../components/StatusBanner";
+import { ColumnMappingEditor } from "../components/ColumnMappingEditor";
 import { useConfig } from "../contexts/ConfigContext";
 import { openSpreadsheetPicker } from "../services/googlePicker";
 import { googleSheetsService } from "../services/googleSheets";
@@ -52,6 +53,7 @@ export function SetupPage(): JSX.Element {
   const [spreadsheetUrl, setSpreadsheetUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [headerDetails, setHeaderDetails] = useState<HeaderDetails | null>(null);
+  const [showMappingEditor, setShowMappingEditor] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [setupReport, setSetupReport] = useState<SetupReport | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -326,6 +328,7 @@ export function SetupPage(): JSX.Element {
       const { config: nextConfig, setupReport: report } = await googleSheetsService.saveConfig(url);
       saveConfig(nextConfig);
       setSetupReport(report);
+      setShowMappingEditor(false);
       setSuccess("Spreadsheet is configured and validated.");
       trackEvent("setup_saved");
     } catch (saveError) {
@@ -518,41 +521,6 @@ export function SetupPage(): JSX.Element {
             ← Back to options
           </button>
 
-          {error ? <StatusBanner variant="error" message={error} /> : null}
-
-          {headerDetails ? (
-            <div className="header-mismatch">
-              <p className="header-mismatch-intro">
-                Your sheet’s column structure doesn’t match what QuickExpense expects. Here’s a comparison:
-              </p>
-              <table className="header-mismatch-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Expected</th>
-                    <th>Your sheet</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {deriveHeaderRowDetails(headerDetails).map((row) => (
-                    <tr key={row.index} className={row.status !== "match" ? "header-mismatch-row" : ""} data-status={row.status}>
-                      <td>{row.index + 1}</td>
-                      <td>{row.expected}</td>
-                      <td>{row.actual}</td>
-                      <td className="header-mismatch-status">
-                        {row.status === "match" && <span className="header-mismatch-badge header-mismatch-badge--match">✓ Match</span>}
-                        {row.status === "mismatch" && <span className="header-mismatch-badge header-mismatch-badge--mismatch">✗ Mismatch</span>}
-                        {row.status === "missing" && <span className="header-mismatch-badge header-mismatch-badge--missing">− Missing</span>}
-                        {row.status === "extra" && <span className="header-mismatch-badge header-mismatch-badge--extra">+ Extra</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
-
           {success ? <StatusBanner variant="success" message={success} /> : null}
 
           {setupReport ? (
@@ -575,7 +543,12 @@ export function SetupPage(): JSX.Element {
           <div className="card setup-card">
             <div className="setup-card-icon">
               <FileSpreadsheet size={24} aria-hidden />
-              <span className="setup-card-title">Google Sheets URL</span>
+              <span className="setup-card-title">
+                Google Sheets URL
+                {(error || headerDetails) ? (
+                  <span className="setup-card-title-warning" aria-label="Column structure issue detected">⚠</span>
+                ) : null}
+              </span>
             </div>
 
             <button
@@ -648,6 +621,63 @@ export function SetupPage(): JSX.Element {
           </div>
 
           {busy ? <LoadingBlock label={isPicking ? "Opening file picker…" : "Checking compatibility…"} /> : null}
+
+          {error ? <StatusBanner variant="error" message={error} /> : null}
+
+          {headerDetails ? (
+            <div className="header-mismatch">
+              <p className="header-mismatch-intro">
+                Your sheet's column structure doesn't match what QuickExpense expects. Here's a comparison:
+              </p>
+              <table className="header-mismatch-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Expected</th>
+                    <th>Your sheet</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deriveHeaderRowDetails(headerDetails).map((row) => (
+                    <tr key={row.index} className={row.status !== "match" ? "header-mismatch-row" : ""} data-status={row.status}>
+                      <td>{row.index + 1}</td>
+                      <td>{row.expected}</td>
+                      <td>{row.actual}</td>
+                      <td className="header-mismatch-status">
+                        {row.status === "match" && <span className="header-mismatch-badge header-mismatch-badge--match">✓ Match</span>}
+                        {row.status === "mismatch" && <span className="header-mismatch-badge header-mismatch-badge--mismatch">✗ Mismatch</span>}
+                        {row.status === "missing" && <span className="header-mismatch-badge header-mismatch-badge--missing">− Missing</span>}
+                        {row.status === "extra" && <span className="header-mismatch-badge header-mismatch-badge--extra">+ Extra</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!showMappingEditor ? (
+                <button
+                  className="btn btn-secondary"
+                  type="button"
+                  style={{ marginTop: "var(--space-3)" }}
+                  onClick={() => setShowMappingEditor(true)}
+                >
+                  Map columns →
+                </button>
+              ) : null}
+              {showMappingEditor && headerDetails.detectedColumns.length > 0 ? (
+                <div style={{ marginTop: "var(--space-4)" }}>
+                  <ColumnMappingEditor
+                    detectedColumns={headerDetails.detectedColumns}
+                    onSaved={() => {
+                      setShowMappingEditor(false);
+                      void saveSpreadsheet(spreadsheetUrl.trim());
+                    }}
+                    onCancel={() => setShowMappingEditor(false)}
+                  />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </>
       ) : null}
 

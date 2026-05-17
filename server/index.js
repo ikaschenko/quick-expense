@@ -30,6 +30,8 @@ import {
   isCustomColumnEmpty,
   deleteColumnFromSheet,
   findColumnIndex,
+  readConfigSheetMapping,
+  writeConfigSheetMapping,
   DEFAULT_CUSTOM_COLUMNS,
   MAX_CUSTOM_COLUMNS,
   MAX_OPTIONAL_CURRENCIES,
@@ -158,6 +160,13 @@ app.use((req, res, next) => {
 
 function getUserSession(req) {
   return req.session.userEmail ? { email: req.session.userEmail } : null;
+}
+
+/** Derive ConfigMode from the result of readConfigSheetMapping. */
+function deriveConfigMode(mappingResult) {
+  if (mappingResult === null) return "default";
+  if (mappingResult?.error === "invalid") return "config-invalid";
+  return "config-driven";
 }
 
 const requireAuthenticatedUser = createRequireAuthenticatedUser({
@@ -328,7 +337,11 @@ app.get("/api/config", requireAuthenticatedUser, async (req, res) => {
 
   try {
     const accessToken = await getAuthorizedAccessToken(userRecord);
-    const report = await validateSpreadsheet(accessToken, userRecord.spreadsheetId);
+    const mappingResult = await readConfigSheetMapping(accessToken, userRecord.spreadsheetId);
+    const configMode = deriveConfigMode(mappingResult);
+    const mapping = configMode === "config-driven" ? mappingResult : null;
+
+    const report = await validateSpreadsheet(accessToken, userRecord.spreadsheetId, mapping);
 
     res.json({
       config: {
@@ -338,6 +351,7 @@ app.get("/api/config", requireAuthenticatedUser, async (req, res) => {
         sheetName: "Expenses",
         currencies: report.sheetCurrencies,
         customColumns: report.customColumns,
+        configMode,
       },
     });
   } catch (error) {
@@ -355,7 +369,13 @@ app.post("/api/config", requireAuthenticatedUser, async (req, res) => {
     }
 
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    const setupReport = await validateSpreadsheet(accessToken, spreadsheetId);
+
+    // Read any existing mapping and validate using it so config-driven sheets pass.
+    const mappingResult = await readConfigSheetMapping(accessToken, spreadsheetId);
+    const configMode = deriveConfigMode(mappingResult);
+    const mapping = configMode === "config-driven" ? mappingResult : null;
+
+    const setupReport = await validateSpreadsheet(accessToken, spreadsheetId, mapping);
 
     const updatedUser = await updateUserRecord(req.userRecord.email, (current) => ({
       ...current,
@@ -371,6 +391,7 @@ app.post("/api/config", requireAuthenticatedUser, async (req, res) => {
         sheetName: "Expenses",
         currencies: setupReport.sheetCurrencies,
         customColumns: setupReport.customColumns,
+        configMode,
       },
       setupReport,
     });
@@ -406,11 +427,51 @@ app.post("/api/config/create-spreadsheet", requireAuthenticatedUser, async (req,
         sheetName: "Expenses",
         currencies: setupReport.sheetCurrencies,
         customColumns: setupReport.customColumns,
+        configMode: "default",
       },
       setupReport,
     });
   } catch (error) {
     res.status(400).json({ message: (error).message });
+  }
+});
+
+app.get("/api/config/mapping", requireAuthenticatedUser, async (req, res) => {
+  if (!req.userRecord.spreadsheetId) {
+    res.status(400).json({ message: "Spreadsheet is not configured." });
+    return;
+  }
+  try {
+    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const mappingResult = await readConfigSheetMapping(accessToken, req.userRecord.spreadsheetId);
+    const mode = deriveConfigMode(mappingResult);
+    res.json({ mapping: mode === "config-driven" ? mappingResult : null, mode });
+  } catch (error) {
+    res.status(500).json({ message: (error).message });
+  }
+});
+
+app.post("/api/config/mapping", requireAuthenticatedUser, async (req, res) => {
+  if (!req.userRecord.spreadsheetId) {
+    res.status(400).json({ message: "Spreadsheet is not configured." });
+    return;
+  }
+  if (req.body?.confirmed !== true) {
+    res.status(400).json({ message: "Explicit confirmation is required to save a column mapping." });
+    return;
+  }
+  const mapping = req.body?.mapping;
+  if (!mapping || typeof mapping !== "object" || Array.isArray(mapping)) {
+    res.status(400).json({ message: "A mapping object is required." });
+    return;
+  }
+  try {
+    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    await writeConfigSheetMapping(accessToken, req.userRecord.spreadsheetId, mapping);
+    const mode = "config-driven";
+    res.json({ mapping, mode });
+  } catch (error) {
+    res.status(500).json({ message: (error).message });
   }
 });
 
@@ -443,7 +504,9 @@ app.get("/api/expenses", requireAuthenticatedUser, async (req, res) => {
     }
 
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    const snapshot = await loadExpenses(accessToken, req.userRecord.spreadsheetId);
+    const mappingResult = await readConfigSheetMapping(accessToken, req.userRecord.spreadsheetId);
+    const mapping = deriveConfigMode(mappingResult) === "config-driven" ? mappingResult : null;
+    const snapshot = await loadExpenses(accessToken, req.userRecord.spreadsheetId, mapping);
     res.json(snapshot);
   } catch (error) {
     res.status(400).json({ message: (error).message });
@@ -469,7 +532,9 @@ app.post("/api/expenses", requireAuthenticatedUser, async (req, res) => {
     }
 
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    await appendExpenseRow(accessToken, req.userRecord.spreadsheetId, values);
+    const mappingResult = await readConfigSheetMapping(accessToken, req.userRecord.spreadsheetId);
+    const mapping = deriveConfigMode(mappingResult) === "config-driven" ? mappingResult : null;
+    await appendExpenseRow(accessToken, req.userRecord.spreadsheetId, values, mapping);
 
     if (req.body?.fxRateBackup && typeof req.body.fxRateBackup === "object") {
       await saveFxRateBackup(req.userRecord.email, req.userRecord.spreadsheetId, req.body.fxRateBackup);

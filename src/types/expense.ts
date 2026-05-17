@@ -52,6 +52,8 @@ export interface SpreadsheetConfig {
   currencies: string[];
   /** Custom column names from sheet header (0–10), in sheet order. */
   customColumns: string[];
+  configMode: ConfigMode;
+  configModeReason?: string;
 }
 
 export interface SetupReport {
@@ -66,7 +68,11 @@ export interface ConfigResponse {
 export interface HeaderDetails {
   expected: string[];
   actual: string[];
+  detectedColumns: string[];
 }
+
+export type ColumnMapping = Record<string, string>; // QuickExpense field → user column name
+export type ConfigMode = "config-driven" | "default" | "config-invalid";
 
 export type HeaderMatchStatus = "match" | "mismatch" | "missing" | "extra";
 

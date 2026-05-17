@@ -1,0 +1,160 @@
+import { useState } from "react";
+import { googleSheetsService } from "../services/googleSheets";
+import { ColumnMapping } from "../types/expense";
+import { StatusBanner } from "./StatusBanner";
+
+/** Required QuickExpense fields that must be mapped. */
+const REQUIRED_QE_FIELDS = ["Date", "USD", "Category", "Spent By", "Comment"] as const;
+
+interface Props {
+  /** Actual column names found in the user's sheet. */
+  detectedColumns: string[];
+  /** Called when the mapping has been saved successfully. */
+  onSaved: () => void;
+  /** Called when the user cancels the editor. */
+  onCancel: () => void;
+}
+
+type EditorPhase = "edit" | "confirm";
+
+export function ColumnMappingEditor({ detectedColumns, onSaved, onCancel }: Props): JSX.Element {
+  const [mapping, setMapping] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    for (const field of REQUIRED_QE_FIELDS) {
+      const exact = detectedColumns.find((c) => c.toLowerCase() === field.toLowerCase());
+      initial[field] = exact ?? "";
+    }
+    return initial;
+  });
+
+  const [phase, setPhase] = useState<EditorPhase>("edit");
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const allAssigned = REQUIRED_QE_FIELDS.every((f) => mapping[f]);
+
+  // The effective mapping only includes entries where the user column differs from the QE field name.
+  const effectiveMapping: ColumnMapping = {};
+  for (const field of REQUIRED_QE_FIELDS) {
+    if (mapping[field] && mapping[field] !== field) {
+      effectiveMapping[field] = mapping[field];
+    }
+  }
+
+  const handleFieldChange = (field: string, userCol: string) => {
+    setMapping((prev) => ({ ...prev, [field]: userCol }));
+  };
+
+  const handleSaveClick = () => {
+    if (!allAssigned) return;
+    setPhase("confirm");
+  };
+
+  const handleConfirm = async () => {
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      await googleSheetsService.saveColumnMapping(effectiveMapping);
+      onSaved();
+    } catch (err) {
+      setSaveError((err as Error).message);
+      setPhase("edit");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="column-mapping-editor">
+      {phase === "edit" ? (
+        <>
+          <p className="column-mapping-editor-intro">
+            Match each QuickExpense field to the column name in your spreadsheet. Columns not listed here remain unchanged.
+          </p>
+          {saveError ? <StatusBanner variant="error" message={saveError} /> : null}
+          <table className="column-mapping-table">
+            <thead>
+              <tr>
+                <th>QuickExpense field</th>
+                <th>Your column name</th>
+              </tr>
+            </thead>
+            <tbody>
+              {REQUIRED_QE_FIELDS.map((field) => (
+                <tr key={field}>
+                  <td className="column-mapping-field-name">{field}</td>
+                  <td>
+                    <select
+                      className="input column-mapping-select"
+                      value={mapping[field]}
+                      onChange={(e) => handleFieldChange(field, e.target.value)}
+                    >
+                      <option value="">— select a column —</option>
+                      {detectedColumns.map((col) => (
+                        <option key={col} value={col}>{col}</option>
+                      ))}
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="column-mapping-editor-actions">
+            <button
+              className="btn btn-primary"
+              type="button"
+              disabled={!allAssigned}
+              onClick={handleSaveClick}
+            >
+              Save mapping
+            </button>
+            <button className="btn btn-secondary" type="button" onClick={onCancel}>
+              Cancel
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="column-mapping-confirm-notice">
+            Your spreadsheet columns will <strong>NOT</strong> be modified. QuickExpense will read
+            and write using this translation:
+          </div>
+          <table className="column-mapping-table">
+            <thead>
+              <tr>
+                <th>QuickExpense field</th>
+                <th>Your column name</th>
+              </tr>
+            </thead>
+            <tbody>
+              {REQUIRED_QE_FIELDS.map((field) => (
+                <tr key={field}>
+                  <td className="column-mapping-field-name">{field}</td>
+                  <td>{mapping[field]}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="column-mapping-editor-actions">
+            <button
+              className="btn btn-primary"
+              type="button"
+              disabled={isSaving}
+              onClick={() => void handleConfirm()}
+            >
+              {isSaving ? "Saving…" : "Confirm and save"}
+            </button>
+            <button
+              className="btn btn-secondary"
+              type="button"
+              disabled={isSaving}
+              onClick={() => setPhase("edit")}
+            >
+              Back to edit
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
