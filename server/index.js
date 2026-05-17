@@ -17,6 +17,7 @@ import {
 } from "./google-client.js";
 import {
   appendExpenseRow,
+  createSpreadsheet,
   loadExpenses,
   parseSpreadsheetUrl,
   validateSpreadsheet,
@@ -379,6 +380,37 @@ app.post("/api/config", requireAuthenticatedUser, async (req, res) => {
       body.headerDetails = error.headerDetails;
     }
     res.status(400).json(body);
+  }
+});
+
+app.post("/api/config/create-spreadsheet", requireAuthenticatedUser, async (req, res) => {
+  try {
+    const rawName = String(req.body?.name ?? "").trim();
+    const name = rawName.slice(0, 100) || "Quick Expense — My Expenses";
+
+    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const { spreadsheetId, spreadsheetUrl } = await createSpreadsheet(accessToken, name);
+    const setupReport = await validateSpreadsheet(accessToken, spreadsheetId);
+
+    const updatedUser = await updateUserRecord(req.userRecord.email, (current) => ({
+      ...current,
+      spreadsheetUrl,
+      spreadsheetId,
+    }));
+
+    res.json({
+      config: {
+        email: updatedUser.email,
+        spreadsheetId: updatedUser.spreadsheetId,
+        spreadsheetUrl: updatedUser.spreadsheetUrl,
+        sheetName: "Expenses",
+        currencies: setupReport.sheetCurrencies,
+        customColumns: setupReport.customColumns,
+      },
+      setupReport,
+    });
+  } catch (error) {
+    res.status(400).json({ message: (error).message });
   }
 });
 

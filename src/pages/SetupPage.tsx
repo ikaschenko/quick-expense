@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { FileSpreadsheet, X, Plus, Pencil, Trash2, ChevronUp, ChevronDown, Check, TableProperties } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { FileSpreadsheet, Wand2, ChevronDown, ChevronUp, X, Plus, Pencil, Trash2, Check, TableProperties } from "lucide-react";
 import { Layout } from "../components/Layout";
 import { LoadingBlock } from "../components/LoadingBlock";
 import { StatusBanner } from "../components/StatusBanner";
@@ -8,8 +9,7 @@ import { openSpreadsheetPicker } from "../services/googlePicker";
 import { googleSheetsService } from "../services/googleSheets";
 import { trackEvent } from "../services/analytics";
 import { AppError, CurrencyDictionary, HeaderDetails, SetupReport } from "../types/expense";
-import { resolveSetupBannerState } from "../utils/setupStatus";
-import { validateColumnName } from "../utils/spreadsheet";
+import { deriveHeaderRowDetails, validateColumnName } from "../utils/spreadsheet";
 
 type ColumnType = "mandatory-field" | "mandatory-currency" | "optional-currency" | "custom-column";
 
@@ -45,6 +45,8 @@ function typeLabel(type: ColumnType): string {
 
 const MAX_CUSTOM_COLUMNS = 10;
 
+type SetupPath = "choose" | "fresh" | "existing" | "configured";
+
 export function SetupPage(): JSX.Element {
   const { config, isConfigLoading, error: configError, saveConfig, refreshConfig, updateStructure } = useConfig();
   const [spreadsheetUrl, setSpreadsheetUrl] = useState("");
@@ -54,7 +56,11 @@ export function SetupPage(): JSX.Element {
   const [setupReport, setSetupReport] = useState<SetupReport | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isPicking, setIsPicking] = useState(false);
-  const [hasInvalidSetup, setHasInvalidSetup] = useState(false);
+  const [setupPath, setSetupPath] = useState<SetupPath>(() => config ? "configured" : "choose");
+  const [isCreating, setIsCreating] = useState(false);
+  const [newSheetName, setNewSheetName] = useState("Quick Expense — My Expenses");
+  const [structureGuideOpen, setStructureGuideOpen] = useState(false);
+  const navigate = useNavigate();
 
   // Structure management state
   const [actionError, setActionError] = useState<string | null>(null);
@@ -90,6 +96,16 @@ export function SetupPage(): JSX.Element {
       void googleSheetsService.getAvailableCurrencies().then(setCurrencyDictionary).catch(() => undefined);
     }
   }, [config?.spreadsheetId]);
+
+  // Sync setupPath when config loads or clears
+  useEffect(() => {
+    if (isConfigLoading) return;
+    if (config) {
+      setSetupPath("configured");
+    } else {
+      setSetupPath((prev) => (prev === "configured" ? "choose" : prev));
+    }
+  }, [config, isConfigLoading]);
 
   const columns = useMemo(
     () => classifyColumns(config?.currencies ?? [], config?.customColumns ?? []),
@@ -304,18 +320,15 @@ export function SetupPage(): JSX.Element {
       if (!url) {
         await googleSheetsService.clearConfig();
         refreshConfig();
-        setHasInvalidSetup(false);
         setSuccess("Spreadsheet removed. Setup is not complete.");
         return;
       }
       const { config: nextConfig, setupReport: report } = await googleSheetsService.saveConfig(url);
       saveConfig(nextConfig);
-      setHasInvalidSetup(false);
       setSetupReport(report);
       setSuccess("Spreadsheet is configured and validated.");
       trackEvent("setup_saved");
     } catch (saveError) {
-      setHasInvalidSetup(true);
       setError((saveError as Error).message);
       if (saveError instanceof AppError && saveError.headerDetails) {
         setHeaderDetails(saveError.headerDetails);
@@ -349,133 +362,353 @@ export function SetupPage(): JSX.Element {
     }
   };
 
+  // ─── Create Spreadsheet (fresh path) ──────────────────────────────────────────────
+
+  const onCreateSpreadsheet = async (): Promise<void> => {
+    setError(null);
+    setSuccess(null);
+    setSetupReport(null);
+    setIsCreating(true);
+    try {
+      const name = newSheetName.trim() || undefined;
+      const { config: nextConfig, setupReport: report } = await googleSheetsService.createSpreadsheet(name);
+      saveConfig(nextConfig);
+      setSetupReport(report);
+      setSuccess("Your spreadsheet has been created and is ready to use.");
+      trackEvent("setup_created");
+    } catch (createError) {
+      setError((createError as Error).message);
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const onResetAndExit = async (): Promise<void> => {
+    if (!window.confirm("This action will reset the previously provided link. Are you sure?")) return;
+    await saveSpreadsheet("");
+    navigate("/home");
+  };
+
   const busy = isSaving || isPicking;
-  const setupBanner = resolveSetupBannerState({
-    isConfigLoading,
-    hasConfig: Boolean(config),
-    hasInvalidSetup,
-    hasLoadError: Boolean(configError),
-  });
+
+  const pageTitle =
+    setupPath === "configured" ? "Spreadsheet settings" :
+    setupPath === "existing" ? "Connect existing sheet" :
+    setupPath === "fresh" ? "Create your spreadsheet" :
+    "Set up Quick Expense";
 
   return (
-    <Layout title="Connect Spreadsheet">
-      <div className="setup-progress">Step 1 of 1</div>
+    <Layout title={pageTitle}>
 
-      <StatusBanner variant={setupBanner.variant} message={setupBanner.message} />
-      {error ? <StatusBanner variant="error" message={error} /> : null}
-
-      {headerDetails ? (
-        <div className="header-mismatch">
-          <table className="header-mismatch-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Expected</th>
-                <th>Actual</th>
-              </tr>
-            </thead>
-            <tbody>
-              {headerDetails.expected.map((expected, i) => {
-                const actual = headerDetails.actual[i] ?? "(missing)";
-                const matches = expected === actual;
-                return (
-                  <tr key={i} className={matches ? "" : "header-mismatch-row"}>
-                    <td>{i + 1}</td>
-                    <td>{expected}</td>
-                    <td>{actual}</td>
-                  </tr>
-                );
-              })}
-              {headerDetails.actual.slice(headerDetails.expected.length).map((extra, i) => (
-                <tr key={headerDetails.expected.length + i} className="header-mismatch-row">
-                  <td>{headerDetails.expected.length + i + 1}</td>
-                  <td>(none)</td>
-                  <td>{extra}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : null}
-
-      {success ? <StatusBanner variant="success" message={success} /> : null}
-
-      {setupReport ? (
-        <ul className="setup-report">
-          <li className="setup-report-item">
-            {setupReport.tabAction === "created"
-              ? "✓ Expenses tab created"
-              : "✓ Expenses tab found"}
-          </li>
-          <li className="setup-report-item">
-            {setupReport.headersAction === "created"
-              ? "✓ Column headers created automatically"
-              : setupReport.headersAction === "migrated"
-                ? "✓ Columns migrated from legacy format"
-                : "✓ Column headers valid"}
-          </li>
-        </ul>
-      ) : null}
-
-      <div className="card setup-card">
-        <div className="setup-card-icon">
-          <FileSpreadsheet size={24} aria-hidden />
-          <span className="setup-card-title">Google Sheets URL</span>
-        </div>
-
-        <form onSubmit={(event) => void onSubmit(event)}>
-          <div className="input-group">
-            <label className="input-label" htmlFor="spreadsheet-url">Spreadsheet link</label>
-            <input
-              id="spreadsheet-url"
-              className="input"
-              value={spreadsheetUrl}
-              onChange={(event) => setSpreadsheetUrl(event.target.value)}
-              placeholder="https://docs.google.com/spreadsheets/d/..."
-            />
+      {/* ── Path: choose ── */}
+      {setupPath === "choose" ? (
+        <>
+          {isConfigLoading ? (
+            <LoadingBlock label="Checking your current setup status…" />
+          ) : null}
+          {!isConfigLoading && configError ? (
+            <StatusBanner variant="error" message={configError} />
+          ) : null}
+          {!isConfigLoading && !configError ? (
+            <p className="setup-path-intro">
+              Connect Quick Expense to a Google Spreadsheet where your expenses will be stored.
+            </p>
+          ) : null}
+          <div className="setup-path-grid">
+            <div className="setup-path-card">
+              <Wand2 size={28} className="setup-path-card-icon" aria-hidden />
+              <span className="setup-path-card-title">Start fresh</span>
+              <p className="setup-path-card-description">
+                QuickExpense creates a new spreadsheet in your Google Drive, ready to use immediately.
+              </p>
+              <button
+                className="btn btn-primary"
+                type="button"
+                disabled={isConfigLoading}
+                onClick={() => setSetupPath("fresh")}
+              >
+                Create my spreadsheet
+              </button>
+            </div>
+            <div className="setup-path-card">
+              <FileSpreadsheet size={28} className="setup-path-card-icon" aria-hidden />
+              <span className="setup-path-card-title">Use existing sheet</span>
+              <p className="setup-path-card-description">
+                Connect a spreadsheet you already have. We'll check if its structure is compatible.
+              </p>
+              <button
+                className="btn btn-secondary"
+                type="button"
+                disabled={isConfigLoading}
+                onClick={() => setSetupPath("existing")}
+              >
+                Connect a spreadsheet
+              </button>
+            </div>
           </div>
-          <div style={{ display: "flex", gap: "var(--space-3)" }}>
-            <button className="btn btn-primary" disabled={busy} type="submit">
-              {isSaving ? "Validating…" : "Connect Spreadsheet"}
+        </>
+      ) : null}
+
+      {/* ── Path: fresh (Story 3 — programmatic spreadsheet creation) ── */}
+      {setupPath === "fresh" ? (
+        <>
+          <button className="setup-back-link" type="button" onClick={() => { setError(null); setSuccess(null); setSetupReport(null); setSetupPath("choose"); }}>
+            ← Back to options
+          </button>
+
+          {error ? <StatusBanner variant="error" message={error} /> : null}
+          {success ? <StatusBanner variant="success" message={success} /> : null}
+          {setupReport ? (
+            <ul className="setup-report">
+              <li className="setup-report-item">
+                {setupReport.tabAction === "created" ? "✓ Expenses tab created" : "✓ Expenses tab found"}
+              </li>
+              <li className="setup-report-item">
+                {setupReport.headersAction === "created" ? "✓ Column headers created" : "✓ Column headers valid"}
+              </li>
+            </ul>
+          ) : null}
+
+          <div className="card setup-card">
+            <div className="setup-card-icon">
+              <Wand2 size={24} aria-hidden />
+              <span className="setup-card-title">Create my spreadsheet</span>
+            </div>
+            <p className="muted text-sm" style={{ marginBottom: "var(--space-4)" }}>
+              QuickExpense will create a new Google Spreadsheet in your Drive with the correct structure, ready for you to start adding expenses.
+            </p>
+            <div className="input-group" style={{ marginBottom: "var(--space-4)" }}>
+              <label className="input-label" htmlFor="new-sheet-name">Spreadsheet name</label>
+              <input
+                id="new-sheet-name"
+                className="input"
+                value={newSheetName}
+                maxLength={100}
+                disabled={isCreating}
+                onChange={(e) => setNewSheetName(e.target.value)}
+              />
+            </div>
+            <button
+              className="btn btn-primary"
+              type="button"
+              disabled={isCreating}
+              onClick={() => void onCreateSpreadsheet()}
+            >
+              {isCreating ? "Creating…" : "Create my spreadsheet"}
             </button>
+          </div>
+          {isCreating ? <LoadingBlock label="Creating your spreadsheet…" /> : null}
+        </>
+      ) : null}
+
+      {/* ── Path: existing (connect and validate a sheet URL) ── */}
+      {setupPath === "existing" ? (
+        <>
+          <button
+            className="setup-back-link"
+            type="button"
+            onClick={() => {
+              setSetupPath("choose");
+              setError(null);
+              setHeaderDetails(null);
+              setSuccess(null);
+              setSetupReport(null);
+            }}
+          >
+            ← Back to options
+          </button>
+
+          {error ? <StatusBanner variant="error" message={error} /> : null}
+
+          {headerDetails ? (
+            <div className="header-mismatch">
+              <p className="header-mismatch-intro">
+                Your sheet’s column structure doesn’t match what QuickExpense expects. Here’s a comparison:
+              </p>
+              <table className="header-mismatch-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Expected</th>
+                    <th>Your sheet</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deriveHeaderRowDetails(headerDetails).map((row) => (
+                    <tr key={row.index} className={row.status !== "match" ? "header-mismatch-row" : ""} data-status={row.status}>
+                      <td>{row.index + 1}</td>
+                      <td>{row.expected}</td>
+                      <td>{row.actual}</td>
+                      <td className="header-mismatch-status">
+                        {row.status === "match" && <span className="header-mismatch-badge header-mismatch-badge--match">✓ Match</span>}
+                        {row.status === "mismatch" && <span className="header-mismatch-badge header-mismatch-badge--mismatch">✗ Mismatch</span>}
+                        {row.status === "missing" && <span className="header-mismatch-badge header-mismatch-badge--missing">− Missing</span>}
+                        {row.status === "extra" && <span className="header-mismatch-badge header-mismatch-badge--extra">+ Extra</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+
+          {success ? <StatusBanner variant="success" message={success} /> : null}
+
+          {setupReport ? (
+            <ul className="setup-report">
+              <li className="setup-report-item">
+                {setupReport.tabAction === "created"
+                  ? "✓ Expenses tab created"
+                  : "✓ Expenses tab found"}
+              </li>
+              <li className="setup-report-item">
+                {setupReport.headersAction === "created"
+                  ? "✓ Column headers created automatically"
+                  : setupReport.headersAction === "migrated"
+                    ? "✓ Columns migrated from legacy format"
+                    : "✓ Column headers valid"}
+              </li>
+            </ul>
+          ) : null}
+
+          <div className="card setup-card">
+            <div className="setup-card-icon">
+              <FileSpreadsheet size={24} aria-hidden />
+              <span className="setup-card-title">Google Sheets URL</span>
+            </div>
+
+            <button
+              type="button"
+              className="setup-structure-guide-toggle"
+              aria-expanded={structureGuideOpen}
+              onClick={() => setStructureGuideOpen((v) => !v)}
+            >
+              {structureGuideOpen ? <ChevronUp size={14} aria-hidden /> : <ChevronDown size={14} aria-hidden />}
+              What structure does my sheet need?
+            </button>
+            {structureGuideOpen ? (
+              <div className="setup-structure-guide">
+                <p className="setup-structure-guide-intro">Your sheet’s <strong>Expenses</strong> tab must have a header row in this order:</p>
+                <ol className="setup-structure-guide-list">
+                  <li><strong>Date</strong> — mandatory</li>
+                  <li><strong>Currency columns</strong> (e.g. EUR, PLN) — optional, any number</li>
+                  <li><strong>USD</strong> — mandatory</li>
+                  <li><strong>Category</strong> — mandatory</li>
+                  <li><strong>Spent By</strong> — mandatory</li>
+                  <li><strong>Comment</strong> — mandatory</li>
+                  <li><strong>Custom columns</strong> (any names) — optional, after Comment</li>
+                </ol>
+                <p className="setup-structure-guide-note">If the <strong>Expenses</strong> tab doesn’t exist, QuickExpense will create it with a default structure.</p>
+                <br/>
+                <p className="setup-structure-guide-note">QuickExpense only reads and writes the <strong>Expenses</strong> tab. Other sheets in your workbook are never accessed or modified.</p>              </div>
+            ) : null}
+
+            <form onSubmit={(event) => void onSubmit(event)}>
+              <div className="input-group">
+                <label className="input-label" htmlFor="spreadsheet-url">Spreadsheet link</label>
+                <input
+                  id="spreadsheet-url"
+                  className="input"
+                  value={spreadsheetUrl}
+                  onChange={(event) => setSpreadsheetUrl(event.target.value)}
+                  placeholder="https://docs.google.com/spreadsheets/d/..."
+                />
+              </div>
+              <div style={{ display: "flex", gap: "var(--space-3)" }}>
+                <button className="btn btn-primary" disabled={busy} type="submit">
+                  {isSaving ? "Checking…" : "Check compatibility"}
+                </button>
+                <button
+                    className="btn btn-secondary"
+                    disabled={busy || !config}
+                    type="button"
+                    title={!config ? "This action is not applicable in the current context" : undefined}
+                    onClick={() => void onResetAndExit()}
+                    style={{ width: "auto", flexShrink: 0 }}
+                  >
+                    Reset and exit
+                  </button>
+              </div>
+            </form>
+
+            <div className="setup-divider">
+              <span>or</span>
+            </div>
+
             <button
               className="btn btn-secondary"
               disabled={busy}
               type="button"
-              onClick={() => setSpreadsheetUrl("")}
-              style={{ width: "auto", flexShrink: 0 }}
+              onClick={() => void onPickFromDrive()}
             >
-              Clear
+              {isPicking ? "Opening picker…" : "Browse Google Drive"}
             </button>
-          </div>
-        </form>
 
-        <div className="setup-divider">
-          <span>or</span>
-        </div>
-
-        <button
-          className="btn btn-secondary"
-          disabled={busy}
-          type="button"
-          onClick={() => void onPickFromDrive()}
-        >
-          {isPicking ? "Opening picker…" : "Browse Google Drive"}
-        </button>
-      </div>
-
-      {/* Column Reflection — visible only when spreadsheet is connected */}
-      {config?.spreadsheetId ? (
-        <div className="card setup-card" style={{ marginTop: "var(--space-4)" }}>
-          <div className="setup-card-icon">
-            <TableProperties size={24} aria-hidden />
-            <span className="setup-card-title">Sheet Structure</span>
           </div>
 
-          {actionError ? <StatusBanner variant="error" message={actionError} /> : null}
-          {actionSuccess ? <StatusBanner variant="success" message={actionSuccess} /> : null}
+          {busy ? <LoadingBlock label={isPicking ? "Opening file picker…" : "Checking compatibility…"} /> : null}
+        </>
+      ) : null}
 
-          <ul className="custom-columns-list">
+      {/* ── Path: configured (sheet structure management) ── */}
+      {setupPath === "configured" ? (
+        <>
+          {success ? <StatusBanner variant="success" message={success} /> : null}
+
+          {setupReport ? (
+            <ul className="setup-report">
+              <li className="setup-report-item">
+                {setupReport.tabAction === "created"
+                  ? "✓ Expenses tab created"
+                  : "✓ Expenses tab found"}
+              </li>
+              <li className="setup-report-item">
+                {setupReport.headersAction === "created"
+                  ? "✓ Column headers created automatically"
+                  : setupReport.headersAction === "migrated"
+                    ? "✓ Columns migrated from legacy format"
+                    : "✓ Column headers valid"}
+              </li>
+            </ul>
+          ) : null}
+
+          {config ? (
+            <div className="home-status-card connected">
+              <FileSpreadsheet size={20} className="home-status-icon" style={{ color: "var(--color-success)" }} aria-hidden />
+              <div className="home-status-content">
+                <div className="home-status-label">Connected</div>
+                <div className="home-status-detail">
+                  <a
+                    className="setup-connected-url-link"
+                    href={config.spreadsheetUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {config.spreadsheetUrl}
+                  </a>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="home-status-action"
+                onClick={() => setSetupPath("choose")}
+              >
+                Change
+              </button>
+            </div>
+          ) : null}
+
+          <div className="card setup-card">
+            <div className="setup-card-icon">
+              <TableProperties size={24} aria-hidden />
+              <span className="setup-card-title">Sheet Structure</span>
+            </div>
+
+            {actionError ? <StatusBanner variant="error" message={actionError} /> : null}
+            {actionSuccess ? <StatusBanner variant="success" message={actionSuccess} /> : null}
+
+            <ul className="custom-columns-list">
             {columns.map((col) => {
               const isMandatory = col.type === "mandatory-field" || col.type === "mandatory-currency";
               const isCurrency = col.type === "optional-currency";
@@ -685,10 +918,10 @@ export function SetupPage(): JSX.Element {
               </button>
             </div>
           ) : null}
-        </div>
+          </div>
+        </>
       ) : null}
 
-      {busy ? <LoadingBlock label={isPicking ? "Opening file picker…" : "Validating spreadsheet…"} /> : null}
     </Layout>
   );
 }

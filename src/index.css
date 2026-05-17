@@ -1328,6 +1328,12 @@ button { cursor: pointer; }
   overflow-x: auto;
 }
 
+.header-mismatch-intro {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-3);
+}
+
 .header-mismatch-table {
   width: 100%;
   border-collapse: collapse;
@@ -1348,8 +1354,89 @@ button { cursor: pointer; }
 
 .header-mismatch-row td {
   background: var(--color-error-light);
+}
+
+.header-mismatch-row[data-status="extra"] td {
+  background: var(--color-warning-light);
+}
+
+.header-mismatch-status {
+  white-space: nowrap;
+}
+
+.header-mismatch-badge {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+
+.header-mismatch-badge--match {
+  background: var(--color-success-light);
+  color: #065f46;
+}
+
+.header-mismatch-badge--mismatch {
+  background: var(--color-error-light);
   color: #991b1b;
-  font-weight: 500;
+}
+
+.header-mismatch-badge--missing {
+  background: var(--color-error-light);
+  color: #991b1b;
+}
+
+.header-mismatch-badge--extra {
+  background: var(--color-warning-light);
+  color: #92400e;
+}
+
+.setup-structure-guide-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: none;
+  border: none;
+  padding: 0;
+  margin-bottom: var(--space-3);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-accent);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.setup-structure-guide-toggle:hover {
+  color: var(--color-accent-hover);
+}
+
+.setup-structure-guide {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.setup-structure-guide-intro {
+  font-size: var(--font-size-sm);
+  margin: 0 0 var(--space-3);
+}
+
+.setup-structure-guide-list {
+  font-size: var(--font-size-sm);
+  padding-left: var(--space-5);
+  margin: 0 0 var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.setup-structure-guide-note {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin: 0;
 }
 
 .setup-report {
@@ -1393,3 +1480,86 @@ button { cursor: pointer; }
 .mb-5 { margin-bottom: var(--space-5); }
 .mt-4 { margin-top: var(--space-4); }
 .gap-3 { gap: var(--space-3); }
+
+/* ===== Setup Page — Path Selection ===== */
+.setup-path-intro {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-5);
+  text-align: center;
+}
+
+.setup-path-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+@media (max-width: 480px) {
+  .setup-path-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.setup-path-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.setup-path-card-icon {
+  color: var(--color-accent);
+}
+
+.setup-path-card-title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.setup-path-card-description {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  flex: 1;
+  margin: 0;
+}
+
+.setup-path-card .btn {
+  width: 100%;
+  margin-top: auto;
+}
+
+.setup-back-link {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 0;
+  margin-bottom: var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.setup-back-link:hover {
+  color: var(--color-text-primary);
+}
+
+.setup-connected-url-link {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+.setup-connected-url-link:hover {
+  color: var(--color-text-primary);
+}

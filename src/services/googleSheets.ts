@@ -104,4 +104,11 @@ export const googleSheetsService = {
       body: JSON.stringify({ name }),
     });
   },
+
+  async createSpreadsheet(name?: string): Promise<{ config: SpreadsheetConfig; setupReport: SetupReport }> {
+    return requestJson<{ config: SpreadsheetConfig; setupReport: SetupReport }>("/api/config/create-spreadsheet", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    });
+  },
 };

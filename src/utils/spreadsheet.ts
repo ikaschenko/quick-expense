@@ -1,5 +1,26 @@
 import { buildExpenseHeaders, MAX_DATASET_BYTES, POST_CURRENCY_HEADERS, RESERVED_COLUMN_NAMES, SHEET_NAME } from "../constants/expenses";
-import { DistinctValues, ExpenseDraft, ExpenseRecord } from "../types/expense";
+import { DistinctValues, ExpenseDraft, ExpenseRecord, HeaderDetails, HeaderRowDetail } from "../types/expense";
+
+export function deriveHeaderRowDetails(details: HeaderDetails): HeaderRowDetail[] {
+  const rows: HeaderRowDetail[] = [];
+  const maxLen = Math.max(details.expected.length, details.actual.length);
+  for (let i = 0; i < maxLen; i++) {
+    const expected = details.expected[i] ?? "";
+    const actual = details.actual[i] ?? "";
+    let status: HeaderRowDetail["status"];
+    if (i >= details.expected.length) {
+      status = "extra";
+    } else if (i >= details.actual.length) {
+      status = "missing";
+    } else if (expected === actual) {
+      status = "match";
+    } else {
+      status = "mismatch";
+    }
+    rows.push({ index: i, expected: expected || "(none)", actual: actual || "(missing)", status });
+  }
+  return rows;
+}
 
 const distinctFixedKeys = ["Category", "spentBy"] as const;
 

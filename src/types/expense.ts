@@ -68,6 +68,15 @@ export interface HeaderDetails {
   actual: string[];
 }
 
+export type HeaderMatchStatus = "match" | "mismatch" | "missing" | "extra";
+
+export interface HeaderRowDetail {
+  index: number;
+  expected: string;
+  actual: string;
+  status: HeaderMatchStatus;
+}
+
 export type ManualFxRates = Record<string, string>;
 
 export interface FxRateBackupPayload {

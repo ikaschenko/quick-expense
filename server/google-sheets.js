@@ -10,6 +10,8 @@ const currencyDictionary = JSON.parse(
 const VALID_CURRENCY_CODES = new Set(currencyDictionary.currencies.map((c) => c.code));
 
 const SHEET_NAME = "Expenses";
+// Spreadsheet template to copy when a user starts fresh.
+const TEMPLATE_SPREADSHEET_ID = "1uE3OmvxHg03aETXg0msInAVniWZfoadwdpxf1gR2ENg";
 // Fixed columns that always appear after the currency block, in this exact order.
 const POST_CURRENCY_FIXED = ["USD", "Category", "Spent By", "Comment"];
 // Legacy header format (old column names, pre-custom-columns era)
@@ -351,6 +353,24 @@ function mapRowsToExpenseRecords(rows, sheetCurrencies, customColumns = [], actu
 
 function calculateJsonByteSize(value) {
   return new TextEncoder().encode(JSON.stringify(value)).length;
+}
+
+export async function createSpreadsheet(accessToken, title) {
+  // Copy the shared QuickExpense template into the user's Drive.
+  // The template is publicly readable so no extra scope is needed for the source;
+  // the resulting copy is a new file owned by the user, within the drive.file scope.
+  const payload = await requestJson(
+    accessToken,
+    `https://www.googleapis.com/drive/v3/files/${TEMPLATE_SPREADSHEET_ID}/copy`,
+    {
+      method: "POST",
+      headers: createHeaders(accessToken, true),
+      body: JSON.stringify({ name: title }),
+    },
+  );
+  const spreadsheetId = payload.id;
+  const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
+  return { spreadsheetId, spreadsheetUrl };
 }
 
 export function parseSpreadsheetUrl(url) {

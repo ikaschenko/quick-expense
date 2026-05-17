@@ -45,7 +45,7 @@ export function HomePage(): JSX.Element {
             <div className="home-status-label">No spreadsheet yet</div>
             <div className="home-status-detail">Connect one to start tracking</div>
           </div>
-          <Link to="/setup" className="home-status-action">Setup now →</Link>
+          <Link to="/setup" className="home-status-action">Complete setup →</Link>
         </div>
       )}
 
