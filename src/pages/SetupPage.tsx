@@ -9,10 +9,27 @@ import { useConfig } from "../contexts/ConfigContext";
 import { openSpreadsheetPicker } from "../services/googlePicker";
 import { googleSheetsService } from "../services/googleSheets";
 import { trackEvent } from "../services/analytics";
-import { AppError, CurrencyDictionary, HeaderDetails, SetupReport } from "../types/expense";
+import { AppError, ColumnMapping, ConfigMode, CurrencyDictionary, HeaderDetails, SetupReport } from "../types/expense";
 import { deriveHeaderRowDetails, validateColumnName } from "../utils/spreadsheet";
+import { REQUIRED_QE_FIELDS } from "../constants/expenses";
 
 type ColumnType = "mandatory-field" | "mandatory-currency" | "optional-currency" | "custom-column";
+
+function configModeBadgeLabel(mode: ConfigMode): string {
+  switch (mode) {
+    case "config-driven": return "Config detected";
+    case "default": return "Default rules";
+    case "config-invalid": return "Config invalid \u2014 using defaults";
+  }
+}
+
+function configModeTooltip(mode: ConfigMode): string | undefined {
+  switch (mode) {
+    case "config-driven": return "QuickExpense is using your Config sheet settings.";
+    case "default": return "No Config sheet found. Standard column rules apply.";
+    case "config-invalid": return undefined;
+  }
+}
 
 interface ColumnInfo {
   name: string;
@@ -88,6 +105,17 @@ export function SetupPage(): JSX.Element {
   // Field-level error for inline forms
   const [fieldError, setFieldError] = useState<string | null>(null);
 
+  // Column mapping state (configured path)
+  const [mappingData, setMappingData] = useState<{
+    mapping: ColumnMapping | null;
+    mode: ConfigMode;
+    detectedColumns: string[];
+  } | null>(null);
+  const [mappingLoadError, setMappingLoadError] = useState<string | null>(null);
+  const [mappingEditorOpen, setMappingEditorOpen] = useState(false);
+  const [mappingSectionOpen, setMappingSectionOpen] = useState(false);
+  const [mappingSuccess, setMappingSuccess] = useState<string | null>(null);
+
   useEffect(() => {
     setSpreadsheetUrl(config?.spreadsheetUrl ?? "");
   }, [config]);
@@ -98,6 +126,17 @@ export function SetupPage(): JSX.Element {
       void googleSheetsService.getAvailableCurrencies().then(setCurrencyDictionary).catch(() => undefined);
     }
   }, [config?.spreadsheetId]);
+
+  // Fetch column mapping when viewing the configured path
+  useEffect(() => {
+    if (setupPath !== "configured" || !config?.spreadsheetId) return;
+    setMappingLoadError(null);
+    setMappingData(null);
+    void googleSheetsService
+      .getColumnMapping()
+      .then(setMappingData)
+      .catch((err) => setMappingLoadError((err as Error).message));
+  }, [setupPath, config?.spreadsheetId]);
 
   // Sync setupPath when config loads or clears
   useEffect(() => {
@@ -718,6 +757,26 @@ export function SetupPage(): JSX.Element {
                     {config.spreadsheetUrl}
                   </a>
                 </div>
+                <div className="config-mode-badge-row">
+                  <span
+                    className={`config-mode-badge config-mode-badge--${config.configMode}`}
+                    title={configModeTooltip(config.configMode)}
+                  >
+                    {configModeBadgeLabel(config.configMode)}
+                  </span>
+                  {config.configMode === "config-invalid" ? (
+                    <span className="config-mode-fix-hint">
+                      Your Config sheet was found but could not be read.{" "}
+                      <button
+                        type="button"
+                        className="btn-inline"
+                        onClick={() => setSetupPath("existing")}
+                      >
+                        Fix it &rarr;
+                      </button>
+                    </span>
+                  ) : null}
+                </div>
               </div>
               <button
                 type="button"
@@ -865,6 +924,101 @@ export function SetupPage(): JSX.Element {
               );
             })}
           </ul>
+
+          {/* ── Column mapping sub-section ── */}
+          <div className="column-mapping-section">
+            <button
+              type="button"
+              className="column-mapping-section-toggle"
+              aria-expanded={mappingSectionOpen}
+              onClick={() => {
+                setMappingSectionOpen((v) => !v);
+                setMappingEditorOpen(false);
+                setMappingSuccess(null);
+              }}
+            >
+              {mappingSectionOpen ? <ChevronUp size={14} aria-hidden /> : <ChevronDown size={14} aria-hidden />}
+              Column mapping
+              {mappingData ? (
+                <span className={`config-mode-badge config-mode-badge--${mappingData.mode}`}>
+                  {mappingData.mode === "config-driven" ? "Config detected" : "Not configured"}
+                </span>
+              ) : null}
+            </button>
+
+            {mappingSectionOpen ? (
+              <div className="column-mapping-section-body">
+                {mappingLoadError ? (
+                  <>
+                    <StatusBanner variant="error" message={`Could not load mapping — ${mappingLoadError}`} />
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => {
+                        setMappingLoadError(null);
+                        void googleSheetsService
+                          .getColumnMapping()
+                          .then(setMappingData)
+                          .catch((err) => setMappingLoadError((err as Error).message));
+                      }}
+                    >
+                      Retry
+                    </button>
+                  </>
+                ) : !mappingData ? (
+                  <LoadingBlock label="Loading mapping…" />
+                ) : mappingData.mode !== "config-driven" ? (
+                  <p className="muted text-sm">No column mapping is configured. Standard column names apply.</p>
+                ) : (
+                  <>
+                    {mappingSuccess ? <StatusBanner variant="success" message={mappingSuccess} /> : null}
+                    {!mappingEditorOpen ? (
+                      <>
+                        <table className="column-mapping-table">
+                          <thead>
+                            <tr>
+                              <th>QuickExpense field</th>
+                              <th>Your column name</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {REQUIRED_QE_FIELDS.map((field) => (
+                              <tr key={field}>
+                                <td className="column-mapping-field-name">{field}</td>
+                                <td>{mappingData.mapping?.[field] ?? field}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          style={{ marginTop: "var(--space-3)" }}
+                          onClick={() => { setMappingSuccess(null); setMappingEditorOpen(true); }}
+                        >
+                          Edit mapping
+                        </button>
+                      </>
+                    ) : (
+                      <ColumnMappingEditor
+                        detectedColumns={mappingData.detectedColumns}
+                        initialMapping={mappingData.mapping ?? undefined}
+                        onSaved={() => {
+                          setMappingEditorOpen(false);
+                          setMappingSuccess("Mapping updated.");
+                          void googleSheetsService
+                            .getColumnMapping()
+                            .then(setMappingData)
+                            .catch(() => undefined);
+                        }}
+                        onCancel={() => setMappingEditorOpen(false)}
+                      />
+                    )}
+                  </>
+                )}
+              </div>
+            ) : null}
+          </div>
 
           {isAddingCurrency ? (
             <form onSubmit={(e) => void submitAddCurrency(e)} className="custom-columns-add-form" style={{ marginTop: "var(--space-3)" }}>

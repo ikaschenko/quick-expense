@@ -114,7 +114,7 @@ export const googleSheetsService = {
     });
   },
 
-  async getColumnMapping(): Promise<{ mapping: ColumnMapping | null; mode: ConfigMode }> {
+  async getColumnMapping(): Promise<{ mapping: ColumnMapping | null; mode: ConfigMode; detectedColumns: string[] }> {
     return requestJson("/api/config/mapping");
   },
 

@@ -2,13 +2,15 @@ import { useState } from "react";
 import { googleSheetsService } from "../services/googleSheets";
 import { ColumnMapping } from "../types/expense";
 import { StatusBanner } from "./StatusBanner";
+import { REQUIRED_QE_FIELDS } from "../constants/expenses";
 
 /** Required QuickExpense fields that must be mapped. */
-const REQUIRED_QE_FIELDS = ["Date", "USD", "Category", "Spent By", "Comment"] as const;
 
 interface Props {
   /** Actual column names found in the user's sheet. */
   detectedColumns: string[];
+  /** Pre-populate with an existing saved mapping. Only overrides (QE field ≠ user col) are stored. */
+  initialMapping?: ColumnMapping;
   /** Called when the mapping has been saved successfully. */
   onSaved: () => void;
   /** Called when the user cancels the editor. */
@@ -17,12 +19,17 @@ interface Props {
 
 type EditorPhase = "edit" | "confirm";
 
-export function ColumnMappingEditor({ detectedColumns, onSaved, onCancel }: Props): JSX.Element {
+export function ColumnMappingEditor({ detectedColumns, initialMapping, onSaved, onCancel }: Props): JSX.Element {
   const [mapping, setMapping] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
     for (const field of REQUIRED_QE_FIELDS) {
-      const exact = detectedColumns.find((c) => c.toLowerCase() === field.toLowerCase());
-      initial[field] = exact ?? "";
+      if (initialMapping) {
+        // initialMapping stores only overrides. If no entry, field maps to itself (identity).
+        initial[field] = initialMapping[field] ?? field;
+      } else {
+        const exact = detectedColumns.find((c) => c.toLowerCase() === field.toLowerCase());
+        initial[field] = exact ?? "";
+      }
     }
     return initial;
   });

@@ -15,13 +15,14 @@ let parseSpreadsheetUrl;
 let loadExpenses;
 let appendExpenseRow;
 let hasExactItemSet;
-let readConfigSheetMapping;
+let readExpensesSheetHeader;
 let writeConfigSheetMapping;
+let detectConfigSheet;
 
 beforeAll(async () => {
   ({
     validateSpreadsheet, parseSpreadsheetUrl, loadExpenses, appendExpenseRow, hasExactItemSet,
-    readConfigSheetMapping, writeConfigSheetMapping,
+    writeConfigSheetMapping, detectConfigSheet, readExpensesSheetHeader,
   } = await import("../server/google-sheets.js"));
 });
 
@@ -410,7 +411,34 @@ describe("hasExactItemSet", () => {
   });
 });
 
-describe("readConfigSheetMapping", () => {
+describe("readExpensesSheetHeader", () => {
+  const TOKEN = "test-token";
+  const SHEET_ID = "spreadsheet-123";
+
+  function valuesResponse(rows) {
+    return jsonResponse({ values: rows });
+  }
+
+  it("returns the header row as a string array", async () => {
+    setupFetchSequence([valuesResponse([["Date", "USD", "Category", "Spent By", "Comment", "Notes"]])]);
+    const result = await readExpensesSheetHeader(TOKEN, SHEET_ID);
+    expect(result).toEqual(["Date", "USD", "Category", "Spent By", "Comment", "Notes"]);
+  });
+
+  it("returns an empty array when the sheet has no header row", async () => {
+    setupFetchSequence([valuesResponse([])]);
+    const result = await readExpensesSheetHeader(TOKEN, SHEET_ID);
+    expect(result).toEqual([]);
+  });
+
+  it("returns an empty array (never throws) when a network error occurs", async () => {
+    mockFetch.mockRejectedValueOnce(new Error("network failure"));
+    const result = await readExpensesSheetHeader(TOKEN, SHEET_ID);
+    expect(result).toEqual([]);
+  });
+});
+
+describe("detectConfigSheet", () => {
   const TOKEN = "test-token";
   const SHEET_ID = "spreadsheet-123";
 
@@ -424,44 +452,76 @@ describe("readConfigSheetMapping", () => {
     return jsonResponse({ values: rows });
   }
 
-  it("returns null when Config sheet does not exist", async () => {
+  it("returns { mode: 'default' } when Config sheet does not exist", async () => {
     setupFetchSequence([metadataResponse(["Expenses"])]);
-    const result = await readConfigSheetMapping(TOKEN, SHEET_ID);
-    expect(result).toBeNull();
+    const result = await detectConfigSheet(TOKEN, SHEET_ID);
+    expect(result).toEqual({ mode: "default" });
   });
 
-  it("returns the parsed mapping when Config sheet has a valid column_mapping row", async () => {
+  it("returns { mode: 'config-driven', mapping } for a valid Config sheet", async () => {
     const mapping = { USD: "Amount", "Spent By": "WhoSpent" };
     setupFetchSequence([
       metadataResponse(["Expenses", "Config"]),
       valuesResponse([["schema_version", "1"], ["column_mapping", JSON.stringify(mapping)]]),
     ]);
-    const result = await readConfigSheetMapping(TOKEN, SHEET_ID);
-    expect(result).toEqual(mapping);
+    const result = await detectConfigSheet(TOKEN, SHEET_ID);
+    expect(result).toEqual({ mode: "config-driven", mapping });
   });
 
-  it("returns { error: 'invalid' } when column_mapping row is missing", async () => {
+  it("returns config-invalid when schema_version row is missing", async () => {
+    setupFetchSequence([
+      metadataResponse(["Expenses", "Config"]),
+      valuesResponse([["column_mapping", JSON.stringify({ USD: "Amount" })]]),
+    ]);
+    const result = await detectConfigSheet(TOKEN, SHEET_ID);
+    expect(result.mode).toBe("config-invalid");
+    expect(result.reason).toMatch(/schema_version/i);
+  });
+
+  it("returns config-invalid when schema_version is not '1'", async () => {
+    setupFetchSequence([
+      metadataResponse(["Expenses", "Config"]),
+      valuesResponse([["schema_version", "2"], ["column_mapping", "{}"]]),
+    ]);
+    const result = await detectConfigSheet(TOKEN, SHEET_ID);
+    expect(result.mode).toBe("config-invalid");
+    expect(result.reason).toMatch(/version/i);
+  });
+
+  it("returns config-invalid when column_mapping row is missing", async () => {
     setupFetchSequence([
       metadataResponse(["Expenses", "Config"]),
       valuesResponse([["schema_version", "1"]]),
     ]);
-    const result = await readConfigSheetMapping(TOKEN, SHEET_ID);
-    expect(result).toEqual({ error: "invalid" });
+    const result = await detectConfigSheet(TOKEN, SHEET_ID);
+    expect(result.mode).toBe("config-invalid");
+    expect(result.reason).toMatch(/column_mapping/i);
   });
 
-  it("returns { error: 'invalid' } when column_mapping value is malformed JSON", async () => {
+  it("returns config-invalid when column_mapping contains invalid JSON", async () => {
     setupFetchSequence([
       metadataResponse(["Expenses", "Config"]),
-      valuesResponse([["column_mapping", "not-json"]]),
+      valuesResponse([["schema_version", "1"], ["column_mapping", "not-json"]]),
     ]);
-    const result = await readConfigSheetMapping(TOKEN, SHEET_ID);
-    expect(result).toEqual({ error: "invalid" });
+    const result = await detectConfigSheet(TOKEN, SHEET_ID);
+    expect(result.mode).toBe("config-invalid");
+    expect(result.reason).toMatch(/json/i);
   });
 
-  it("returns null (never throws) when a network error occurs", async () => {
+  it("returns config-invalid when column_mapping is not an object", async () => {
+    setupFetchSequence([
+      metadataResponse(["Expenses", "Config"]),
+      valuesResponse([["schema_version", "1"], ["column_mapping", "[1,2,3]"]]),
+    ]);
+    const result = await detectConfigSheet(TOKEN, SHEET_ID);
+    expect(result.mode).toBe("config-invalid");
+    expect(result.reason).toMatch(/object/i);
+  });
+
+  it("returns { mode: 'default' } (never throws) when a network error occurs", async () => {
     mockFetch.mockRejectedValueOnce(new Error("network failure"));
-    const result = await readConfigSheetMapping(TOKEN, SHEET_ID);
-    expect(result).toBeNull();
+    const result = await detectConfigSheet(TOKEN, SHEET_ID);
+    expect(result).toEqual({ mode: "default" });
   });
 });
 

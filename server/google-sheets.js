@@ -411,7 +411,7 @@ function applyMappingToHeader(normalizedHeader, mapping) {
  *   Record<string,string> — the parsed mapping (QE field → user column name)
  * Never throws — callers handle null / error gracefully.
  */
-export async function readConfigSheetMapping(accessToken, spreadsheetId) {
+async function readConfigSheetMapping(accessToken, spreadsheetId) {
   try {
     const metadata = await getMetadata(accessToken, spreadsheetId);
     const configSheet = metadata.sheets?.find((s) => s.properties?.title === "Config");
@@ -436,6 +436,49 @@ export async function readConfigSheetMapping(accessToken, spreadsheetId) {
 }
 
 /**
+ * Detect the Config sheet and determine the configuration mode.
+ * Returns one of:
+ *   { mode: "default" }                          — no Config sheet found
+ *   { mode: "config-driven", mapping: {...} }    — valid Config sheet with parsed mapping
+ *   { mode: "config-invalid", reason: "..." }    — Config sheet exists but is unreadable
+ * Never throws — callers receive a safe fallback result on any error.
+ */
+export async function detectConfigSheet(accessToken, spreadsheetId) {
+  try {
+    const metadata = await getMetadata(accessToken, spreadsheetId);
+    const configSheet = metadata.sheets?.find((s) => s.properties?.title === "Config");
+    if (!configSheet) return { mode: "default" };
+
+    const rows = await getValues(accessToken, spreadsheetId, "Config!A:B");
+
+    const versionRow = rows.find((r) => r[0] === "schema_version");
+    if (!versionRow) {
+      return { mode: "config-invalid", reason: "Config sheet is missing the schema_version row." };
+    }
+    if (versionRow[1] !== "1") {
+      return { mode: "config-invalid", reason: `Unsupported Config schema version "${versionRow[1]}".` };
+    }
+
+    const mappingRow = rows.find((r) => r[0] === "column_mapping");
+    if (!mappingRow || !mappingRow[1]) {
+      return { mode: "config-invalid", reason: "Config sheet is missing a column_mapping value." };
+    }
+
+    try {
+      const parsed = JSON.parse(mappingRow[1]);
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        return { mode: "config-invalid", reason: "column_mapping is not a valid JSON object." };
+      }
+      return { mode: "config-driven", mapping: parsed };
+    } catch {
+      return { mode: "config-invalid", reason: "column_mapping contains invalid JSON." };
+    }
+  } catch {
+    return { mode: "default" };
+  }
+}
+
+/**
  * Write the column mapping to the Config sheet.
  * Creates the Config sheet if it does not exist (the one and only place it is created).
  */
@@ -449,6 +492,20 @@ export async function writeConfigSheetMapping(accessToken, spreadsheetId, mappin
     ["schema_version", "1"],
     ["column_mapping", JSON.stringify(mapping)],
   ]);
+}
+
+/**
+ * Read the first row of the Expenses sheet and return column names as a string[].
+ * Returns an empty array if the sheet or header row does not exist.
+ * Never throws — callers receive an empty array on any error.
+ */
+export async function readExpensesSheetHeader(accessToken, spreadsheetId) {
+  try {
+    const rows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!1:1`);
+    return rows[0] ?? [];
+  } catch {
+    return [];
+  }
 }
 
 export async function validateSpreadsheet(accessToken, spreadsheetId, mapping = null) {
