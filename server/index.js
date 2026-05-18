@@ -15,6 +15,7 @@ import {
   createPkcePair,
   refreshAccessToken,
 } from "./google-client.js";
+import { validateMappingRequestBody } from "./validation.js";
 import {
   appendExpenseRow,
   createSpreadsheet,
@@ -456,15 +457,12 @@ app.post("/api/config/mapping", requireAuthenticatedUser, async (req, res) => {
     res.status(400).json({ message: "Spreadsheet is not configured." });
     return;
   }
-  if (req.body?.confirmed !== true) {
-    res.status(400).json({ message: "Explicit confirmation is required to save a column mapping." });
+  const validation = validateMappingRequestBody(req.body);
+  if (!validation.valid) {
+    res.status(400).json({ message: validation.message });
     return;
   }
-  const mapping = req.body?.mapping;
-  if (!mapping || typeof mapping !== "object" || Array.isArray(mapping)) {
-    res.status(400).json({ message: "A mapping object is required." });
-    return;
-  }
+  const mapping = req.body.mapping;
   try {
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
     await writeConfigSheetMapping(accessToken, req.userRecord.spreadsheetId, mapping);

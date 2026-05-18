@@ -122,10 +122,12 @@ export function ColumnMappingEditor({ detectedColumns, initialMapping, onSaved, 
         </>
       ) : (
         <>
-          <div className="column-mapping-confirm-notice">
-            Your spreadsheet columns will <strong>NOT</strong> be modified. QuickExpense will read
-            and write using this translation:
-          </div>
+          <p className="column-mapping-confirm-title">Save mapping to your spreadsheet?</p>
+          <p className="column-mapping-confirm-notice">
+            {initialMapping
+              ? "This will update the \u2018Config\u2019 tab in your spreadsheet with your revised column mapping."
+              : "This will create a \u2018Config\u2019 tab in your spreadsheet and write your column mapping there. You can review or delete it in Google Sheets at any time."}
+          </p>
           <table className="column-mapping-table">
             <thead>
               <tr>
@@ -149,15 +151,15 @@ export function ColumnMappingEditor({ detectedColumns, initialMapping, onSaved, 
               disabled={isSaving}
               onClick={() => void handleConfirm()}
             >
-              {isSaving ? "Saving…" : "Confirm and save"}
+              Confirm
             </button>
             <button
               className="btn btn-secondary"
               type="button"
               disabled={isSaving}
-              onClick={() => setPhase("edit")}
+              onClick={onCancel}
             >
-              Back to edit
+              Cancel
             </button>
           </div>
         </>
