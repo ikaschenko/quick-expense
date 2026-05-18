@@ -1,6 +1,4 @@
-// @vitest-environment jsdom
-import { describe, it, expect } from "vitest";
-import { getCustomColumnLabel, hasDetails } from "../src/components/ExpenseTable";
+import { getCustomColumnLabel, hasDetails } from "../src/utils/expenseTable";
 import { ExpenseRecord } from "../src/types/expense";
 
 function makeRecord(overrides: Partial<ExpenseRecord> = {}): ExpenseRecord {

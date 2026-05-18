@@ -17,6 +17,7 @@ import {
   Pill,
 } from "lucide-react";
 import { ExpenseRecord } from "../types/expense";
+import { getCustomColumnLabel, hasDetails } from "../utils/expenseTable";
 
 import { LucideProps } from "lucide-react";
 
@@ -63,14 +64,6 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
   fitness: Dumbbell,
 };
 
-const CUSTOM_COLUMN_LABELS: Record<string, string> = {
-  SpentFor: "Spent For",
-};
-
-export function getCustomColumnLabel(name: string): string {
-  return CUSTOM_COLUMN_LABELS[name] ?? name;
-}
-
 function getCategoryIcon(category: string): LucideIcon {
   const lower = category.toLowerCase();
   for (const [key, Icon] of Object.entries(CATEGORY_ICONS)) {
@@ -102,12 +95,6 @@ function getCommentPreview(record: ExpenseRecord): string {
     : base;
 }
 
-export function hasDetails(record: ExpenseRecord, customColumns: string[] = []): boolean {
-  return (
-    record.Comment.length > COMMENT_PREVIEW_LENGTH ||
-    customColumns.some((col) => Boolean(record.customFields?.[col]?.trim()))
-  );
-}
 
 interface ExpenseCardProps {
   record: ExpenseRecord;
