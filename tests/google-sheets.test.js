@@ -18,11 +18,12 @@ let hasExactItemSet;
 let readExpensesSheetHeader;
 let writeConfigSheetMapping;
 let detectConfigSheet;
+let createSpreadsheet;
 
 beforeAll(async () => {
   ({
     validateSpreadsheet, parseSpreadsheetUrl, loadExpenses, appendExpenseRow, hasExactItemSet,
-    writeConfigSheetMapping, detectConfigSheet, readExpensesSheetHeader,
+    writeConfigSheetMapping, detectConfigSheet, readExpensesSheetHeader, createSpreadsheet,
   } = await import("../server/google-sheets.js"));
 });
 
@@ -558,5 +559,42 @@ describe("loadExpenses with column mapping", () => {
     expect(record.spentBy).toBe("alice");
     expect(record.Comment).toBe("lunch");
     expect(record.Category).toBe("Food");
+  });
+});
+
+describe("createSpreadsheet", () => {
+  const TOKEN = "test-token";
+
+  it("copies the template and returns spreadsheetId and spreadsheetUrl", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ id: "new-sheet-id-123" }));
+
+    const result = await createSpreadsheet(TOKEN, "My Expenses");
+
+    expect(result).toEqual({
+      spreadsheetId: "new-sheet-id-123",
+      spreadsheetUrl: "https://docs.google.com/spreadsheets/d/new-sheet-id-123/edit",
+    });
+
+    const call = mockFetch.mock.calls[0];
+    expect(call[0]).toContain("/copy");
+    const body = JSON.parse(call[1].body);
+    expect(body.name).toBe("My Expenses");
+  });
+
+  it("passes authorization header with the access token", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ id: "abc" }));
+
+    await createSpreadsheet(TOKEN, "Test Sheet");
+
+    const call = mockFetch.mock.calls[0];
+    expect(call[1].headers.Authorization).toBe("Bearer test-token");
+  });
+
+  it("throws when the Google API returns an error", async () => {
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse({ error: { message: "Insufficient permissions" } }, 403),
+    );
+
+    await expect(createSpreadsheet(TOKEN, "Fail")).rejects.toThrow("Insufficient permissions");
   });
 });

@@ -1,5 +1,6 @@
 import {
   buildDistinctValues,
+  deriveHeaderRowDetails,
   mapRowsToExpenseRecords,
   parseSpreadsheetUrl,
   validateColumnName,
@@ -92,5 +93,55 @@ describe("spreadsheet utilities", () => {
       expect(validateColumnName("Канал", [])).toBeNull();
       expect(validateColumnName("My Column #1", [])).toBeNull();
     });
+  });
+});
+
+describe("deriveHeaderRowDetails", () => {
+  it("returns 'match' for columns that are identical", () => {
+    const result = deriveHeaderRowDetails({
+      expected: ["Date", "USD", "Category"],
+      actual: ["Date", "USD", "Category"],
+      detectedColumns: [],
+    });
+    expect(result).toHaveLength(3);
+    expect(result.every((r) => r.status === "match")).toBe(true);
+  });
+
+  it("returns 'mismatch' when expected and actual differ", () => {
+    const result = deriveHeaderRowDetails({
+      expected: ["Date", "USD", "Category"],
+      actual: ["Date", "Amount", "Category"],
+      detectedColumns: [],
+    });
+    expect(result[1]).toEqual({ index: 1, expected: "USD", actual: "Amount", status: "mismatch" });
+  });
+
+  it("returns 'missing' when actual row is shorter than expected", () => {
+    const result = deriveHeaderRowDetails({
+      expected: ["Date", "USD", "Category", "Comment"],
+      actual: ["Date", "USD"],
+      detectedColumns: [],
+    });
+    expect(result[2]).toEqual({ index: 2, expected: "Category", actual: "(missing)", status: "missing" });
+    expect(result[3]).toEqual({ index: 3, expected: "Comment", actual: "(missing)", status: "missing" });
+  });
+
+  it("returns 'extra' when actual row is longer than expected", () => {
+    const result = deriveHeaderRowDetails({
+      expected: ["Date", "USD"],
+      actual: ["Date", "USD", "Notes", "Tags"],
+      detectedColumns: [],
+    });
+    expect(result[2]).toEqual({ index: 2, expected: "(none)", actual: "Notes", status: "extra" });
+    expect(result[3]).toEqual({ index: 3, expected: "(none)", actual: "Tags", status: "extra" });
+  });
+
+  it("handles empty expected and actual arrays", () => {
+    const result = deriveHeaderRowDetails({
+      expected: [],
+      actual: [],
+      detectedColumns: [],
+    });
+    expect(result).toEqual([]);
   });
 });

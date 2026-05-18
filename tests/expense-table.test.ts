@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
 import { getCustomColumnLabel, hasDetails } from "../src/components/ExpenseTable";
 import { ExpenseRecord } from "../src/types/expense";

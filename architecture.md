@@ -244,6 +244,9 @@ All API routes are defined in `server/index.js`.
 | GET | `/api/config` | Yes | Get user's configured spreadsheet |
 | POST | `/api/config` | Yes | Save/validate spreadsheet URL |
 | DELETE | `/api/config` | Yes | Remove spreadsheet configuration |
+| POST | `/api/config/create-spreadsheet` | Yes | Copy template spreadsheet into user's Drive |
+| GET | `/api/config/mapping` | Yes | Get current column mapping, config mode, and detected columns |
+| POST | `/api/config/mapping` | Yes | Save column mapping to Config sheet (requires `confirmed: true`) |
 | GET | `/api/expenses` | Yes | Load all expense records from the spreadsheet |
 | POST | `/api/expenses` | Yes | Append a new expense row |
 | GET | `/api/fx-backup` | Yes | Get the latest saved FX rate backup |
@@ -348,6 +351,27 @@ Required structure:
 - Load reads a dynamic column range `Expenses!A:{lastColumn}`, maps rows to `ExpenseRecord` objects with a `currencyAmounts` map.
 - Dataset payload size is capped at **10 MB** (calculated as JSON byte size of all records). If exceeded, Tail/Search is denied.
 
+#### Config Sheet (Optional)
+
+A second sheet named `Config` may exist in the same spreadsheet. It stores column mapping configuration in a simple key-value layout:
+
+| Row | Column A | Column B |
+|---|---|---|
+| 1 | `schema_version` | `1` |
+| 2 | `column_mapping` | JSON object mapping QE field names → user column names |
+
+Example `column_mapping` value: `{"USD":"Amount","Spent By":"WhoSpent","Comment":"Notes"}`
+
+#### Three Configuration Modes
+
+The system detects the Config sheet state via `detectConfigSheet()` and operates in one of three modes:
+
+| Mode | Condition | Behavior |
+|---|---|---|
+| `default` | No Config sheet exists | Standard header validation; columns must match QE field names directly |
+| `config-driven` | Config sheet has valid `schema_version` = 1 and parseable `column_mapping` | Mapping is applied: user-facing column names in the sheet are translated to QE field names at read/write time |
+| `config-invalid` | Config sheet exists but is malformed (missing version, bad JSON, etc.) | Setup UI warns the user; the mapping cannot be used until corrected |
+
 ### 7.3 Database Schema Management
 
 Schema scripts are stored in `db/` as numbered SQL files (`001_initial_schema.sql`, etc.). Apply them in order against the target PostgreSQL instance. See `db/README.md` for setup instructions.
@@ -368,7 +392,7 @@ The SPA uses three nested context providers (wrapped in `App.tsx`):
 ```
 
 - **AuthContext:** Checks `/api/auth/session` on mount. Exposes `status` (`initializing` | `signed_out` | `signed_in`), `session` (email + timestamps), `signIn()`, `signOut()`, `refreshSession()`.
-- **ConfigContext:** Fetches `/api/config` when a session is present. Exposes the `SpreadsheetConfig` object and methods to save/clear/refresh.
+- **ConfigContext:** Fetches `/api/config` when a session is present. Exposes the `SpreadsheetConfig` object and methods to save/clear/refresh. The config includes a `configMode` field (`"default"` | `"config-driven"` | `"config-invalid"`) indicating whether a column mapping is active. When `configMode` is `"config-invalid"`, a `configModeReason` string explains the problem.
 - **DatasetContext:** Manages the loaded expense dataset. Key behaviors:
   - `loadDataset()` — fetches from `/api/expenses` unless a valid cached snapshot exists.
   - `invalidateDataset()` — called after a successful Add, forcing the next Tail/Search to reload.
@@ -487,3 +511,6 @@ The backend validates all required env vars at startup and fails fast if any are
 8. **Single sheet named "Expenses"** — no multi-sheet support.
 9. **Concurrency** — relies on Google Sheets API atomic append; no manual row indexing.
 10. **Session duration** — cookie lasts 30 days; business rule targets 24-hour re-auth, enforced by token expiry + refresh.
+11. **No auto-creation of Config sheet** — the Config sheet is created only when the user explicitly saves a column mapping via `POST /api/config/mapping`. It is never auto-created during setup or validation flows.
+12. **Explicit consent gate for column mapping** — `POST /api/config/mapping` requires `confirmed: true` in the request body. This prevents accidental overwrites of existing Config sheet data from programmatic or double-submit scenarios.
+13. **Two-path setup model** — users choose between (a) creating a fresh spreadsheet from a template (default mode, no Config sheet) or (b) connecting an existing spreadsheet and optionally configuring a column mapping (config-driven mode). This design separates simple onboarding from advanced customization.

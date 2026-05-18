@@ -124,6 +124,38 @@ describe("updateUserRecord", () => {
     expect(result.accessToken).toBe("refreshed-token");
     expect(result.refreshToken).toBe("rt-1");
   });
+
+  it("persists spreadsheet fields when updated after create", async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [
+        {
+          email: "user@test.com",
+          access_token: "at-1",
+          access_token_expires_at: "1700000000000",
+          refresh_token: "rt-1",
+          spreadsheet_url: null,
+          spreadsheet_id: null,
+          last_authenticated_at: "1699999000000",
+          last_activity_at: "1699999000000",
+        },
+      ],
+    });
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+
+    const result = await updateUserRecord("user@test.com", (current) => ({
+      ...current,
+      spreadsheetUrl: "https://docs.google.com/spreadsheets/d/new-id/edit",
+      spreadsheetId: "new-id",
+    }));
+
+    expect(result.spreadsheetUrl).toBe("https://docs.google.com/spreadsheets/d/new-id/edit");
+    expect(result.spreadsheetId).toBe("new-id");
+
+    const upsertCall = mockQuery.mock.calls[1];
+    expect(upsertCall[0]).toContain("INSERT INTO users");
+    expect(upsertCall[1]).toContain("https://docs.google.com/spreadsheets/d/new-id/edit");
+    expect(upsertCall[1]).toContain("new-id");
+  });
 });
 
 describe("saveFxRateBackup", () => {
