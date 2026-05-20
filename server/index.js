@@ -365,17 +365,19 @@ app.post("/api/config", requireAuthenticatedUser, async (req, res) => {
 
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
 
-    // Detect any existing Config sheet and validate using its mapping so config-driven sheets pass.
-    const { mode: configMode, mapping = null, reason: configModeReason } =
-      await detectConfigSheet(accessToken, spreadsheetId);
-
-    const setupReport = await validateSpreadsheet(accessToken, spreadsheetId, mapping);
-
+    // Persist the spreadsheetId before validation so that POST /api/config/mapping
+    // can work even when validation fails due to column mismatches.
     const updatedUser = await updateUserRecord(req.userRecord.email, (current) => ({
       ...current,
       spreadsheetUrl,
       spreadsheetId,
     }));
+
+    // Detect any existing Config sheet and validate using its mapping so config-driven sheets pass.
+    const { mode: configMode, mapping = null, reason: configModeReason } =
+      await detectConfigSheet(accessToken, spreadsheetId);
+
+    const setupReport = await validateSpreadsheet(accessToken, spreadsheetId, mapping);
 
     res.json({
       config: {
@@ -454,7 +456,11 @@ app.get("/api/config/mapping", requireAuthenticatedUser, async (req, res) => {
 
 app.post("/api/config/mapping", requireAuthenticatedUser, async (req, res) => {
   if (!req.userRecord.spreadsheetId) {
-    res.status(400).json({ message: "Spreadsheet is not configured." });
+    res.status(400).json({
+      message:
+        "Spreadsheet is not configured. Submit a valid spreadsheet URL in Setup first — " +
+        "the URL must be saved successfully before a column mapping can be applied.",
+    });
     return;
   }
   const validation = validateMappingRequestBody(req.body);
