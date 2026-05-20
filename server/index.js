@@ -588,7 +588,9 @@ app.post("/api/sheet/column", requireAuthenticatedUser, async (req, res) => {
 
     // Read current structure to validate against existing names
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    const report = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId);
+    const { mode: configMode, mapping: configMapping = null } = await detectConfigSheet(accessToken, req.userRecord.spreadsheetId);
+    const mapping = configMode === "config-driven" ? configMapping : null;
+    const report = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping);
 
     if (report.customColumns.length >= MAX_CUSTOM_COLUMNS) {
       res.status(400).json({ message: `You can have at most ${MAX_CUSTOM_COLUMNS} custom columns.` });
@@ -604,7 +606,7 @@ app.post("/api/sheet/column", requireAuthenticatedUser, async (req, res) => {
     await insertCustomColumnInSheet(accessToken, req.userRecord.spreadsheetId, name);
 
     // Re-read to return updated structure
-    const updated = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId);
+    const updated = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping);
     res.status(201).json({ currencies: updated.sheetCurrencies, customColumns: updated.customColumns });
   } catch (error) {
     res.status(400).json({ message: (error).message });
@@ -628,7 +630,9 @@ app.patch("/api/sheet/column/rename", requireAuthenticatedUser, async (req, res)
 
     // Validate new name
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    const report = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId);
+    const { mode: configMode, mapping: configMapping = null } = await detectConfigSheet(accessToken, req.userRecord.spreadsheetId);
+    const mapping = configMode === "config-driven" ? configMapping : null;
+    const report = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping);
     const allNames = [...report.sheetCurrencies, ...report.customColumns];
     const nameError = validateColumnName(newName, allNames, currentName);
     if (nameError) {
@@ -651,7 +655,7 @@ app.patch("/api/sheet/column/rename", requireAuthenticatedUser, async (req, res)
 
     await renameColumnInSheet(accessToken, req.userRecord.spreadsheetId, colIndex, newName);
 
-    const updated = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId);
+    const updated = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping);
     res.json({ currencies: updated.sheetCurrencies, customColumns: updated.customColumns });
   } catch (error) {
     res.status(400).json({ message: (error).message });
@@ -672,7 +676,9 @@ app.put("/api/sheet/columns/reorder", requireAuthenticatedUser, async (req, res)
     }
 
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    const report = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId);
+    const { mode: configMode, mapping: configMapping = null } = await detectConfigSheet(accessToken, req.userRecord.spreadsheetId);
+    const mapping = configMode === "config-driven" ? configMapping : null;
+    const report = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping);
 
     if (!hasExactItemSet(report.customColumns, orderedNames)) {
       res.status(400).json({ message: "orderedNames must contain all custom columns exactly once." });
@@ -681,7 +687,7 @@ app.put("/api/sheet/columns/reorder", requireAuthenticatedUser, async (req, res)
 
     await reorderCustomColumnsInSheet(accessToken, req.userRecord.spreadsheetId, orderedNames);
 
-    const updated = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId);
+    const updated = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping);
     res.json({ currencies: updated.sheetCurrencies, customColumns: updated.customColumns });
   } catch (error) {
     res.status(400).json({ message: (error).message });
@@ -702,7 +708,9 @@ app.put("/api/sheet/currencies/reorder", requireAuthenticatedUser, async (req, r
     }
 
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    const report = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId);
+    const { mode: configMode, mapping: configMapping = null } = await detectConfigSheet(accessToken, req.userRecord.spreadsheetId);
+    const mapping = configMode === "config-driven" ? configMapping : null;
+    const report = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping);
 
     if (!hasExactItemSet(report.sheetCurrencies, orderedCodes)) {
       res.status(400).json({ message: "orderedCodes must contain all currency columns exactly once." });
@@ -711,7 +719,7 @@ app.put("/api/sheet/currencies/reorder", requireAuthenticatedUser, async (req, r
 
     await reorderCurrencyColumnsInSheet(accessToken, req.userRecord.spreadsheetId, orderedCodes);
 
-    const updated = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId);
+    const updated = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping);
     res.json({ currencies: updated.sheetCurrencies, customColumns: updated.customColumns });
   } catch (error) {
     res.status(400).json({ message: (error).message });
@@ -738,6 +746,8 @@ app.delete("/api/sheet/column", requireAuthenticatedUser, async (req, res) => {
     }
 
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const { mode: configMode, mapping: configMapping = null } = await detectConfigSheet(accessToken, req.userRecord.spreadsheetId);
+    const mapping = configMode === "config-driven" ? configMapping : null;
     const colIndex = await findColumnIndex(accessToken, req.userRecord.spreadsheetId, name);
     if (colIndex === null) {
       res.status(404).json({ message: `Column "${name}" not found in sheet.` });
@@ -754,7 +764,7 @@ app.delete("/api/sheet/column", requireAuthenticatedUser, async (req, res) => {
 
     await deleteColumnFromSheet(accessToken, req.userRecord.spreadsheetId, colIndex);
 
-    const updated = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId);
+    const updated = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping);
     res.json({ currencies: updated.sheetCurrencies, customColumns: updated.customColumns });
   } catch (error) {
     res.status(400).json({ message: (error).message });
