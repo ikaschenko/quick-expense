@@ -647,7 +647,12 @@ app.patch("/api/sheet/column/rename", requireAuthenticatedUser, async (req, res)
       return;
     }
 
-    const colIndex = await findColumnIndex(accessToken, req.userRecord.spreadsheetId, currentName);
+    const colIndex = await findColumnIndex(
+      accessToken,
+      req.userRecord.spreadsheetId,
+      currentName,
+      mapping,
+    );
     if (colIndex === null) {
       res.status(404).json({ message: `Column "${currentName}" not found in sheet.` });
       return;
@@ -685,7 +690,7 @@ app.put("/api/sheet/columns/reorder", requireAuthenticatedUser, async (req, res)
       return;
     }
 
-    await reorderCustomColumnsInSheet(accessToken, req.userRecord.spreadsheetId, orderedNames);
+    await reorderCustomColumnsInSheet(accessToken, req.userRecord.spreadsheetId, orderedNames, mapping);
 
     const updated = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping);
     res.json({ currencies: updated.sheetCurrencies, customColumns: updated.customColumns });
@@ -717,7 +722,7 @@ app.put("/api/sheet/currencies/reorder", requireAuthenticatedUser, async (req, r
       return;
     }
 
-    await reorderCurrencyColumnsInSheet(accessToken, req.userRecord.spreadsheetId, orderedCodes);
+    await reorderCurrencyColumnsInSheet(accessToken, req.userRecord.spreadsheetId, orderedCodes, mapping);
 
     const updated = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping);
     res.json({ currencies: updated.sheetCurrencies, customColumns: updated.customColumns });
@@ -748,7 +753,7 @@ app.delete("/api/sheet/column", requireAuthenticatedUser, async (req, res) => {
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
     const { mode: configMode, mapping: configMapping = null } = await detectConfigSheet(accessToken, req.userRecord.spreadsheetId);
     const mapping = configMode === "config-driven" ? configMapping : null;
-    const colIndex = await findColumnIndex(accessToken, req.userRecord.spreadsheetId, name);
+    const colIndex = await findColumnIndex(accessToken, req.userRecord.spreadsheetId, name, mapping);
     if (colIndex === null) {
       res.status(404).json({ message: `Column "${name}" not found in sheet.` });
       return;

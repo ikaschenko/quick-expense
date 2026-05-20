@@ -19,11 +19,15 @@ let readExpensesSheetHeader;
 let writeConfigSheetMapping;
 let detectConfigSheet;
 let createSpreadsheet;
+let reorderCustomColumnsInSheet;
+let findColumnIndex;
 
 beforeAll(async () => {
   ({
     validateSpreadsheet, parseSpreadsheetUrl, loadExpenses, appendExpenseRow, hasExactItemSet,
     writeConfigSheetMapping, detectConfigSheet, readExpensesSheetHeader, createSpreadsheet,
+    reorderCustomColumnsInSheet,
+    findColumnIndex,
   } = await import("../server/google-sheets.js"));
 });
 
@@ -409,6 +413,130 @@ describe("hasExactItemSet", () => {
 
   it("accepts the same items in a different order", () => {
     expect(hasExactItemSet(["A", "B", "C"], ["c", "b", "a"])).toBe(true);
+  });
+});
+
+describe("reorderCustomColumnsInSheet", () => {
+  const TOKEN = "test-token";
+  const SHEET_ID = "spreadsheet-123";
+
+  function metadataResponse(sheetNames) {
+    return jsonResponse({
+      sheets: sheetNames.map((title, i) => ({ properties: { sheetId: i, title } })),
+    });
+  }
+
+  function valuesResponse(rows) {
+    return jsonResponse({ values: rows });
+  }
+
+  function batchUpdateResponse() {
+    return jsonResponse({ replies: [{}] });
+  }
+
+  it("reorders custom columns when mandatory headers are mapped", async () => {
+    const header = ["Date", "Amount", "Category", "WhoSpent", "Comment", "Channel", "Theme"];
+    const mapping = { USD: "Amount", "Spent By": "WhoSpent" };
+
+    setupFetchSequence([
+      metadataResponse(["Expenses"]),
+      valuesResponse([header]),
+      batchUpdateResponse(),
+    ]);
+
+    await reorderCustomColumnsInSheet(TOKEN, SHEET_ID, ["Theme", "Channel"], mapping);
+
+    const batchUpdateCall = mockFetch.mock.calls[2];
+    const body = JSON.parse(batchUpdateCall[1].body);
+    expect(body.requests).toHaveLength(1);
+    expect(body.requests[0].moveDimension.source.startIndex).toBe(6);
+    expect(body.requests[0].moveDimension.destinationIndex).toBe(5);
+  });
+
+  it("ignores trailing empty header cells when reordering custom columns", async () => {
+    const header = ["Date", "USD", "Category", "Spent By", "Comment", "Channel", "Theme", ""];
+
+    setupFetchSequence([
+      metadataResponse(["Expenses"]),
+      valuesResponse([header]),
+      batchUpdateResponse(),
+    ]);
+
+    await reorderCustomColumnsInSheet(TOKEN, SHEET_ID, ["Theme", "Channel"]);
+
+    const batchUpdateCall = mockFetch.mock.calls[2];
+    const body = JSON.parse(batchUpdateCall[1].body);
+    expect(body.requests).toHaveLength(1);
+    expect(body.requests[0].moveDimension.source.startIndex).toBe(6);
+    expect(body.requests[0].moveDimension.destinationIndex).toBe(5);
+  });
+
+  it("leftward move: destinationIndex = targetIdx (no adjustment)", async () => {
+    // Move Theme(6) before Channel(5): leftward, no +1.
+    const header = ["Date", "USD", "Category", "Spent By", "Comment", "Channel", "Theme"];
+
+    setupFetchSequence([
+      metadataResponse(["Expenses"]),
+      valuesResponse([header]),
+      batchUpdateResponse(),
+    ]);
+
+    await reorderCustomColumnsInSheet(TOKEN, SHEET_ID, ["Theme", "Channel"]);
+
+    const body = JSON.parse(mockFetch.mock.calls[2][1].body);
+    expect(body.requests).toHaveLength(1);
+    const move = body.requests[0].moveDimension;
+    expect(move.source.startIndex).toBe(6);
+    expect(move.destinationIndex).toBe(5);
+  });
+
+  it("rightward move formula: destinationIndex = targetIdx + 1", () => {
+    // The Sheets API destinationIndex is based on pre-removal coordinates.
+    // Rightward (currentIdx < targetIdx): +1 required; leftward: no adjustment.
+    const computeDestination = (currentIdx, targetIdx) =>
+      currentIdx < targetIdx ? targetIdx + 1 : targetIdx;
+
+    expect(computeDestination(3, 7)).toBe(8); // rightward: +1
+    expect(computeDestination(7, 3)).toBe(3); // leftward: no change
+  });
+
+  it("returns a specific reason when header structure is invalid", async () => {
+    const header = ["Date", "Amount", "Category", "WhoSpent", "Theme"];
+    const mapping = { USD: "Amount", "Spent By": "WhoSpent" };
+
+    setupFetchSequence([
+      metadataResponse(["Expenses"]),
+      valuesResponse([header]),
+    ]);
+
+    await expect(
+      reorderCustomColumnsInSheet(TOKEN, SHEET_ID, ["Theme"], mapping),
+    ).rejects.toThrow('Column "Comment" was not found after "Spent By".');
+  });
+});
+
+describe("findColumnIndex", () => {
+  const TOKEN = "test-token";
+  const SHEET_ID = "spreadsheet-123";
+
+  function valuesResponse(rows) {
+    return jsonResponse({ values: rows });
+  }
+
+  it("finds a mapped mandatory column by QE field name", async () => {
+    const header = ["Date", "Amount", "Category", "WhoSpent", "Comment", "Theme"];
+    const mapping = { USD: "Amount", "Spent By": "WhoSpent" };
+
+    setupFetchSequence([valuesResponse([header])]);
+
+    const idx = await findColumnIndex(TOKEN, SHEET_ID, "Spent By", mapping);
+    expect(idx).toBe(4);
+  });
+
+  it("returns null when the requested column is missing", async () => {
+    setupFetchSequence([valuesResponse([["Date", "USD", "Category", "Spent By", "Comment"]])]);
+    const idx = await findColumnIndex(TOKEN, SHEET_ID, "Theme");
+    expect(idx).toBeNull();
   });
 });
 

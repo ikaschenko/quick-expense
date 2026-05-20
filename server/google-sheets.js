@@ -80,7 +80,18 @@ function parseSheetStructure(headerRow) {
 }
 
 function normalizeHeaders(row = []) {
-  return row.map((value) => value.trim());
+  const normalized = row.map((value) => String(value ?? "").trim());
+  while (normalized.length > 0 && normalized[normalized.length - 1] === "") {
+    normalized.pop();
+  }
+  return normalized;
+}
+
+function parseEffectiveSheetStructure(headerRow, mapping = null) {
+  const normalizedHeader = normalizeHeaders(headerRow);
+  const effectiveHeader = mapping ? applyMappingToHeader(normalizedHeader, mapping) : normalizedHeader;
+  const structure = parseSheetStructure(effectiveHeader);
+  return { normalizedHeader, effectiveHeader, structure };
 }
 
 /**
@@ -701,42 +712,70 @@ export async function renameColumnInSheet(accessToken, spreadsheetId, colIndex1B
  * Reorder custom columns in the sheet to match the given ordered list of names.
  * Reads the current header, finds current positions, issues moveDimension requests.
  */
-export async function reorderCustomColumnsInSheet(accessToken, spreadsheetId, orderedNames) {
+export async function reorderCustomColumnsInSheet(accessToken, spreadsheetId, orderedNames, mapping = null) {
   const metadata = await getMetadata(accessToken, spreadsheetId);
   const expenseSheet = metadata.sheets?.find((s) => s.properties?.title === SHEET_NAME);
   if (!expenseSheet) throw new Error("Expenses sheet not found.");
   const sheetId = expenseSheet.properties.sheetId;
 
   const headerRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!1:1`);
-  const headerRow = normalizeHeaders(headerRows[0] ?? []);
+  const { normalizedHeader, effectiveHeader, structure } = parseEffectiveSheetStructure(
+    headerRows[0] ?? [],
+    mapping,
+  );
 
-  const structure = parseSheetStructure(headerRow);
-  if (!structure) throw new Error("Cannot reorder: sheet header structure is unrecognized.");
+  if (!structure) {
+    const reason = diagnoseSheetStructure(effectiveHeader);
+    throw new Error(
+      `Cannot reorder custom columns: ${reason} Expected header pattern: Date | [currencies] | USD | Category | Spent By | Comment | [custom columns].`,
+    );
+  }
 
-  const customStartIdx = headerRow.length - structure.customColumns.length; // 0-based
+  const customNameSet = new Set(structure.customColumns.map((name) => name.toLowerCase()));
+  const customPositions = effectiveHeader
+    .map((name, index) => ({ name, index }))
+    .filter(({ name }) => customNameSet.has(name.toLowerCase()))
+    .map(({ index }) => index);
+
+  if (customPositions.length !== orderedNames.length) {
+    throw new Error("Cannot reorder custom columns: custom column count in header does not match the requested order.");
+  }
 
   // Build moves using selection-sort logic to avoid index shifting issues.
-  // Each iteration: find where desired[i] currently is, move it to position customStartIdx+i.
-  const working = [...headerRow];
+  // Each iteration: find where desired[i] currently is, move it to the next custom slot.
+  const workingRaw = [...normalizedHeader];
+  const workingEffective = [...effectiveHeader];
   const requests = [];
 
   for (let i = 0; i < orderedNames.length; i++) {
-    const targetIdx = customStartIdx + i;
-    const currentIdx = working.findIndex(
-      (h, j) => j >= targetIdx && h.toLowerCase() === orderedNames[i].toLowerCase(),
+    const targetIdx = customPositions[i];
+    const currentIdx = workingEffective.findIndex(
+      (h) => h.toLowerCase() === orderedNames[i].toLowerCase(),
     );
-    if (currentIdx === -1 || currentIdx === targetIdx) continue;
+    if (currentIdx === -1) {
+      throw new Error(
+        `Cannot reorder custom columns: column "${orderedNames[i]}" was not found in the sheet header after applying mapping.`,
+      );
+    }
+    if (currentIdx === targetIdx) continue;
+
+    // The Sheets API destinationIndex is relative to the grid *before* the source column is
+    // removed. Moving right (currentIdx < targetIdx): after removal indices shift left by 1,
+    // so add 1 to land at the intended position. Moving left: no adjustment needed.
+    const destinationIndex = currentIdx < targetIdx ? targetIdx + 1 : targetIdx;
 
     requests.push({
       moveDimension: {
         source: { sheetId, dimension: "COLUMNS", startIndex: currentIdx, endIndex: currentIdx + 1 },
-        destinationIndex: targetIdx,
+        destinationIndex,
       },
     });
 
-    // Update working array to reflect the move
-    const [moved] = working.splice(currentIdx, 1);
-    working.splice(targetIdx, 0, moved);
+    // Update working arrays to reflect each move.
+    const [movedRaw] = workingRaw.splice(currentIdx, 1);
+    workingRaw.splice(targetIdx, 0, movedRaw);
+    const [movedEffective] = workingEffective.splice(currentIdx, 1);
+    workingEffective.splice(targetIdx, 0, movedEffective);
   }
 
   if (requests.length === 0) return;
@@ -756,34 +795,53 @@ export async function reorderCustomColumnsInSheet(accessToken, spreadsheetId, or
  * Reorder optional currency columns in the sheet to match the given ordered list of codes.
  * Currency columns live between Date (index 0) and USD.
  */
-export async function reorderCurrencyColumnsInSheet(accessToken, spreadsheetId, orderedCodes) {
+export async function reorderCurrencyColumnsInSheet(accessToken, spreadsheetId, orderedCodes, mapping = null) {
   const metadata = await getMetadata(accessToken, spreadsheetId);
   const expenseSheet = metadata.sheets?.find((s) => s.properties?.title === SHEET_NAME);
   if (!expenseSheet) throw new Error("Expenses sheet not found.");
   const sheetId = expenseSheet.properties.sheetId;
 
   const headerRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!1:1`);
-  const headerRow = normalizeHeaders(headerRows[0] ?? []);
+  const { effectiveHeader, structure } = parseEffectiveSheetStructure(headerRows[0] ?? [], mapping);
 
-  const structure = parseSheetStructure(headerRow);
-  if (!structure) throw new Error("Cannot reorder: sheet header structure is unrecognized.");
+  if (!structure) {
+    const reason = diagnoseSheetStructure(effectiveHeader);
+    throw new Error(
+      `Cannot reorder currency columns: ${reason} Expected header pattern: Date | [currencies] | USD | Category | Spent By | Comment | [custom columns].`,
+    );
+  }
 
-  const currencyStartIdx = 1; // 0-based, right after Date
+  const currencyNameSet = new Set(structure.currencies.map((code) => code.toLowerCase()));
+  const currencyPositions = effectiveHeader
+    .map((name, index) => ({ name, index }))
+    .filter(({ name }) => currencyNameSet.has(name.toLowerCase()))
+    .map(({ index }) => index);
 
-  const working = [...headerRow];
+  if (currencyPositions.length !== orderedCodes.length) {
+    throw new Error("Cannot reorder currency columns: currency column count in header does not match the requested order.");
+  }
+
+  const working = [...effectiveHeader];
   const requests = [];
 
   for (let i = 0; i < orderedCodes.length; i++) {
-    const targetIdx = currencyStartIdx + i;
+    const targetIdx = currencyPositions[i];
     const currentIdx = working.findIndex(
-      (h, j) => j >= targetIdx && h.toLowerCase() === orderedCodes[i].toLowerCase(),
+      (h) => h.toLowerCase() === orderedCodes[i].toLowerCase(),
     );
-    if (currentIdx === -1 || currentIdx === targetIdx) continue;
+    if (currentIdx === -1) {
+      throw new Error(
+        `Cannot reorder currency columns: column "${orderedCodes[i]}" was not found in the sheet header after applying mapping.`,
+      );
+    }
+    if (currentIdx === targetIdx) continue;
+
+    const destinationIndex = currentIdx < targetIdx ? targetIdx + 1 : targetIdx;
 
     requests.push({
       moveDimension: {
         source: { sheetId, dimension: "COLUMNS", startIndex: currentIdx, endIndex: currentIdx + 1 },
-        destinationIndex: targetIdx,
+        destinationIndex,
       },
     });
 
@@ -840,10 +898,10 @@ export async function deleteColumnFromSheet(accessToken, spreadsheetId, colIndex
 }
 
 /** Find the 1-based column index of a named column in the sheet header (case-insensitive). */
-export async function findColumnIndex(accessToken, spreadsheetId, columnName) {
+export async function findColumnIndex(accessToken, spreadsheetId, columnName, mapping = null) {
   const headerRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!1:1`);
-  const headerRow = normalizeHeaders(headerRows[0] ?? []);
-  const idx = headerRow.findIndex((h) => h.toLowerCase() === columnName.toLowerCase());
+  const { effectiveHeader } = parseEffectiveSheetStructure(headerRows[0] ?? [], mapping);
+  const idx = effectiveHeader.findIndex((h) => h.toLowerCase() === columnName.toLowerCase());
   return idx === -1 ? null : idx + 1;
 }
 
