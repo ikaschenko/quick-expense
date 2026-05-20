@@ -1263,7 +1263,8 @@ button { cursor: pointer; }
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-2) 0;
+  padding: var(--space-1) 0;
+  min-height: 40px;
   border-bottom: 1px solid var(--color-border);
 }
 .custom-columns-row:last-child {
