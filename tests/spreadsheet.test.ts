@@ -2,6 +2,7 @@ import {
   buildDistinctValues,
   deriveHeaderRowDetails,
   mapRowsToExpenseRecords,
+  mergeCategories,
   parseSpreadsheetUrl,
   validateColumnName,
 } from "../src/utils/spreadsheet";
@@ -143,5 +144,33 @@ describe("deriveHeaderRowDetails", () => {
       detectedColumns: [],
     });
     expect(result).toEqual([]);
+  });
+});
+
+describe("mergeCategories", () => {
+  it("returns the dataset array unchanged when predefined is empty", () => {
+    const dataset = ["Food", "Travel"];
+    expect(mergeCategories(dataset, [])).toBe(dataset);
+  });
+
+  it("returns predefined list sorted when dataset is empty", () => {
+    expect(mergeCategories([], ["Housing", "Car", "Food & Groceries"])).toEqual([
+      "Car",
+      "Food & Groceries",
+      "Housing",
+    ]);
+  });
+
+  it("deduplicates and sorts alphabetically across the full merged set", () => {
+    expect(mergeCategories(["Food", "Travel"], ["Car", "Food", "Housing"])).toEqual([
+      "Car",
+      "Food",
+      "Housing",
+      "Travel",
+    ]);
+  });
+
+  it("deduplication is case-sensitive", () => {
+    expect(mergeCategories(["food"], ["Food"])).toEqual(["food", "Food"]);
   });
 });

@@ -673,6 +673,11 @@ button { cursor: pointer; }
   color: var(--color-success);
 }
 
+.config-mode-badge--config-no-mapping {
+  background: var(--color-success-light);
+  color: var(--color-success);
+}
+
 .config-mode-badge--default {
   background: var(--color-surface-raised);
   color: var(--color-text-secondary);

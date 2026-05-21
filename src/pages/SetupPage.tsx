@@ -18,6 +18,7 @@ type ColumnType = "mandatory-field" | "mandatory-currency" | "optional-currency"
 function configModeBadgeLabel(mode: ConfigMode): string {
   switch (mode) {
     case "config-driven": return "Config detected";
+    case "config-no-mapping": return "Config detected";
     case "default": return "Default rules";
     case "config-invalid": return "Config invalid \u2014 using defaults";
   }
@@ -26,6 +27,7 @@ function configModeBadgeLabel(mode: ConfigMode): string {
 function configModeTooltip(mode: ConfigMode): string | undefined {
   switch (mode) {
     case "config-driven": return "QuickExpense is using your Config sheet settings.";
+    case "config-no-mapping": return "Config sheet found. No column mapping is active.";
     case "default": return "No Config sheet found. Standard column rules apply.";
     case "config-invalid": return undefined;
   }

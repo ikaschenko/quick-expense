@@ -10,7 +10,7 @@ import {
 import { googleSheetsService } from "../services/googleSheets";
 import { RetryBackoff } from "../services/retryBackoff";
 import { DatasetSnapshot, DistinctValues, SearchFilters } from "../types/expense";
-import { buildDistinctValues } from "../utils/spreadsheet";
+import { buildDistinctValues, mergeCategories } from "../utils/spreadsheet";
 import { useAuth } from "./AuthContext";
 import { useConfig } from "./ConfigContext";
 
@@ -113,6 +113,13 @@ export function DatasetProvider({ children }: PropsWithChildren): JSX.Element {
 
   const clearError = useCallback(() => setError(null), []);
 
+  const distinctValues = useMemo(() => {
+    const base = snapshot?.distinctValues ?? emptyDistinctValues;
+    const predefined = config?.predefinedCategories ?? [];
+    if (!predefined.length) return base;
+    return { ...base, Category: mergeCategories(base.Category, predefined) };
+  }, [snapshot?.distinctValues, config?.predefinedCategories]);
+
   const value = useMemo<DatasetContextValue>(
     () => ({
       status,
@@ -124,9 +131,9 @@ export function DatasetProvider({ children }: PropsWithChildren): JSX.Element {
       reloadDataset,
       invalidateDataset,
       clearError,
-      distinctValues: snapshot?.distinctValues ?? emptyDistinctValues,
+      distinctValues,
     }),
-    [clearError, error, invalidateDataset, loadDataset, reloadDataset, searchFilters, snapshot, status],
+    [clearError, distinctValues, error, invalidateDataset, loadDataset, reloadDataset, searchFilters, snapshot, status],
   );
 
   return <DatasetContext.Provider value={value}>{children}</DatasetContext.Provider>;

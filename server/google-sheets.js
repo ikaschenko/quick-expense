@@ -417,90 +417,77 @@ function applyMappingToHeader(normalizedHeader, mapping) {
 /**
  * Read the column mapping from the Config sheet.
  * Returns:
- *   null              — Config sheet does not exist (or read failed)
- *   { error: "invalid" } — Config sheet exists but mapping is absent or malformed
- *   Record<string,string> — the parsed mapping (QE field → user column name)
- * Never throws — callers handle null / error gracefully.
- */
-async function readConfigSheetMapping(accessToken, spreadsheetId) {
-  try {
-    const metadata = await getMetadata(accessToken, spreadsheetId);
-    const configSheet = metadata.sheets?.find((s) => s.properties?.title === "Config");
-    if (!configSheet) return null;
-
-    const rows = await getValues(accessToken, spreadsheetId, "Config!A:B");
-    const mappingRow = rows.find((r) => r[0] === "column_mapping");
-    if (!mappingRow || !mappingRow[1]) return { error: "invalid" };
-
-    try {
-      const parsed = JSON.parse(mappingRow[1]);
-      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-        return { error: "invalid" };
-      }
-      return parsed;
-    } catch {
-      return { error: "invalid" };
-    }
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Detect the Config sheet and determine the configuration mode.
  * Returns one of:
- *   { mode: "default" }                          — no Config sheet found
- *   { mode: "config-driven", mapping: {...} }    — valid Config sheet with parsed mapping
- *   { mode: "config-invalid", reason: "..." }    — Config sheet exists but is unreadable
+ *   { mode: "default",          predefinedCategories: [] }              — no Config sheet found
+ *   { mode: "config-no-mapping", predefinedCategories: string[] }       — Config sheet with no column_mapping
+ *   { mode: "config-driven",    predefinedCategories: string[], mapping: {...} } — valid mapping present
+ *   { mode: "config-invalid",   predefinedCategories: string[], reason: "..." } — column_mapping is malformed
+ * schema_version rows are silently ignored (backward compatibility).
  * Never throws — callers receive a safe fallback result on any error.
  */
 export async function detectConfigSheet(accessToken, spreadsheetId) {
   try {
     const metadata = await getMetadata(accessToken, spreadsheetId);
     const configSheet = metadata.sheets?.find((s) => s.properties?.title === "Config");
-    if (!configSheet) return { mode: "default" };
+    if (!configSheet) return { mode: "default", predefinedCategories: [] };
 
     const rows = await getValues(accessToken, spreadsheetId, "Config!A:B");
 
-    const versionRow = rows.find((r) => r[0] === "schema_version");
-    if (!versionRow) {
-      return { mode: "config-invalid", reason: "Config sheet is missing the schema_version row." };
-    }
-    if (versionRow[1] !== "1") {
-      return { mode: "config-invalid", reason: `Unsupported Config schema version "${versionRow[1]}".` };
+    // Parse categories_list block: the key row marks the start; its column B is a human label (skipped).
+    // Subsequent rows with empty column A and non-empty column B are category values.
+    // The block ends at the next row with a non-empty column A.
+    const predefinedCategories = [];
+    const catStartIdx = rows.findIndex((r) => r[0] === "categories_list");
+    if (catStartIdx !== -1) {
+      for (let i = catStartIdx + 1; i < rows.length; i++) {
+        if (rows[i][0]) break;
+        const val = rows[i][1]?.trim();
+        if (val) predefinedCategories.push(val);
+      }
     }
 
+    // Parse column_mapping — absence is not an error.
     const mappingRow = rows.find((r) => r[0] === "column_mapping");
     if (!mappingRow || !mappingRow[1]) {
-      return { mode: "config-invalid", reason: "Config sheet is missing a column_mapping value." };
+      return { mode: "config-no-mapping", predefinedCategories };
     }
 
     try {
       const parsed = JSON.parse(mappingRow[1]);
       if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-        return { mode: "config-invalid", reason: "column_mapping is not a valid JSON object." };
+        return { mode: "config-invalid", reason: "column_mapping is not a valid JSON object.", predefinedCategories };
       }
-      return { mode: "config-driven", mapping: parsed };
+      return { mode: "config-driven", mapping: parsed, predefinedCategories };
     } catch {
-      return { mode: "config-invalid", reason: "column_mapping contains invalid JSON." };
+      return { mode: "config-invalid", reason: "column_mapping contains invalid JSON.", predefinedCategories };
     }
   } catch {
-    return { mode: "default" };
+    return { mode: "default", predefinedCategories: [] };
   }
 }
 
 /**
  * Write the column mapping to the Config sheet.
  * Creates the Config sheet if it does not exist (the one and only place it is created).
+ * If the sheet already exists, updates the column_mapping row in place or appends it
+ * after the last data row — preserving any existing categories_list block.
  */
 export async function writeConfigSheetMapping(accessToken, spreadsheetId, mapping) {
   const metadata = await getMetadata(accessToken, spreadsheetId);
   const configSheet = metadata.sheets?.find((s) => s.properties?.title === "Config");
   if (!configSheet) {
     await addSheet(accessToken, spreadsheetId, "Config");
+    await updateValues(accessToken, spreadsheetId, "Config!A1:B1", [
+      ["column_mapping", JSON.stringify(mapping)],
+    ]);
+    return;
   }
-  await updateValues(accessToken, spreadsheetId, "Config!A1:B2", [
-    ["schema_version", "1"],
+
+  const rows = await getValues(accessToken, spreadsheetId, "Config!A:B");
+  const mappingRowIdx = rows.findIndex((r) => r[0] === "column_mapping");
+  const rowNumber = mappingRowIdx !== -1 ? mappingRowIdx + 1 : rows.length + 1;
+  await updateValues(accessToken, spreadsheetId, `Config!A${rowNumber}:B${rowNumber}`, [
     ["column_mapping", JSON.stringify(mapping)],
   ]);
 }

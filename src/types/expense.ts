@@ -54,6 +54,7 @@ export interface SpreadsheetConfig {
   customColumns: string[];
   configMode: ConfigMode;
   configModeReason?: string;
+  predefinedCategories: string[];
 }
 
 export interface SetupReport {
@@ -72,7 +73,7 @@ export interface HeaderDetails {
 }
 
 export type ColumnMapping = Record<string, string>; // QuickExpense field → user column name
-export type ConfigMode = "config-driven" | "default" | "config-invalid";
+export type ConfigMode = "config-driven" | "config-no-mapping" | "default" | "config-invalid";
 
 export type HeaderMatchStatus = "match" | "mismatch" | "missing" | "extra";
 

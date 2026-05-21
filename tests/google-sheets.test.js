@@ -581,76 +581,190 @@ describe("detectConfigSheet", () => {
     return jsonResponse({ values: rows });
   }
 
-  it("returns { mode: 'default' } when Config sheet does not exist", async () => {
+  it("returns { mode: 'default', predefinedCategories: [] } when Config sheet does not exist", async () => {
     setupFetchSequence([metadataResponse(["Expenses"])]);
     const result = await detectConfigSheet(TOKEN, SHEET_ID);
-    expect(result).toEqual({ mode: "default" });
+    expect(result).toEqual({ mode: "default", predefinedCategories: [] });
   });
 
-  it("returns { mode: 'config-driven', mapping } for a valid Config sheet", async () => {
+  it("returns { mode: 'config-driven', mapping, predefinedCategories: [] } for a valid Config sheet with no categories", async () => {
     const mapping = { USD: "Amount", "Spent By": "WhoSpent" };
+    setupFetchSequence([
+      metadataResponse(["Expenses", "Config"]),
+      valuesResponse([["column_mapping", JSON.stringify(mapping)]]),
+    ]);
+    const result = await detectConfigSheet(TOKEN, SHEET_ID);
+    expect(result).toEqual({ mode: "config-driven", mapping, predefinedCategories: [] });
+  });
+
+  it("ignores schema_version row and still returns config-driven for legacy Config sheets", async () => {
+    const mapping = { USD: "Amount" };
     setupFetchSequence([
       metadataResponse(["Expenses", "Config"]),
       valuesResponse([["schema_version", "1"], ["column_mapping", JSON.stringify(mapping)]]),
     ]);
     const result = await detectConfigSheet(TOKEN, SHEET_ID);
-    expect(result).toEqual({ mode: "config-driven", mapping });
+    expect(result).toEqual({ mode: "config-driven", mapping, predefinedCategories: [] });
   });
 
-  it("returns config-invalid when schema_version row is missing", async () => {
+  it("returns config-no-mapping when Config sheet has no column_mapping row", async () => {
     setupFetchSequence([
       metadataResponse(["Expenses", "Config"]),
-      valuesResponse([["column_mapping", JSON.stringify({ USD: "Amount" })]]),
+      valuesResponse([["some_other_key", "value"]]),
     ]);
     const result = await detectConfigSheet(TOKEN, SHEET_ID);
-    expect(result.mode).toBe("config-invalid");
-    expect(result.reason).toMatch(/schema_version/i);
-  });
-
-  it("returns config-invalid when schema_version is not '1'", async () => {
-    setupFetchSequence([
-      metadataResponse(["Expenses", "Config"]),
-      valuesResponse([["schema_version", "2"], ["column_mapping", "{}"]]),
-    ]);
-    const result = await detectConfigSheet(TOKEN, SHEET_ID);
-    expect(result.mode).toBe("config-invalid");
-    expect(result.reason).toMatch(/version/i);
-  });
-
-  it("returns config-invalid when column_mapping row is missing", async () => {
-    setupFetchSequence([
-      metadataResponse(["Expenses", "Config"]),
-      valuesResponse([["schema_version", "1"]]),
-    ]);
-    const result = await detectConfigSheet(TOKEN, SHEET_ID);
-    expect(result.mode).toBe("config-invalid");
-    expect(result.reason).toMatch(/column_mapping/i);
+    expect(result).toEqual({ mode: "config-no-mapping", predefinedCategories: [] });
   });
 
   it("returns config-invalid when column_mapping contains invalid JSON", async () => {
     setupFetchSequence([
       metadataResponse(["Expenses", "Config"]),
-      valuesResponse([["schema_version", "1"], ["column_mapping", "not-json"]]),
+      valuesResponse([["column_mapping", "not-json"]]),
     ]);
     const result = await detectConfigSheet(TOKEN, SHEET_ID);
     expect(result.mode).toBe("config-invalid");
     expect(result.reason).toMatch(/json/i);
+    expect(result.predefinedCategories).toEqual([]);
   });
 
   it("returns config-invalid when column_mapping is not an object", async () => {
     setupFetchSequence([
       metadataResponse(["Expenses", "Config"]),
-      valuesResponse([["schema_version", "1"], ["column_mapping", "[1,2,3]"]]),
+      valuesResponse([["column_mapping", "[1,2,3]"]]),
     ]);
     const result = await detectConfigSheet(TOKEN, SHEET_ID);
     expect(result.mode).toBe("config-invalid");
     expect(result.reason).toMatch(/object/i);
+    expect(result.predefinedCategories).toEqual([]);
   });
 
-  it("returns { mode: 'default' } (never throws) when a network error occurs", async () => {
+  it("returns { mode: 'default', predefinedCategories: [] } (never throws) when a network error occurs", async () => {
     mockFetch.mockRejectedValueOnce(new Error("network failure"));
     const result = await detectConfigSheet(TOKEN, SHEET_ID);
-    expect(result).toEqual({ mode: "default" });
+    expect(result).toEqual({ mode: "default", predefinedCategories: [] });
+  });
+
+  it("parses categories_list block and returns them in config-no-mapping mode", async () => {
+    setupFetchSequence([
+      metadataResponse(["Expenses", "Config"]),
+      valuesResponse([
+        ["categories_list", "Categories"],
+        ["", "Food & Groceries"],
+        ["", "Dining Out"],
+        ["", "Housing"],
+      ]),
+    ]);
+    const result = await detectConfigSheet(TOKEN, SHEET_ID);
+    expect(result.mode).toBe("config-no-mapping");
+    expect(result.predefinedCategories).toEqual(["Food & Groceries", "Dining Out", "Housing"]);
+  });
+
+  it("parses categories_list block alongside a valid column_mapping", async () => {
+    const mapping = { USD: "Amount" };
+    setupFetchSequence([
+      metadataResponse(["Expenses", "Config"]),
+      valuesResponse([
+        ["categories_list", "Categories"],
+        ["", "Food & Groceries"],
+        ["", "Dining Out"],
+        ["column_mapping", JSON.stringify(mapping)],
+      ]),
+    ]);
+    const result = await detectConfigSheet(TOKEN, SHEET_ID);
+    expect(result.mode).toBe("config-driven");
+    expect(result.predefinedCategories).toEqual(["Food & Groceries", "Dining Out"]);
+    expect(result.mapping).toEqual(mapping);
+  });
+
+  it("stops categories_list block at the next non-empty column A row", async () => {
+    setupFetchSequence([
+      metadataResponse(["Expenses", "Config"]),
+      valuesResponse([
+        ["categories_list", "Categories"],
+        ["", "Food & Groceries"],
+        ["column_mapping", "{}"],
+        ["", "this row is after column_mapping, not a category"],
+      ]),
+    ]);
+    const result = await detectConfigSheet(TOKEN, SHEET_ID);
+    expect(result.predefinedCategories).toEqual(["Food & Groceries"]);
+  });
+
+  it("skips blank column B rows within the categories_list block", async () => {
+    setupFetchSequence([
+      metadataResponse(["Expenses", "Config"]),
+      valuesResponse([
+        ["categories_list", "Categories"],
+        ["", "Food & Groceries"],
+        ["", ""],
+        ["", "Dining Out"],
+      ]),
+    ]);
+    const result = await detectConfigSheet(TOKEN, SHEET_ID);
+    expect(result.predefinedCategories).toEqual(["Food & Groceries", "Dining Out"]);
+  });
+});
+
+describe("writeConfigSheetMapping", () => {
+  const TOKEN = "test-token";
+  const SHEET_ID = "spreadsheet-123";
+
+  function metadataWithSheets(sheetNames) {
+    return jsonResponse({
+      sheets: sheetNames.map((title, i) => ({ properties: { sheetId: i, title } })),
+    });
+  }
+
+  function valuesResponse(rows) {
+    return jsonResponse({ values: rows });
+  }
+
+  it("creates Config sheet and writes column_mapping as a single row (no schema_version)", async () => {
+    // metadata (no Config), addSheet, updateValues
+    setupFetchSequence([
+      metadataWithSheets(["Expenses"]),
+      jsonResponse({}), // addSheet
+      jsonResponse({}), // updateValues
+    ]);
+    await writeConfigSheetMapping(TOKEN, SHEET_ID, { USD: "Amount" });
+    const updateCall = mockFetch.mock.calls[2];
+    const body = JSON.parse(updateCall[1].body);
+    expect(body.values).toEqual([["column_mapping", JSON.stringify({ USD: "Amount" })]]);
+    expect(body.range).toBe("Config!A1:B1");
+    // Ensure schema_version was NOT written
+    expect(JSON.stringify(body.values)).not.toContain("schema_version");
+  });
+
+  it("updates column_mapping row in place when it already exists", async () => {
+    // metadata (Config exists), getValues (column_mapping at row 2), updateValues
+    setupFetchSequence([
+      metadataWithSheets(["Expenses", "Config"]),
+      valuesResponse([["schema_version", "1"], ["column_mapping", '{"USD":"Old"}']]),
+      jsonResponse({}), // updateValues
+    ]);
+    await writeConfigSheetMapping(TOKEN, SHEET_ID, { USD: "New" });
+    const updateCall = mockFetch.mock.calls[2];
+    const body = JSON.parse(updateCall[1].body);
+    expect(body.range).toBe("Config!A2:B2");
+    expect(body.values).toEqual([["column_mapping", JSON.stringify({ USD: "New" })]]);
+  });
+
+  it("appends column_mapping after existing categories when no mapping row exists", async () => {
+    // Config exists with 3 rows of categories_list, no column_mapping
+    setupFetchSequence([
+      metadataWithSheets(["Expenses", "Config"]),
+      valuesResponse([
+        ["categories_list", "Categories"],
+        ["", "Food & Groceries"],
+        ["", "Dining Out"],
+      ]),
+      jsonResponse({}), // updateValues appended at row 4
+    ]);
+    await writeConfigSheetMapping(TOKEN, SHEET_ID, { USD: "Amount" });
+    const updateCall = mockFetch.mock.calls[2];
+    const body = JSON.parse(updateCall[1].body);
+    expect(body.range).toBe("Config!A4:B4");
+    expect(body.values).toEqual([["column_mapping", JSON.stringify({ USD: "Amount" })]]);
   });
 });
 

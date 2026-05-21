@@ -169,4 +169,13 @@ export function assertDatasetWithinLimit(records: ExpenseRecord[]): number {
   return payloadBytes;
 }
 
+/**
+ * Merge predefined categories (from Config sheet) with dataset-derived categories.
+ * The result is deduplicated and sorted alphabetically.
+ */
+export function mergeCategories(fromDataset: string[], predefined: string[]): string[] {
+  if (!predefined.length) return fromDataset;
+  return [...new Set([...fromDataset, ...predefined])].sort((a, b) => a.localeCompare(b));
+}
+
 export { SHEET_NAME };

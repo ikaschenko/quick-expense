@@ -332,7 +332,7 @@ app.get("/api/config", requireAuthenticatedUser, async (req, res) => {
 
   try {
     const accessToken = await getAuthorizedAccessToken(userRecord);
-    const { mode: configMode, mapping = null, reason: configModeReason } =
+    const { mode: configMode, mapping = null, reason: configModeReason, predefinedCategories = [] } =
       await detectConfigSheet(accessToken, userRecord.spreadsheetId);
 
     const report = await validateSpreadsheet(accessToken, userRecord.spreadsheetId, mapping);
@@ -346,6 +346,7 @@ app.get("/api/config", requireAuthenticatedUser, async (req, res) => {
         currencies: report.sheetCurrencies,
         customColumns: report.customColumns,
         configMode,
+        predefinedCategories,
         ...(configModeReason ? { configModeReason } : {}),
       },
     });
@@ -374,7 +375,7 @@ app.post("/api/config", requireAuthenticatedUser, async (req, res) => {
     }));
 
     // Detect any existing Config sheet and validate using its mapping so config-driven sheets pass.
-    const { mode: configMode, mapping = null, reason: configModeReason } =
+    const { mode: configMode, mapping = null, reason: configModeReason, predefinedCategories = [] } =
       await detectConfigSheet(accessToken, spreadsheetId);
 
     const setupReport = await validateSpreadsheet(accessToken, spreadsheetId, mapping);
@@ -388,6 +389,7 @@ app.post("/api/config", requireAuthenticatedUser, async (req, res) => {
         currencies: setupReport.sheetCurrencies,
         customColumns: setupReport.customColumns,
         configMode,
+        predefinedCategories,
         ...(configModeReason ? { configModeReason } : {}),
       },
       setupReport,
@@ -425,6 +427,7 @@ app.post("/api/config/create-spreadsheet", requireAuthenticatedUser, async (req,
         currencies: setupReport.sheetCurrencies,
         customColumns: setupReport.customColumns,
         configMode: "default",
+        predefinedCategories: [],
       },
       setupReport,
     });
