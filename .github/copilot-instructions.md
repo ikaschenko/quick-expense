@@ -27,47 +27,46 @@ Run `npm run build` after TypeScript changes and `npm test` after any logic chan
 ## Core Engineering Principles
 
 ### Root-Cause Thinking
-- Always diagnose and fix the **root cause** of a problem, not the symptom or consequence.
-- If a bug manifests in the UI but originates in the data layer or API — fix it at the source.
-- When a fix feels like it's "working around" the issue, stop and investigate deeper.
+- Diagnose and fix the **root cause**, not the symptom. If a fix feels like a workaround, investigate deeper.
 
 ### Domain-Driven Design
-- Start from the **logical data model** first. Understand the domain entities and their relationships before touching the database/store, API endpoints, or UI components.
-- Name things after domain concepts (expenses, categories, spreadsheet config), not implementation details.
+- Start from the **logical data model** — understand domain entities and relationships before touching store, API, or UI.
+- Name things after domain concepts, not implementation details.
 
 ### SOLID Principles
-- **Single Responsibility:** Each module, component, and function should have one reason to change.
-- **Open/Closed:** Extend behavior through composition, not modification of existing working code.
-- **Dependency Inversion:** Frontend services depend on abstractions (`http.ts` wrappers), not raw `fetch` calls in components.
+- **Single Responsibility:** One reason to change per module/component/function.
+- **Open/Closed:** Extend via composition, not modification of working code.
+- **Dependency Inversion:** Frontend services depend on `http.ts` abstractions, not raw `fetch`.
 
 ### Low Coupling, High Cohesion
-- Keep related logic together (contexts own their state, services own their API calls, utils are pure functions).
-- Minimize cross-cutting dependencies. Frontend and backend communicate only via `/api` routes — never import from `server/` in `src/` or vice versa.
+- Keep related logic together (contexts own state, services own API calls, utils are pure).
+- Frontend and backend communicate only via `/api` routes — never import across boundaries.
 
-### KISS + Thoughtful Refactoring
+### Do More With Less
+- **Less code is better code.** The primary metric for implementation quality is minimal lines of code added while preserving clarity and correctness.
 - Prefer the simplest solution that solves the problem correctly.
-- However, when a short-term shortcut will degrade long-term maintainability or create duplication — apply timely refactoring. Reorganize code for zero duplication and maximum reasonable reuse.
-- "Do more with less" — minimize lines of code while preserving clarity. Concise code is easier to maintain.
+- **Prefer proven libraries over hand-rolled code.** When a well-maintained package solves the problem, recommend it — the project codebase grows slower and responsibility is shared with the community. Always get human approval before adding a new dependency.
+- **Zero duplication.** Before writing new code, search for existing utilities, helpers, or patterns that can be reused. Suggest tactical refactorings (with estimated LOC impact) in the implementation plan when they enable reuse or reduce net code.
+- When a short-term shortcut will degrade long-term maintainability — apply timely refactoring.
 
 ### Maintainability First
-- Every change should leave the codebase in equal or better shape than before.
-- Prevent quality degradation: no dead code, no orphaned files, no commented-out blocks left behind.
-- If you notice deteriorating patterns while working on a task, flag them — don't ignore rot.
+- Every change must leave the codebase in equal or better shape. No dead code, orphaned files, or commented-out blocks.
+- If you notice deteriorating patterns, flag them — don't ignore rot.
 
 ### Ask Before Deciding
-- If there is an architectural choice, a design trade-off, or ambiguity in requirements — **raise questions to the human** rather than guessing.
-- Provide: the options considered, pros and cons of each, and your recommendation. Let the human decide.
+- On architectural choices, trade-offs, or ambiguity — **ask the human** with options, pros/cons, and your recommendation.
 
 ## Behavioral Guidelines
 
 ### Think Before Coding
 
-**Don't assume. Don't hide confusion. Surface tradeoffs.**
+**Don't assume. Don't hide confusion. Surface tradeoffs. Be concise.**
 
 - State your assumptions explicitly. If uncertain, ask.
 - If multiple interpretations exist, present them — don't pick silently.
 - If a simpler approach exists, say so. Push back when warranted.
 - If something is unclear, stop. Name what's confusing. Ask.
+- **Conciseness:** When investigating a problem or proposing a plan, use short bullet points and brief rationale — no verbose prose or restating the obvious.
 
 ### Goal-Driven Execution
 
@@ -82,48 +81,29 @@ For multi-step tasks, state a brief plan:
 ```
 1. [Step] → verify: [check]
 2. [Step] → verify: [check]
-3. [Step] → verify: [check]
 ```
-
-Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
 ### Surgical Changes
 
-**Touch only what you must. Clean up only your own mess.**
+**Touch only what you must — except when deduplication reduces net code.**
 
 - Don't "improve" adjacent code, comments, or formatting when editing.
-- Don't refactor things that aren't broken.
 - Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it — don't delete it.
+- If you notice unrelated dead code or duplication, mention it — don't fix it silently.
 - Remove imports/variables/functions that YOUR changes made unused.
 - Don't remove pre-existing dead code unless asked.
-
-The test: every changed line should trace directly to the user's request.
+- **Exception:** When a task reveals duplication that the new code would worsen, include a refactoring step in the plan (with LOC impact). Apply only after human approval.
 
 ## Project-Specific Conventions
 
-- All API calls from the frontend go through `src/services/http.ts` — never use raw `fetch` in components.
-- React state is managed via three nested context providers (Auth → Config → Dataset in `App.tsx`). Do not introduce Redux, Zustand, or other state libraries without explicit agreement.
-- Expense data lives in the user's Google Spreadsheet — the backend never stores expense rows.
-- Types are centralized in `src/types/expense.ts`. Constants in `src/constants/`.
-- Pure utility functions go in `src/utils/` — they must remain side-effect-free and testable.
-- Backend routes are all in `server/index.js`. Protected routes use `requireAuthenticatedUser` middleware.
-- Backend is **plain JavaScript with ES modules** — not TypeScript. Do not add `.ts` files under `server/`.
-- Mutating API endpoints require the `X-Requested-With: fetch` header (CSRF protection).
-- Styling uses plain CSS in `src/index.css` with design tokens (CSS custom properties in `:root`). No CSS modules, CSS-in-JS, or utility frameworks (Tailwind, etc.). Use existing `--color-*`, `--space-*`, `--font-size-*`, `--radius-*`, and `--shadow-*` variables.
-- Run `npm test` (Vitest) before considering any change complete. Tests live in `tests/`.
-- Run `npm run build` after TypeScript changes to verify compilation.
-- Deployment: Fly.io via Docker. CI runs in `.github/workflows/` — main app deploys on push to `main` (excluding `landing/`).
+- Frontend API calls go through `src/services/http.ts` — never raw `fetch` in components.
+- State: three nested context providers (Auth → Config → Dataset). No Redux/Zustand without explicit approval.
+- Expense data lives in the user's Google Spreadsheet — backend never stores expense rows.
+- Types in `src/types/expense.ts`. Constants in `src/constants/`.
+- `src/utils/` must be side-effect-free and testable.
+- Backend routes in `server/index.js`. Protected routes use `requireAuthenticatedUser`.
+- Backend is **plain JS with ES modules** — no `.ts` files under `server/`.
+- Mutating endpoints require `X-Requested-With: fetch` header (CSRF).
+- Styling: plain CSS in `src/index.css` with design tokens (`--color-*`, `--space-*`, `--font-size-*`, `--radius-*`, `--shadow-*`). No CSS-in-JS or utility frameworks.
+- Deployment: Fly.io via Docker. CI in `.github/workflows/` — deploys on push to `main` (excluding `landing/`).
 
-## Common Mistakes to Avoid
-
-- Using raw `fetch` instead of `src/services/http.ts` in components or pages.
-- Importing from `server/` in `src/` or vice versa.
-- Adding state management libraries (Redux, Zustand, etc.) without explicit approval.
-- Forgetting the `X-Requested-With: fetch` header on mutating API endpoints.
-- Scattering type definitions instead of centralizing in `src/types/expense.ts`.
-- Forgetting `requireAuthenticatedUser` middleware on new protected routes.
-- Modifying context provider nesting order (Auth → Config → Dataset) without architect approval.
-- Putting side effects (network, storage, DOM) in `src/utils/` — those must remain pure.
-- Adding npm packages without human approval.
-- Leaving dead code, commented-out blocks, or orphaned files behind after a change.
