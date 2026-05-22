@@ -218,8 +218,7 @@ Browser                          Express Backend               Google
 
 - `openid` — user identification
 - `email` — retrieve user email
-- `https://www.googleapis.com/auth/drive.file` — access files created/opened by the app
-- `https://www.googleapis.com/auth/drive.readonly` — read list of files (for Google Picker)
+- `https://www.googleapis.com/auth/drive.file` — create files in Drive and access any file the user selects via the Google Picker
 
 ### 5.4 Session Lifecycle
 

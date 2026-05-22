@@ -80,6 +80,7 @@ export function SetupPage(): JSX.Element {
   const [setupPath, setSetupPath] = useState<SetupPath>(() => config ? "configured" : "choose");
   const [isCreating, setIsCreating] = useState(false);
   const [newSheetName, setNewSheetName] = useState("Quick Expense — My Expenses");
+  const [templateCopyUrl, setTemplateCopyUrl] = useState<string | null>(null);
   const [structureGuideOpen, setStructureGuideOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -412,6 +413,7 @@ export function SetupPage(): JSX.Element {
     setError(null);
     setSuccess(null);
     setSetupReport(null);
+    setTemplateCopyUrl(null);
     setIsCreating(true);
     try {
       const name = newSheetName.trim() || undefined;
@@ -421,7 +423,11 @@ export function SetupPage(): JSX.Element {
       setSuccess("Your spreadsheet has been created and is ready to use.");
       trackEvent("setup_created");
     } catch (createError) {
-      setError((createError as Error).message);
+      const err = createError as AppError;
+      setError(err.message);
+      if (err.templateCopyFailed && err.templateUrl) {
+        setTemplateCopyUrl(err.templateUrl);
+      }
     } finally {
       setIsCreating(false);
     }
@@ -496,11 +502,16 @@ export function SetupPage(): JSX.Element {
       {/* ── Path: fresh (Story 3 — programmatic spreadsheet creation) ── */}
       {setupPath === "fresh" ? (
         <>
-          <button className="setup-back-link" type="button" onClick={() => { setError(null); setSuccess(null); setSetupReport(null); setSetupPath("choose"); }}>
+          <button className="setup-back-link" type="button" onClick={() => { setError(null); setSuccess(null); setSetupReport(null); setTemplateCopyUrl(null); setSetupPath("choose"); }}>
             ← Back to options
           </button>
 
           {error ? <StatusBanner variant="error" message={error} /> : null}
+          {templateCopyUrl ? (
+            <p className="text-sm muted" style={{ marginTop: "var(--space-2)" }}>
+              To proceed, <a href={templateCopyUrl} target="_blank" rel="noopener noreferrer">open the template in Google Sheets and make a copy</a> into your Drive, then use "Connect a spreadsheet" to link it.
+            </p>
+          ) : null}
           {success ? <StatusBanner variant="success" message={success} /> : null}
           {setupReport ? (
             <ul className="setup-report">

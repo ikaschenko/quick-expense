@@ -39,20 +39,26 @@ export async function requestJson<T>(input: string, init?: RequestInit): Promise
     if (!response.ok) {
       let message = "Request failed.";
       let headerDetails: HeaderDetails | undefined;
+      let templateCopyFailed: boolean | undefined;
+      let templateUrl: string | undefined;
 
       try {
-        const payload = (await response.json()) as { message?: string; headerDetails?: HeaderDetails };
+        const payload = (await response.json()) as { message?: string; headerDetails?: HeaderDetails; templateCopyFailed?: boolean; templateUrl?: string };
         if (payload.message) {
           message = payload.message;
         }
         if (payload.headerDetails) {
           headerDetails = payload.headerDetails;
         }
+        if (payload.templateCopyFailed) {
+          templateCopyFailed = payload.templateCopyFailed;
+          templateUrl = payload.templateUrl;
+        }
       } catch {
         // Ignore parse failure.
       }
 
-      throw new AppError(
+      const err = new AppError(
         response.status === 401
           ? "authentication"
           : response.status === 400
@@ -63,6 +69,11 @@ export async function requestJson<T>(input: string, init?: RequestInit): Promise
         message,
         headerDetails,
       );
+      if (templateCopyFailed) {
+        err.templateCopyFailed = templateCopyFailed;
+        err.templateUrl = templateUrl;
+      }
+      throw err;
     }
 
     return (await response.json()) as T;

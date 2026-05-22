@@ -112,6 +112,8 @@ export type AppErrorKind =
 export class AppError extends Error {
   readonly kind: AppErrorKind;
   readonly headerDetails?: HeaderDetails;
+  templateCopyFailed?: boolean;
+  templateUrl?: string;
 
   constructor(kind: AppErrorKind, message: string, headerDetails?: HeaderDetails) {
     super(message);

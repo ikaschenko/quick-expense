@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { getServiceAccountAccessToken, SERVICE_ACCOUNT_EMAIL } from "./google-client.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -10,7 +11,6 @@ const currencyDictionary = JSON.parse(
 const VALID_CURRENCY_CODES = new Set(currencyDictionary.currencies.map((c) => c.code));
 
 const SHEET_NAME = "Expenses";
-// Spreadsheet template to copy when a user starts fresh.
 const TEMPLATE_SPREADSHEET_ID = "1uE3OmvxHg03aETXg0msInAVniWZfoadwdpxf1gR2ENg";
 // Fixed columns that always appear after the currency block, in this exact order.
 const POST_CURRENCY_FIXED = ["USD", "Category", "Spent By", "Comment"];
@@ -378,23 +378,114 @@ function calculateJsonByteSize(value) {
   return new TextEncoder().encode(JSON.stringify(value)).length;
 }
 
+/**
+ * Fetch QuickExpense template sheet list and named ranges (publicly shared, no OAuth required).
+ * Lightweight request — no grid data, just the metadata needed for the copyTo flow.
+ */
+async function fetchTemplateSheets() {
+  const apiKey = process.env.GOOGLE_API_KEY;
+  if (!apiKey) throw new Error("GOOGLE_API_KEY is not configured.");
+  const fields = encodeURIComponent("sheets.properties(sheetId,title),namedRanges(name,range)");
+  const response = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${TEMPLATE_SPREADSHEET_ID}?fields=${fields}&key=${encodeURIComponent(apiKey)}`,
+  );
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(`Failed to fetch template: ${body.error?.message ?? response.status}`);
+  }
+  return response.json();
+}
+
 export async function createSpreadsheet(accessToken, title) {
-  // Copy the shared QuickExpense template into the user's Drive.
-  // The template is publicly readable so no extra scope is needed for the source;
-  // the resulting copy is a new file owned by the user, within the drive.file scope.
-  const payload = await requestJson(
-    accessToken,
-    `https://www.googleapis.com/drive/v3/files/${TEMPLATE_SPREADSHEET_ID}/copy`,
-    {
+  // Step 1 [parallel]: SA token + template sheet metadata + blank spreadsheet
+  const [saToken, templateSheets, created] = await Promise.all([
+    getServiceAccountAccessToken(),
+    fetchTemplateSheets(),
+    requestJson(accessToken, "https://sheets.googleapis.com/v4/spreadsheets", {
       method: "POST",
       headers: createHeaders(accessToken, true),
-      body: JSON.stringify({ name: title }),
-    },
-  );
-  const spreadsheetId = payload.id;
+      body: JSON.stringify({ properties: { title } }),
+    }),
+  ]);
+
+  const spreadsheetId = created.spreadsheetId;
+  const defaultSheetId = created.sheets?.[0]?.properties?.sheetId ?? 0;
   const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
+  const batchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+
+  // Step 2: grant SA editor access to the new spreadsheet so copyTo can write into it
+  const permission = await requestJson(accessToken, `https://www.googleapis.com/drive/v3/files/${spreadsheetId}/permissions`, {
+    method: "POST",
+    headers: createHeaders(accessToken, true),
+    body: JSON.stringify({ role: "writer", type: "user", emailAddress: SERVICE_ACCOUNT_EMAIL }),
+  });
+  const permissionId = permission.id;
+
+  try {
+    // Step 3: copy each template sheet into the new spreadsheet (SA token)
+    // copyTo preserves all cell data, formatting, banding, filters, and validation.
+    const copyResults = [];
+    for (const sheet of templateSheets.sheets) {
+      const result = await requestJson(saToken, `https://sheets.googleapis.com/v4/spreadsheets/${TEMPLATE_SPREADSHEET_ID}/sheets/${sheet.properties.sheetId}:copyTo`, {
+        method: "POST",
+        headers: createHeaders(saToken, true),
+        body: JSON.stringify({ destinationSpreadsheetId: spreadsheetId }),
+      });
+      copyResults.push({ originalSheetId: sheet.properties.sheetId, title: sheet.properties.title, newSheetId: result.sheetId });
+    }
+
+    // Step 4: rename "Copy of X" → "X" + delete the default blank sheet (SA token)
+    await requestJson(saToken, batchUrl, {
+      method: "POST",
+      headers: createHeaders(saToken, true),
+      body: JSON.stringify({
+        requests: [
+          ...copyResults.map(({ title: sheetTitle, newSheetId }) => ({
+            updateSheetProperties: {
+              properties: { sheetId: newSheetId, title: sheetTitle },
+              fields: "title",
+            },
+          })),
+          { deleteSheet: { sheetId: defaultSheetId } },
+        ],
+      }),
+    });
+
+    // Step 5: copy spreadsheet-level named ranges (not transferred by copyTo)
+    const namedRanges = templateSheets.namedRanges ?? [];
+    if (namedRanges.length > 0) {
+      const sheetIdMap = new Map(copyResults.map(({ originalSheetId, newSheetId }) => [originalSheetId, newSheetId]));
+      await requestJson(saToken, batchUrl, {
+        method: "POST",
+        headers: createHeaders(saToken, true),
+        body: JSON.stringify({
+          requests: namedRanges.map((nr) => ({
+            addNamedRange: {
+              namedRange: {
+                name: nr.name,
+                range: { ...nr.range, sheetId: sheetIdMap.get(nr.range.sheetId) ?? nr.range.sheetId },
+              },
+            },
+          })),
+        }),
+      });
+    }
+  } catch (err) {
+    const error = new Error("Could not copy the template spreadsheet. Please make a copy manually.");
+    error.templateCopyFailed = true;
+    error.templateUrl = `https://docs.google.com/spreadsheets/d/${TEMPLATE_SPREADSHEET_ID}/copy`;
+    throw error;
+  } finally {
+    // Step 6: remove SA editor permission (best-effort cleanup)
+    await fetch(
+      `https://www.googleapis.com/drive/v3/files/${spreadsheetId}/permissions/${permissionId}`,
+      { method: "DELETE", headers: createHeaders(accessToken) },
+    ).catch(() => {});
+  }
+
   return { spreadsheetId, spreadsheetUrl };
 }
+
 
 export function parseSpreadsheetUrl(url) {
   const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);

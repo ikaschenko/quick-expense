@@ -1,4 +1,28 @@
 import crypto from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import { GoogleAuth } from "google-auth-library";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const SA_KEY_FILE = join(__dirname, "..", "config", "service-account.json");
+const _saKeyData = JSON.parse(readFileSync(SA_KEY_FILE, "utf-8"));
+
+export const SERVICE_ACCOUNT_EMAIL = _saKeyData.client_email;
+
+let _saAuth = null;
+export async function getServiceAccountAccessToken() {
+  if (!_saAuth) {
+    _saAuth = new GoogleAuth({
+      keyFilename: SA_KEY_FILE,
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    });
+  }
+  const client = await _saAuth.getClient();
+  const { token } = await client.getAccessToken();
+  if (!token) throw new Error("Failed to obtain service account access token.");
+  return token;
+}
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -40,7 +64,7 @@ export function buildGoogleAuthorizationUrl({ state, codeChallenge }) {
     client_id: getGoogleClientId(),
     redirect_uri: requireEnv("GOOGLE_REDIRECT_URI"),
     response_type: "code",
-    scope: "openid email https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly",
+    scope: "openid email https://www.googleapis.com/auth/drive.file",
     access_type: "offline",
     prompt: "consent",
     state,

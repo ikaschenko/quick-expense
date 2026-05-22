@@ -432,7 +432,12 @@ app.post("/api/config/create-spreadsheet", requireAuthenticatedUser, async (req,
       setupReport,
     });
   } catch (error) {
-    res.status(400).json({ message: (error).message });
+    const body = { message: error.message };
+    if (error.templateCopyFailed) {
+      body.templateCopyFailed = true;
+      body.templateUrl = error.templateUrl;
+    }
+    res.status(400).json(body);
   }
 });
 

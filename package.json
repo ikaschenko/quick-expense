@@ -24,6 +24,7 @@
     "express": "^4.21.2",
     "express-rate-limit": "^8.3.2",
     "express-session": "^1.18.1",
+    "google-auth-library": "^10.6.2",
     "lucide-react": "^0.577.0",
     "pg": "^8.20.0",
     "posthog-js": "^1.364.6",

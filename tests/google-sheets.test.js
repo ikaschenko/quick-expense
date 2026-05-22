@@ -1,4 +1,11 @@
 // @vitest-environment node
+
+// Mock google-client.js to avoid reading service-account.json and making real OAuth calls.
+vi.mock("../server/google-client.js", () => ({
+  getServiceAccountAccessToken: vi.fn().mockResolvedValue("sa-mock-token"),
+  SERVICE_ACCOUNT_EMAIL: "integr-test@quickexpense-490222.iam.gserviceaccount.com",
+}));
+
 const SHEET_NAME = "Expenses";
 const LEGACY_EXPENSE_HEADERS = [
   "Date", "PLN", "BYN", "USD", "EUR",
@@ -806,37 +813,219 @@ describe("loadExpenses with column mapping", () => {
 
 describe("createSpreadsheet", () => {
   const TOKEN = "test-token";
+  const SA_TOKEN = "sa-mock-token";
+  const TEMPLATE_ID = "1uE3OmvxHg03aETXg0msInAVniWZfoadwdpxf1gR2ENg";
 
-  it("copies the template and returns spreadsheetId and spreadsheetUrl", async () => {
-    mockFetch.mockResolvedValueOnce(jsonResponse({ id: "new-sheet-id-123" }));
+  const mockTemplateSheets = {
+    sheets: [
+      { properties: { sheetId: 1001, title: "Expenses" } },
+      { properties: { sheetId: 1002, title: "Config" } },
+    ],
+  };
 
+  const createdSpreadsheet = {
+    spreadsheetId: "new-id-123",
+    sheets: [{ properties: { sheetId: 0 } }],
+  };
+
+  // 204 No Content response for the permission DELETE cleanup
+  function noContentResponse() {
+    return { ok: true, status: 204, json: () => Promise.resolve(undefined) };
+  }
+
+  beforeAll(() => {
+    process.env.GOOGLE_API_KEY = "test-api-key";
+  });
+
+  // Standard mock sequence (no named ranges):
+  // 1. fetchTemplateSheets (API key GET)
+  // 2. POST /v4/spreadsheets   (create blank spreadsheet, user token)
+  // 3. POST /drive/v3/files/{id}/permissions  (grant SA editor, user token)
+  // 4. POST /v4/spreadsheets/{templateId}/sheets/1001:copyTo  (SA token)
+  // 5. POST /v4/spreadsheets/{templateId}/sheets/1002:copyTo  (SA token)
+  // 6. POST /v4/spreadsheets/{newId}:batchUpdate  (rename + delete default sheet, SA token)
+  // 7. DELETE /drive/v3/files/{newId}/permissions/{permId}  (remove SA, user token)
+  function mockAllCalls() {
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse(mockTemplateSheets))           // fetchTemplateSheets
+      .mockResolvedValueOnce(jsonResponse(createdSpreadsheet))           // create spreadsheet
+      .mockResolvedValueOnce(jsonResponse({ id: "perm-456" }))          // grant SA editor
+      .mockResolvedValueOnce(jsonResponse({ sheetId: 2001 }))           // copyTo sheet 1001
+      .mockResolvedValueOnce(jsonResponse({ sheetId: 2002 }))           // copyTo sheet 1002
+      .mockResolvedValueOnce(jsonResponse({}))                          // batchUpdate rename+delete
+      .mockResolvedValueOnce(noContentResponse());                       // DELETE permission
+  }
+
+  it("returns spreadsheetId and spreadsheetUrl on success", async () => {
+    mockAllCalls();
     const result = await createSpreadsheet(TOKEN, "My Expenses");
-
     expect(result).toEqual({
-      spreadsheetId: "new-sheet-id-123",
-      spreadsheetUrl: "https://docs.google.com/spreadsheets/d/new-sheet-id-123/edit",
+      spreadsheetId: "new-id-123",
+      spreadsheetUrl: "https://docs.google.com/spreadsheets/d/new-id-123/edit",
+    });
+  });
+
+  it("creates a blank spreadsheet with the given title using the user token", async () => {
+    mockAllCalls();
+    await createSpreadsheet(TOKEN, "My Expenses");
+
+    const createCall = mockFetch.mock.calls.find((c) => c[0] === "https://sheets.googleapis.com/v4/spreadsheets" && c[1]?.method === "POST");
+    expect(createCall).toBeDefined();
+    expect(JSON.parse(createCall[1].body).properties.title).toBe("My Expenses");
+    expect(createCall[1].headers.Authorization).toBe("Bearer test-token");
+  });
+
+  it("fetches template metadata via API key (no OAuth)", async () => {
+    mockAllCalls();
+    await createSpreadsheet(TOKEN, "My Expenses");
+
+    const templateCall = mockFetch.mock.calls.find((c) => c[0]?.includes(TEMPLATE_ID));
+    expect(templateCall).toBeDefined();
+    expect(templateCall[0]).toContain("key=test-api-key");
+    expect(templateCall[0]).toContain("fields=");
+    expect(templateCall[1]).toBeUndefined(); // plain GET, no init
+  });
+
+  it("grants SA editor access on the new spreadsheet using the user token", async () => {
+    mockAllCalls();
+    await createSpreadsheet(TOKEN, "My Expenses");
+
+    const permCall = mockFetch.mock.calls.find((c) => c[0]?.includes("permissions") && c[1]?.method === "POST");
+    expect(permCall).toBeDefined();
+    expect(permCall[0]).toContain("new-id-123");
+    expect(permCall[1].headers.Authorization).toBe("Bearer test-token");
+    const body = JSON.parse(permCall[1].body);
+    expect(body.role).toBe("writer");
+    expect(body.type).toBe("user");
+    expect(body.emailAddress).toBe("integr-test@quickexpense-490222.iam.gserviceaccount.com");
+  });
+
+  it("calls copyTo for each template sheet using the SA token", async () => {
+    mockAllCalls();
+    await createSpreadsheet(TOKEN, "My Expenses");
+
+    const copyCalls = mockFetch.mock.calls.filter((c) => c[0]?.includes(":copyTo"));
+    expect(copyCalls).toHaveLength(2);
+    expect(copyCalls[0][0]).toContain(`${TEMPLATE_ID}/sheets/1001:copyTo`);
+    expect(copyCalls[0][1].headers.Authorization).toBe(`Bearer ${SA_TOKEN}`);
+    expect(JSON.parse(copyCalls[0][1].body).destinationSpreadsheetId).toBe("new-id-123");
+    expect(copyCalls[1][0]).toContain(`${TEMPLATE_ID}/sheets/1002:copyTo`);
+  });
+
+  it("renames copied sheets to original titles and deletes default Sheet1 via SA token", async () => {
+    mockAllCalls();
+    await createSpreadsheet(TOKEN, "My Expenses");
+
+    const batchCall = mockFetch.mock.calls.find((c) => c[0]?.includes("new-id-123:batchUpdate"));
+    expect(batchCall).toBeDefined();
+    expect(batchCall[1].headers.Authorization).toBe(`Bearer ${SA_TOKEN}`);
+    const { requests } = JSON.parse(batchCall[1].body);
+    const renameReqs = requests.filter((r) => r.updateSheetProperties);
+    expect(renameReqs).toHaveLength(2);
+    expect(renameReqs[0].updateSheetProperties.properties).toEqual({ sheetId: 2001, title: "Expenses" });
+    expect(renameReqs[1].updateSheetProperties.properties).toEqual({ sheetId: 2002, title: "Config" });
+    expect(requests).toContainEqual({ deleteSheet: { sheetId: 0 } });
+  });
+
+  it("removes SA editor permission after copy using the user token", async () => {
+    mockAllCalls();
+    await createSpreadsheet(TOKEN, "My Expenses");
+
+    const deleteCall = mockFetch.mock.calls.find((c) => c[1]?.method === "DELETE");
+    expect(deleteCall).toBeDefined();
+    expect(deleteCall[0]).toContain("new-id-123/permissions/perm-456");
+    expect(deleteCall[1].headers.Authorization).toBe("Bearer test-token");
+  });
+
+  it("skips named range batchUpdate when template has no named ranges", async () => {
+    mockAllCalls();
+    await createSpreadsheet(TOKEN, "My Expenses");
+
+    const batchCalls = mockFetch.mock.calls.filter((c) => c[0]?.includes(":batchUpdate"));
+    expect(batchCalls).toHaveLength(1); // only the rename+delete batchUpdate
+  });
+
+  it("throws templateCopyFailed error when copyTo fails, still removes SA permission", async () => {
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse(mockTemplateSheets))          // fetchTemplateSheets
+      .mockResolvedValueOnce(jsonResponse(createdSpreadsheet))          // create
+      .mockResolvedValueOnce(jsonResponse({ id: "perm-456" }))         // grant SA
+      .mockResolvedValueOnce(jsonResponse({ error: { message: "Not found" } }, 404)) // copyTo fails
+      .mockResolvedValueOnce(noContentResponse());                      // DELETE permission (cleanup)
+
+    await expect(createSpreadsheet(TOKEN, "Fail")).rejects.toMatchObject({
+      message: expect.stringContaining("Could not copy the template"),
+      templateCopyFailed: true,
+      templateUrl: expect.stringContaining(TEMPLATE_ID),
     });
 
-    const call = mockFetch.mock.calls[0];
-    expect(call[0]).toContain("/copy");
-    const body = JSON.parse(call[1].body);
-    expect(body.name).toBe("My Expenses");
+    // SA permission cleanup still called despite the error
+    const deleteCall = mockFetch.mock.calls.find((c) => c[1]?.method === "DELETE");
+    expect(deleteCall).toBeDefined();
   });
 
-  it("passes authorization header with the access token", async () => {
-    mockFetch.mockResolvedValueOnce(jsonResponse({ id: "abc" }));
-
-    await createSpreadsheet(TOKEN, "Test Sheet");
-
-    const call = mockFetch.mock.calls[0];
-    expect(call[1].headers.Authorization).toBe("Bearer test-token");
+  it("throws when the template fetch fails", async () => {
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({ error: { message: "Template not found" } }, 404))
+      .mockResolvedValueOnce(jsonResponse(createdSpreadsheet));
+    await expect(createSpreadsheet(TOKEN, "Fail")).rejects.toThrow("Template not found");
   });
 
-  it("throws when the Google API returns an error", async () => {
-    mockFetch.mockResolvedValueOnce(
-      jsonResponse({ error: { message: "Insufficient permissions" } }, 403),
-    );
-
+  it("throws when the spreadsheet create call fails", async () => {
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse(mockTemplateSheets))
+      .mockResolvedValueOnce(jsonResponse({ error: { message: "Insufficient permissions" } }, 403));
     await expect(createSpreadsheet(TOKEN, "Fail")).rejects.toThrow("Insufficient permissions");
+  });
+
+  describe("named ranges", () => {
+    const templateWithNamedRanges = {
+      sheets: [
+        { properties: { sheetId: 1001, title: "Expenses" } },
+        { properties: { sheetId: 1002, title: "Config" } },
+      ],
+      namedRanges: [
+        {
+          namedRangeId: "abc123",
+          name: "CategoryList",
+          range: { sheetId: 1002, startRowIndex: 1, endRowIndex: 10, startColumnIndex: 0, endColumnIndex: 1 },
+        },
+      ],
+    };
+
+    function mockNamedRangeCalls() {
+      mockFetch
+        .mockResolvedValueOnce(jsonResponse(templateWithNamedRanges))    // fetchTemplateSheets
+        .mockResolvedValueOnce(jsonResponse(createdSpreadsheet))          // create
+        .mockResolvedValueOnce(jsonResponse({ id: "perm-456" }))         // grant SA
+        .mockResolvedValueOnce(jsonResponse({ sheetId: 2001 }))          // copyTo 1001
+        .mockResolvedValueOnce(jsonResponse({ sheetId: 2002 }))          // copyTo 1002
+        .mockResolvedValueOnce(jsonResponse({}))                         // batchUpdate rename+delete
+        .mockResolvedValueOnce(jsonResponse({}))                         // batchUpdate addNamedRange
+        .mockResolvedValueOnce(noContentResponse());                      // DELETE permission
+    }
+
+    it("adds a second batchUpdate for named ranges when template has them", async () => {
+      mockNamedRangeCalls();
+      await createSpreadsheet(TOKEN, "Test");
+
+      const batchCalls = mockFetch.mock.calls.filter((c) => c[0]?.includes(":batchUpdate"));
+      expect(batchCalls).toHaveLength(2);
+    });
+
+    it("named range batchUpdate uses SA token and remaps sheetId to the copied sheet", async () => {
+      mockNamedRangeCalls();
+      await createSpreadsheet(TOKEN, "Test");
+
+      const batchCalls = mockFetch.mock.calls.filter((c) => c[0]?.includes(":batchUpdate"));
+      const namedRangeBatch = batchCalls[1];
+      expect(namedRangeBatch[1].headers.Authorization).toBe(`Bearer ${SA_TOKEN}`);
+      const { requests } = JSON.parse(namedRangeBatch[1].body);
+      expect(requests).toHaveLength(1);
+      const nr = requests[0].addNamedRange.namedRange;
+      expect(nr.name).toBe("CategoryList");
+      expect(nr.range.sheetId).toBe(2002); // remapped from template 1002 → new 2002
+      expect(nr.namedRangeId).toBeUndefined(); // ID stripped, Google assigns a new one
+    });
   });
 });
