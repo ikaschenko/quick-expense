@@ -18,7 +18,7 @@ function getFirstName(email: string): string {
 }
 
 export function HomePage(): JSX.Element {
-  const { config } = useConfig();
+  const { config, isConfigLoading } = useConfig();
   const { session } = useAuth();
   const firstName = session?.email ? getFirstName(session.email) : "";
 
@@ -29,7 +29,14 @@ export function HomePage(): JSX.Element {
         {getGreeting()}, {firstName} 👋
       </p>
 
-      {config ? (
+      {isConfigLoading ? (
+        <div className="home-status-card loading">
+          <div className="spinner spinner-sm home-status-icon" aria-hidden />
+          <div className="home-status-content">
+            <div className="home-status-label">Checking configuration…</div>
+          </div>
+        </div>
+      ) : config ? (
         <div className="home-status-card connected">
           <Settings size={20} className="home-status-icon" aria-hidden />
           <div className="home-status-content">
@@ -50,7 +57,7 @@ export function HomePage(): JSX.Element {
       )}
 
       <div className="home-cta">
-        {config ? (
+        {config && !isConfigLoading ? (
           <Link to="/add" className="btn btn-primary">
             <Plus size={20} aria-hidden />
             Add Expense
@@ -64,7 +71,7 @@ export function HomePage(): JSX.Element {
       </div>
 
       <div className="home-secondary-row">
-        {config ? (
+        {config && !isConfigLoading ? (
           <Link to="/tail" className="card card-hover home-secondary-card">
             <Clock size={24} className="home-secondary-card-icon" aria-hidden />
             <span className="home-secondary-card-label">Last 20</span>
@@ -75,7 +82,7 @@ export function HomePage(): JSX.Element {
             <span className="home-secondary-card-label">Last 20</span>
           </div>
         )}
-        {config ? (
+        {config && !isConfigLoading ? (
           <Link to="/search" className="card card-hover home-secondary-card">
             <Search size={24} className="home-secondary-card-icon" aria-hidden />
             <span className="home-secondary-card-label">Find expense</span>

@@ -809,6 +809,12 @@ export function SetupPage(): JSX.Element {
 
             {actionError ? <StatusBanner variant="error" message={actionError} /> : null}
             {actionSuccess ? <StatusBanner variant="success" message={actionSuccess} /> : null}
+            {actionBusy ? (
+              <div className="action-busy-toast" role="status" aria-live="polite">
+                <div className="spinner" aria-hidden />
+                <span>Please wait…</span>
+              </div>
+            ) : null}
 
             <ul className="custom-columns-list">
             {columns.map((col) => {
