@@ -6,7 +6,9 @@ import { GoogleAuth } from "google-auth-library";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SA_KEY_FILE = join(__dirname, "..", "config", "service-account.json");
-const _saKeyData = JSON.parse(readFileSync(SA_KEY_FILE, "utf-8"));
+const _saKeyData = process.env.SERVICE_ACCOUNT_JSON
+  ? JSON.parse(process.env.SERVICE_ACCOUNT_JSON)
+  : JSON.parse(readFileSync(SA_KEY_FILE, "utf-8"));
 
 export const SERVICE_ACCOUNT_EMAIL = _saKeyData.client_email;
 
@@ -14,7 +16,7 @@ let _saAuth = null;
 export async function getServiceAccountAccessToken() {
   if (!_saAuth) {
     _saAuth = new GoogleAuth({
-      keyFilename: SA_KEY_FILE,
+      credentials: _saKeyData,
       scopes: ["https://www.googleapis.com/auth/spreadsheets"],
     });
   }
