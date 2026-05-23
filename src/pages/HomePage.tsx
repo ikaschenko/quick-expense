@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Plus, Clock, Search, AlertTriangle, Settings } from "lucide-react";
 import { Layout } from "../components/Layout";
+import { SpreadsheetFileInfo } from "../components/SpreadsheetFileInfo";
 import { useConfig } from "../contexts/ConfigContext";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -18,7 +19,7 @@ function getFirstName(email: string): string {
 }
 
 export function HomePage(): JSX.Element {
-  const { config, isConfigLoading } = useConfig();
+  const { config, isConfigLoading, fileName, isFileNameLoading } = useConfig();
   const { session } = useAuth();
   const firstName = session?.email ? getFirstName(session.email) : "";
 
@@ -41,7 +42,9 @@ export function HomePage(): JSX.Element {
           <Settings size={20} className="home-status-icon" aria-hidden />
           <div className="home-status-content">
             <div className="home-status-label">Connected</div>
-            <div className="home-status-detail">{config.spreadsheetUrl}</div>
+            <div className="home-status-detail">
+              <SpreadsheetFileInfo spreadsheetUrl={config.spreadsheetUrl} fileName={fileName} isLoading={isFileNameLoading} />
+            </div>
           </div>
           <Link to="/setup" className="home-status-action">Change</Link>
         </div>

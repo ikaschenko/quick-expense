@@ -16,6 +16,8 @@ interface ConfigContextValue {
   config: SpreadsheetConfig | null;
   isConfigLoading: boolean;
   error: string | null;
+  fileName: string | null;
+  isFileNameLoading: boolean;
   saveConfig: (config: SpreadsheetConfig) => void;
   clearConfig: () => void;
   clearError: () => void;
@@ -30,6 +32,8 @@ export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
   const [config, setConfig] = useState<SpreadsheetConfig | null>(null);
   const [isConfigLoading, setIsConfigLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [isFileNameLoading, setIsFileNameLoading] = useState(false);
   const retryBackoffRef = useRef(new RetryBackoff());
 
   useEffect(() => {
@@ -65,11 +69,29 @@ export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
       .finally(() => setIsConfigLoading(false));
   }, [session]);
 
+  // Fetch the live file display name from Drive whenever the spreadsheet changes.
+  useEffect(() => {
+    if (!config?.spreadsheetId) {
+      setFileName(null);
+      setIsFileNameLoading(false);
+      return;
+    }
+    setFileName(null);
+    setIsFileNameLoading(true);
+    void googleSheetsService
+      .getSpreadsheetFileName()
+      .then(({ fileName: name }) => setFileName(name))
+      .catch(() => setFileName(null))
+      .finally(() => setIsFileNameLoading(false));
+  }, [config?.spreadsheetId]);
+
   const value = useMemo<ConfigContextValue>(() => {
     return {
       config,
       isConfigLoading,
       error,
+      fileName,
+      isFileNameLoading,
       saveConfig: (nextConfig) => {
         setConfig(nextConfig);
         retryBackoffRef.current.reset();
@@ -113,7 +135,7 @@ export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
         );
       },
     };
-  }, [config, isConfigLoading, error, session]);
+  }, [config, isConfigLoading, error, fileName, isFileNameLoading, session]);
 
   return <ConfigContext.Provider value={value}>{children}</ConfigContext.Provider>;
 }

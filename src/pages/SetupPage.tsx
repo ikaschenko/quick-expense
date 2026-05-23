@@ -1,10 +1,10 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { FileSpreadsheet, Wand2, ChevronDown, ChevronUp, X, Plus, Pencil, Trash2, Check, TableProperties } from "lucide-react";
 import { Layout } from "../components/Layout";
 import { LoadingBlock } from "../components/LoadingBlock";
 import { StatusBanner } from "../components/StatusBanner";
 import { ColumnMappingEditor } from "../components/ColumnMappingEditor";
+import { SpreadsheetFileInfo } from "../components/SpreadsheetFileInfo";
 import { useConfig } from "../contexts/ConfigContext";
 import { openSpreadsheetPicker } from "../services/googlePicker";
 import { googleSheetsService } from "../services/googleSheets";
@@ -68,9 +68,8 @@ const MAX_CUSTOM_COLUMNS = 10;
 type SetupPath = "choose" | "fresh" | "existing" | "configured";
 
 export function SetupPage(): JSX.Element {
-  const { config, isConfigLoading, error: configError, saveConfig, refreshConfig, updateStructure } = useConfig();
-  const [spreadsheetUrl, setSpreadsheetUrl] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const { config, isConfigLoading, error: configError, saveConfig, updateStructure, fileName, isFileNameLoading } = useConfig();
+  const [spreadsheetUrl, setSpreadsheetUrl] = useState("");  const [error, setError] = useState<string | null>(null);
   const [headerDetails, setHeaderDetails] = useState<HeaderDetails | null>(null);
   const [showMappingEditor, setShowMappingEditor] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
@@ -82,7 +81,6 @@ export function SetupPage(): JSX.Element {
   const [newSheetName, setNewSheetName] = useState("Quick Expense — My Expenses");
   const [templateCopyUrl, setTemplateCopyUrl] = useState<string | null>(null);
   const [structureGuideOpen, setStructureGuideOpen] = useState(false);
-  const navigate = useNavigate();
 
   // Structure management state
   const [actionError, setActionError] = useState<string | null>(null);
@@ -118,10 +116,6 @@ export function SetupPage(): JSX.Element {
   const [mappingEditorOpen, setMappingEditorOpen] = useState(false);
   const [mappingSectionOpen, setMappingSectionOpen] = useState(false);
   const [mappingSuccess, setMappingSuccess] = useState<string | null>(null);
-
-  useEffect(() => {
-    setSpreadsheetUrl(config?.spreadsheetUrl ?? "");
-  }, [config]);
 
   // Load currency dictionary for autocomplete
   useEffect(() => {
@@ -361,12 +355,6 @@ export function SetupPage(): JSX.Element {
     setIsSaving(true);
 
     try {
-      if (!url) {
-        await googleSheetsService.clearConfig();
-        refreshConfig();
-        setSuccess("Spreadsheet removed. Setup is not complete.");
-        return;
-      }
       const { config: nextConfig, setupReport: report } = await googleSheetsService.saveConfig(url);
       saveConfig(nextConfig);
       setSetupReport(report);
@@ -381,11 +369,6 @@ export function SetupPage(): JSX.Element {
     } finally {
       setIsSaving(false);
     }
-  };
-
-  const onSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
-    event.preventDefault();
-    await saveSpreadsheet(spreadsheetUrl.trim());
   };
 
   const onPickFromDrive = async (): Promise<void> => {
@@ -431,12 +414,6 @@ export function SetupPage(): JSX.Element {
     } finally {
       setIsCreating(false);
     }
-  };
-
-  const onResetAndExit = async (): Promise<void> => {
-    if (!window.confirm("This action will reset the previously provided link. Are you sure?")) return;
-    await saveSpreadsheet("");
-    navigate("/home");
   };
 
   const busy = isSaving || isPicking;
@@ -629,50 +606,18 @@ export function SetupPage(): JSX.Element {
                 <p className="setup-structure-guide-note">QuickExpense only reads and writes the <strong>Expenses</strong> tab. Other sheets in your workbook are never accessed or modified.</p>              </div>
             ) : null}
 
-            <form onSubmit={(event) => void onSubmit(event)}>
-              <div className="input-group">
-                <label className="input-label" htmlFor="spreadsheet-url">Spreadsheet link</label>
-                <input
-                  id="spreadsheet-url"
-                  className="input"
-                  value={spreadsheetUrl}
-                  onChange={(event) => setSpreadsheetUrl(event.target.value)}
-                  placeholder="https://docs.google.com/spreadsheets/d/..."
-                />
-              </div>
-              <div style={{ display: "flex", gap: "var(--space-3)" }}>
-                <button className="btn btn-primary" disabled={busy} type="submit">
-                  {isSaving ? "Checking…" : "Check compatibility"}
-                </button>
-                <button
-                    className="btn btn-secondary"
-                    disabled={busy || !config}
-                    type="button"
-                    title={!config ? "This action is not applicable in the current context" : undefined}
-                    onClick={() => void onResetAndExit()}
-                    style={{ width: "auto", flexShrink: 0 }}
-                  >
-                    Reset and exit
-                  </button>
-              </div>
-            </form>
-
-            <div className="setup-divider">
-              <span>or</span>
-            </div>
-
             <button
-              className="btn btn-secondary"
+              className="btn btn-primary"
               disabled={busy}
               type="button"
               onClick={() => void onPickFromDrive()}
             >
-              {isPicking ? "Opening picker…" : "Browse Google Drive"}
+              {isPicking ? "Opening picker…" : "Select from Google Drive"}
             </button>
 
           </div>
 
-          {busy ? <LoadingBlock label={isPicking ? "Opening file picker…" : "Checking compatibility…"} /> : null}
+          {busy ? <LoadingBlock label={isSaving ? "Checking compatibility…" : "Opening file picker…"} /> : null}
 
           {error ? <StatusBanner variant="error" message={error} /> : null}
 
@@ -761,14 +706,7 @@ export function SetupPage(): JSX.Element {
               <div className="home-status-content">
                 <div className="home-status-label">Connected</div>
                 <div className="home-status-detail">
-                  <a
-                    className="setup-connected-url-link"
-                    href={config.spreadsheetUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {config.spreadsheetUrl}
-                  </a>
+                  <SpreadsheetFileInfo spreadsheetUrl={config.spreadsheetUrl} fileName={fileName} isLoading={isFileNameLoading} />
                 </div>
                 <div className="config-mode-badge-row">
                   <span

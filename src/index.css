@@ -1728,3 +1728,19 @@ button { cursor: pointer; }
 .setup-connected-url-link:hover {
   color: var(--color-text-primary);
 }
+
+.file-name-skeleton {
+  display: inline-block;
+  width: 160px;
+  height: 0.75em;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--color-surface) 25%, var(--color-border, #e2e8f0) 50%, var(--color-surface) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+  vertical-align: middle;
+}
+
+@keyframes skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

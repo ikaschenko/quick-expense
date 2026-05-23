@@ -25,6 +25,10 @@ export const googleSheetsService = {
     return requestJson<ConfigResponse>("/api/config");
   },
 
+  async getSpreadsheetFileName(): Promise<{ fileName: string }> {
+    return requestJson<{ fileName: string }>("/api/config/file-info");
+  },
+
   async saveConfig(spreadsheetUrl: string): Promise<{ config: SpreadsheetConfig; setupReport: SetupReport }> {
     return requestJson<{ config: SpreadsheetConfig; setupReport: SetupReport }>("/api/config", {
       method: "POST",

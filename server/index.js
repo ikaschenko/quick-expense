@@ -21,6 +21,7 @@ import {
   createSpreadsheet,
   loadExpenses,
   parseSpreadsheetUrl,
+  getSpreadsheetFileMeta,
   validateSpreadsheet,
   hasExactItemSet,
   insertCurrencyColumnInSheet,
@@ -410,6 +411,7 @@ app.post("/api/config/create-spreadsheet", requireAuthenticatedUser, async (req,
 
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
     const { spreadsheetId, spreadsheetUrl } = await createSpreadsheet(accessToken, name);
+
     const setupReport = await validateSpreadsheet(accessToken, spreadsheetId);
 
     const updatedUser = await updateUserRecord(req.userRecord.email, (current) => ({
@@ -438,6 +440,20 @@ app.post("/api/config/create-spreadsheet", requireAuthenticatedUser, async (req,
       body.templateUrl = error.templateUrl;
     }
     res.status(400).json(body);
+  }
+});
+
+app.get("/api/config/file-info", requireAuthenticatedUser, async (req, res) => {
+  if (!req.userRecord.spreadsheetId) {
+    res.status(400).json({ message: "Spreadsheet is not configured." });
+    return;
+  }
+  try {
+    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const { fileName } = await getSpreadsheetFileMeta(accessToken, req.userRecord.spreadsheetId);
+    res.json({ fileName });
+  } catch (error) {
+    res.status(500).json({ message: (error).message });
   }
 });
 

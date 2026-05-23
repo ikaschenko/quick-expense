@@ -493,6 +493,20 @@ export function parseSpreadsheetUrl(url) {
 }
 
 /**
+ * Fetch the Drive display name for a spreadsheet file.
+ * Requires the file to have been opened or created by this app (drive.file scope).
+ * Returns { fileName } or throws on API error.
+ */
+export async function getSpreadsheetFileMeta(accessToken, spreadsheetId) {
+  const data = await requestJson(
+    accessToken,
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(spreadsheetId)}?fields=name`,
+    { headers: createHeaders(accessToken) },
+  );
+  return { fileName: data.name ?? null };
+}
+
+/**
  * Apply a column mapping (QE field → user column name) to a normalized header row.
  * Replaces each user column name with its QE field equivalent where a mapping entry exists.
  * Columns not in the mapping are returned unchanged.
