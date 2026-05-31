@@ -103,7 +103,7 @@ quick-expense/
 │   ├── index.css              ← global styles
 │   ├── vite-env.d.ts
 │   ├── components/            ← reusable UI components
-│   │   ├── ExpenseTable.tsx   ← table rendering with comment tooltip
+│   │   ├── ExpenseTable.tsx   ← expense card list; tap/click to expand full details inline
 │   │   ├── Layout.tsx         ← app shell: topbar + footer + page slot
 │   │   ├── LoadingBlock.tsx   ← spinner component
 │   │   ├── ProtectedRoute.tsx ← redirect to login if unauthenticated
@@ -134,6 +134,7 @@ quick-expense/
 │   │   └── expense.ts         ← all shared types and AppError class
 │   └── utils/                 ← pure utility functions
 │       ├── date.ts            ← local date formatting
+│       ├── expenseTable.ts    ← expense card helpers: preview length, display amount, detail detection
 │       ├── search.ts          ← client-side expense filtering
 │       ├── spreadsheet.ts     ← header validation, row mapping, distinct values
 │       ├── storage.ts         ← safe JSON localStorage helpers

@@ -1,6 +1,6 @@
 import { ExpenseRecord } from "../types/expense";
 
-const COMMENT_PREVIEW_LENGTH = 72;
+export const COMMENT_PREVIEW_LENGTH = 72;
 
 const CUSTOM_COLUMN_LABELS: Record<string, string> = {
   SpentFor: "Spent For",
@@ -15,4 +15,20 @@ export function hasDetails(record: ExpenseRecord, customColumns: string[] = []):
     record.Comment.length > COMMENT_PREVIEW_LENGTH ||
     customColumns.some((col) => Boolean(record.customFields?.[col]?.trim()))
   );
+}
+
+function stripDecimals(amount: string): string {
+  return amount.trim().replace(/^\$/, "").replace(/\.\d+$/, "");
+}
+
+export function getDisplayAmount(record: ExpenseRecord, sheetCurrencies: string[] = []): string {
+  for (const code of sheetCurrencies) {
+    const val = record.currencyAmounts?.[code];
+    if (val?.trim()) {
+      const local = `${code} ${stripDecimals(val)}`;
+      return record.USD?.trim() ? `${local} / $${stripDecimals(record.USD)}` : local;
+    }
+  }
+  if (record.USD?.trim()) return `$${stripDecimals(record.USD)}`;
+  return "\u2014";
 }

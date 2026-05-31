@@ -41,6 +41,7 @@ export function SearchPage(): JSX.Element {
   return (
     <Layout title="Search">
       {/* Search bar */}
+      <div className="input-label mb-2">Comment</div>
       <div className="search-hero-input">
         <SearchIcon size={18} className="search-icon" aria-hidden />
         <input
