@@ -12,7 +12,7 @@ export function getCustomColumnLabel(name: string): string {
 
 export function hasDetails(record: ExpenseRecord, customColumns: string[] = []): boolean {
   return (
-    record.Comment.length > COMMENT_PREVIEW_LENGTH ||
+    record.Comment.trim().length > 0 ||
     customColumns.some((col) => Boolean(record.customFields?.[col]?.trim()))
   );
 }

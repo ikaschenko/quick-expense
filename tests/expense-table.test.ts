@@ -28,9 +28,9 @@ describe("getCustomColumnLabel", () => {
 });
 
 describe("hasDetails", () => {
-  it("returns false when comment is short and no custom fields", () => {
+  it("returns true when comment is non-empty, even if short", () => {
     const record = makeRecord({ Comment: "short" });
-    expect(hasDetails(record, ["SpentFor"])).toBe(false);
+    expect(hasDetails(record, ["SpentFor"])).toBe(true);
   });
 
   it("returns false when comment is empty and all custom field values are empty", () => {
