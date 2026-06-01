@@ -24,6 +24,13 @@ export function deriveHeaderRowDetails(details: HeaderDetails): HeaderRowDetail[
 
 const distinctFixedKeys = ["Category", "spentBy"] as const;
 
+/** When two values differ only in case, prefer the one starting with an uppercase letter. */
+function pickPreferredCase(existing: string, incoming: string): string {
+  const existingIsCapital = existing.length > 0 && existing[0] !== existing[0].toLowerCase();
+  const incomingIsCapital = incoming.length > 0 && incoming[0] !== incoming[0].toLowerCase();
+  return (incomingIsCapital && !existingIsCapital) ? incoming : existing;
+}
+
 export function validateColumnName(
   name: string,
   existingNames: string[],
@@ -125,31 +132,39 @@ export function expenseDraftToRowValues(draft: ExpenseDraft, sheetCurrencies: st
 }
 
 export function buildDistinctValues(records: ExpenseRecord[], customColumns: string[] = []): DistinctValues {
-  const fixedSets: Record<string, Set<string>> = { Category: new Set(), spentBy: new Set() };
-  const customSets: Record<string, Set<string>> = {};
+  const fixedMaps: Record<string, Map<string, string>> = { Category: new Map(), spentBy: new Map() };
+  const customMaps: Record<string, Map<string, string>> = {};
   for (const col of customColumns) {
-    customSets[col] = new Set();
+    customMaps[col] = new Map();
   }
 
   for (const record of records) {
     for (const key of distinctFixedKeys) {
       const value = record[key].trim();
-      if (value) fixedSets[key].add(value);
+      if (value) {
+        const lower = value.toLowerCase();
+        const existing = fixedMaps[key].get(lower);
+        fixedMaps[key].set(lower, existing ? pickPreferredCase(existing, value) : value);
+      }
     }
     for (const col of customColumns) {
       const value = record.customFields[col]?.trim();
-      if (value) customSets[col].add(value);
+      if (value) {
+        const lower = value.toLowerCase();
+        const existing = customMaps[col].get(lower);
+        customMaps[col].set(lower, existing ? pickPreferredCase(existing, value) : value);
+      }
     }
   }
 
   const customFields: Record<string, string[]> = {};
   for (const col of customColumns) {
-    customFields[col] = [...(customSets[col] ?? new Set())].sort((a, b) => a.localeCompare(b));
+    customFields[col] = [...(customMaps[col]?.values() ?? [])].sort((a, b) => a.localeCompare(b));
   }
 
   return {
-    Category: [...fixedSets.Category].sort((a, b) => a.localeCompare(b)),
-    spentBy: [...fixedSets.spentBy].sort((a, b) => a.localeCompare(b)),
+    Category: [...fixedMaps.Category.values()].sort((a, b) => a.localeCompare(b)),
+    spentBy: [...fixedMaps.spentBy.values()].sort((a, b) => a.localeCompare(b)),
     customFields,
   };
 }
@@ -175,7 +190,13 @@ export function assertDatasetWithinLimit(records: ExpenseRecord[]): number {
  */
 export function mergeCategories(fromDataset: string[], predefined: string[]): string[] {
   if (!predefined.length) return fromDataset;
-  return [...new Set([...fromDataset, ...predefined])].sort((a, b) => a.localeCompare(b));
+  const map = new Map<string, string>();
+  for (const val of [...fromDataset, ...predefined]) {
+    const lower = val.toLowerCase();
+    const existing = map.get(lower);
+    map.set(lower, existing ? pickPreferredCase(existing, val) : val);
+  }
+  return [...map.values()].sort((a, b) => a.localeCompare(b));
 }
 
 export { SHEET_NAME };

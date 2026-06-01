@@ -9,14 +9,14 @@ export interface SearchOutcome {
 
 export function filterExpenses(records: ExpenseRecord[], filters: SearchFilters): SearchOutcome {
   const normalizedComment = filters.comment.trim().toLowerCase();
-  const selectedCategories = new Set(filters.categories);
+  const selectedCategoriesLower = new Set(filters.categories.map((c) => c.toLowerCase()));
 
   const parts = normalizedComment.split(/\s+/).filter((p) => p.length > 0);
   const meaningfulChars = parts.join("");
 
   const matches = records.filter((record) => {
     const categoryMatch =
-      selectedCategories.size === 0 || selectedCategories.has(record.Category);
+      selectedCategoriesLower.size === 0 || selectedCategoriesLower.has(record.Category.trim().toLowerCase());
     const commentMatch =
       meaningfulChars.length < 2 ||
       parts.every((p) => record.Comment.toLowerCase().includes(p));

@@ -88,4 +88,10 @@ describe("expense search", () => {
     expect(outcome.allMatches).toHaveLength(1);
     expect(outcome.allMatches[0].rowNumber).toBe(2);
   });
+
+  it("matches category filter case-insensitively", () => {
+    const outcome = filterExpenses(records, { categories: ["food"], comment: "" });
+    expect(outcome.allMatches).toHaveLength(1);
+    expect(outcome.allMatches[0].Category).toBe("Food");
+  });
 });

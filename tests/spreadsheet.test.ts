@@ -50,6 +50,21 @@ describe("spreadsheet utilities", () => {
     });
   });
 
+  it("deduplicates categories case-insensitively, preferring the capitalized variant", () => {
+    const records = mapRowsToExpenseRecords(
+      [
+        ["2026-03-01", "5.00", "pocket money", "a@example.com", ""],
+        ["2026-03-02", "5.00", "Pocket Money", "a@example.com", ""],
+        ["2026-03-03", "5.00", "internet", "a@example.com", ""],
+        ["2026-03-04", "5.00", "Internet", "a@example.com", ""],
+      ],
+      [],
+      [],
+    );
+
+    expect(buildDistinctValues(records).Category).toEqual(["Internet", "Pocket Money"]);
+  });
+
   it("maps rows correctly with no currencies and no custom columns", () => {
     const records = mapRowsToExpenseRecords(
       [["2026-03-01", "5.00", "Food", "a@example.com", ""]],
@@ -170,7 +185,15 @@ describe("mergeCategories", () => {
     ]);
   });
 
-  it("deduplication is case-sensitive", () => {
-    expect(mergeCategories(["food"], ["Food"])).toEqual(["food", "Food"]);
+  it("deduplication is case-insensitive, preferring the capitalized variant", () => {
+    expect(mergeCategories(["food"], ["Food"])).toEqual(["Food"]);
+  });
+
+  it("keeps first occurrence when neither variant starts with a capital", () => {
+    expect(mergeCategories(["food"], ["fOOD"])).toEqual(["food"]);
+  });
+
+  it("keeps first occurrence when both variants start with a capital", () => {
+    expect(mergeCategories(["Food"], ["FOOD"])).toEqual(["Food"]);
   });
 });
