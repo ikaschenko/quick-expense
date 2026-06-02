@@ -23,6 +23,7 @@ interface ConfigContextValue {
   clearError: () => void;
   refreshConfig: () => void;
   updateStructure: (currencies: string[], customColumns: string[]) => void;
+  toggleColumnVisibility: (field: string, hidden: boolean) => Promise<void>;
 }
 
 const ConfigContext = createContext<ConfigContextValue | null>(null);
@@ -133,6 +134,30 @@ export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
         setConfig((prev) =>
           prev ? { ...prev, currencies, customColumns } : prev,
         );
+      },
+      toggleColumnVisibility: async (field: string, hidden: boolean): Promise<void> => {
+        // Optimistic update
+        setConfig((prev) => {
+          if (!prev) return prev;
+          const next = hidden
+            ? [...prev.hiddenColumns, field]
+            : prev.hiddenColumns.filter((f) => f !== field);
+          return { ...prev, hiddenColumns: next };
+        });
+        try {
+          const { hiddenColumns } = await googleSheetsService.toggleColumnVisibility(field, hidden);
+          setConfig((prev) => (prev ? { ...prev, hiddenColumns } : prev));
+        } catch (err) {
+          // Revert optimistic update on failure
+          setConfig((prev) => {
+            if (!prev) return prev;
+            const reverted = hidden
+              ? prev.hiddenColumns.filter((f) => f !== field)
+              : [...prev.hiddenColumns, field];
+            return { ...prev, hiddenColumns: reverted };
+          });
+          throw err;
+        }
       },
     };
   }, [config, isConfigLoading, error, fileName, isFileNameLoading, session]);

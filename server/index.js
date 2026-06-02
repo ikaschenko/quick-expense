@@ -54,6 +54,9 @@ import {
   updateUserRecord,
   saveFxRateBackup,
   getLatestFxRateBackup,
+  getHiddenColumns,
+  setColumnVisibility,
+  renameVisibilityEntry,
 } from "./store.js";
 import pool from "./db.js";
 
@@ -152,7 +155,7 @@ app.use(
 );
 
 app.use((req, res, next) => {
-  if (["POST", "PUT", "DELETE"].includes(req.method)) {
+  if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
     if (req.headers["x-requested-with"] !== "fetch") {
       res.status(403).json({ message: "Forbidden." });
       return;
@@ -338,6 +341,13 @@ app.get("/api/config", requireAuthenticatedUser, async (req, res) => {
 
     const report = await validateSpreadsheet(accessToken, userRecord.spreadsheetId, mapping);
 
+    let hiddenColumns = [];
+    try {
+      hiddenColumns = await getHiddenColumns(userRecord.email, userRecord.spreadsheetId);
+    } catch {
+      // Table may not exist yet before migration — fall back to empty.
+    }
+
     res.json({
       config: {
         email: userRecord.email,
@@ -348,9 +358,43 @@ app.get("/api/config", requireAuthenticatedUser, async (req, res) => {
         customColumns: report.customColumns,
         configMode,
         predefinedCategories,
+        hiddenColumns,
         ...(configModeReason ? { configModeReason } : {}),
       },
     });
+  } catch (error) {
+    res.status(500).json({ message: (error).message });
+  }
+});
+
+app.patch("/api/config/column-visibility", requireAuthenticatedUser, async (req, res) => {
+  if (!req.userRecord.spreadsheetId) {
+    res.status(400).json({ message: "Spreadsheet is not configured." });
+    return;
+  }
+
+  const field = String(req.body?.field ?? "").trim();
+  const hidden = req.body?.hidden;
+
+  if (!field || field.length > 30) {
+    res.status(400).json({ message: "field must be a non-empty string of at most 30 characters." });
+    return;
+  }
+  if (typeof hidden !== "boolean") {
+    res.status(400).json({ message: "hidden must be a boolean." });
+    return;
+  }
+
+  const nonHideableFields = ["date", "usd", "category", "spent by"];
+  if (nonHideableFields.includes(field.toLowerCase())) {
+    res.status(400).json({ message: `"${field}" is a mandatory field and cannot be hidden.` });
+    return;
+  }
+
+  try {
+    await setColumnVisibility(req.userRecord.email, req.userRecord.spreadsheetId, field, hidden);
+    const hiddenColumns = await getHiddenColumns(req.userRecord.email, req.userRecord.spreadsheetId);
+    res.json({ hiddenColumns });
   } catch (error) {
     res.status(500).json({ message: (error).message });
   }
@@ -683,6 +727,7 @@ app.patch("/api/sheet/column/rename", requireAuthenticatedUser, async (req, res)
     }
 
     await renameColumnInSheet(accessToken, req.userRecord.spreadsheetId, colIndex, newName);
+    await renameVisibilityEntry(req.userRecord.email, req.userRecord.spreadsheetId, currentName, newName);
 
     const updated = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping);
     res.json({ currencies: updated.sheetCurrencies, customColumns: updated.customColumns });

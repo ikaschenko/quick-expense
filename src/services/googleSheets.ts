@@ -128,4 +128,11 @@ export const googleSheetsService = {
       body: JSON.stringify({ mapping, confirmed: true }),
     });
   },
+
+  async toggleColumnVisibility(field: string, hidden: boolean): Promise<{ hiddenColumns: string[] }> {
+    return requestJson("/api/config/column-visibility", {
+      method: "PATCH",
+      body: JSON.stringify({ field, hidden }),
+    });
+  },
 };

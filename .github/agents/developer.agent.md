@@ -30,3 +30,20 @@ You are a Software Developer on the Quick Expense project.
 4. Implement following existing patterns. Be concise in plans — short bullet points.
 5. Run build + tests to verify.
 6. Flag architectural changes (new routes, data flows, dependencies) for architect review.
+
+## Tests & Documentation — No Debt Policy
+
+Every task is complete only when tests and docs are current. Apply these checks **before** reporting done:
+
+**Tests (`tests/`)**
+- New exported function or module → add a `tests/<module>.test.(ts|js)` block covering happy path, nulls/empty, and boundaries.
+- New API endpoint → add tests in `tests/store.test.js` (store functions) and check route-level validation logic.
+- Changed behaviour → update or extend existing tests so they reflect the new contract.
+- Deleted or renamed export → remove or rename its tests.
+
+**Documentation**
+- New API endpoint → add a row to the endpoint table in `architecture.md` §6.
+- New or changed DB table/column → update the data model section in `architecture.md` §7.1 and the migration list in `db/database.md`.
+- New DB migration file → append it to the migration table in `architecture.md` §7.3 and to the `psql` command list in `db/database.md`.
+- Changed context shape or service method → update the relevant description in `architecture.md` §8.
+- File renamed or moved → update every reference across `architecture.md`, `README.md`, `.github/copilot-instructions.md`, and agent/skill files.

@@ -87,7 +87,7 @@ npm install
 
 ## Database setup
 
-The backend requires a PostgreSQL database. For initial setup (installing PostgreSQL, creating the database, and running the schema) see [`db/README.md`](db/README.md).
+The backend requires a PostgreSQL database. For initial setup (installing PostgreSQL, creating the database, and running the schema) see [`db/database.md`](db/database.md).
 
 ## Run locally
 

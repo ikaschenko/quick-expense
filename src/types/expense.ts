@@ -55,6 +55,8 @@ export interface SpreadsheetConfig {
   configMode: ConfigMode;
   configModeReason?: string;
   predefinedCategories: string[];
+  /** Canonical QE field names hidden from the Add Expense form. */
+  hiddenColumns: string[];
 }
 
 export interface SetupReport {

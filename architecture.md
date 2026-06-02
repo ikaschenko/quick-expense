@@ -253,6 +253,7 @@ All API routes are defined in `server/index.js`.
 | GET | `/api/currencies/available` | Yes | Get the currency dictionary (all supported codes + max limit) |
 | GET | `/api/currencies` | Yes | Get the user's active currency codes |
 | PUT | `/api/currencies` | Yes | Save user's currency selection and update sheet columns |
+| PATCH | `/api/config/column-visibility` | Yes | Toggle visibility of a column on the Add Expense form (`{ field, hidden }`) |
 
 "Auth = Yes" means the `requireAuthenticatedUser` middleware is applied: it verifies the session cookie has a `userEmail`, retrieves the user record, and attaches it to `req.userRecord`.
 
@@ -331,6 +332,23 @@ Stores each user's configurable (non-USD) currency selections with an audit trai
 - When a user removes a currency, `removed_at` is set (soft-delete). The column remains in the spreadsheet for historical data.
 - On first load, if no records exist for a user, active currencies are auto-seeded from the sheet's existing header columns (legacy migration).
 
+#### e) `user_column_visibility` Table
+
+Stores per-user, per-spreadsheet column visibility preferences for the Add Expense form. A row's presence means the column is hidden; absence means visible.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | SERIAL | PRIMARY KEY |
+| `user_email` | TEXT | NOT NULL, FK → users(email) |
+| `spreadsheet_id` | TEXT | NOT NULL |
+| `canonical_field_name` | VARCHAR(30) | NOT NULL |
+| `hidden_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() |
+
+- Unique index on `(user_email, spreadsheet_id, canonical_field_name)` prevents duplicate entries.
+- Keyed by canonical QE field name (e.g. `"Comment"`, `"PLN"`) so column renames via the Setup UI automatically migrate the preference via `renameVisibilityEntry()`.
+- Only hideable columns may be toggled: `Date`, `USD`, `Category`, and `Spent By` are never hidden (rejected at the API layer).
+- Tail and Search always show all columns regardless of visibility preferences.
+
 ### 7.2 Expense Data — Google Spreadsheet
 
 **Expense data is NOT stored in the backend.** It lives entirely in a Google Spreadsheet controlled by the user.
@@ -374,7 +392,20 @@ The system detects the Config sheet state via `detectConfigSheet()` and operates
 
 ### 7.3 Database Schema Management
 
-Schema scripts are stored in `db/` as numbered SQL files (`001_initial_schema.sql`, etc.). Apply them in order against the target PostgreSQL instance. See `db/README.md` for setup instructions.
+Schema scripts are stored in `db/` as numbered SQL files (`001_initial_schema.sql`, etc.). Apply them in order against the target PostgreSQL instance. See `db/database.md` for setup instructions.
+
+Current migrations:
+
+| File | Purpose |
+|---|---|
+| `001_initial_schema.sql` | `users`, `fx_rate_backups`, `sessions` tables |
+| `002_enable_rls_and_revoke_postgrest_access.sql` | RLS + PostgREST lockdown for initial tables |
+| `003_user_currencies.sql` | `user_currencies` table |
+| `004_rls_user_currencies.sql` | RLS policy for `user_currencies` |
+| `005_user_custom_columns.sql` | Custom column support |
+| `006_drop_column_config_tables.sql` | Cleanup of superseded config tables |
+| `007_user_column_visibility.sql` | `user_column_visibility` table |
+| `008_rls_user_column_visibility.sql` | RLS policy for `user_column_visibility` |
 
 ---
 
@@ -392,7 +423,7 @@ The SPA uses three nested context providers (wrapped in `App.tsx`):
 ```
 
 - **AuthContext:** Checks `/api/auth/session` on mount. Exposes `status` (`initializing` | `signed_out` | `signed_in`), `session` (email + timestamps), `signIn()`, `signOut()`, `refreshSession()`.
-- **ConfigContext:** Fetches `/api/config` when a session is present. Exposes the `SpreadsheetConfig` object and methods to save/clear/refresh. The config includes a `configMode` field (`"default"` | `"config-driven"` | `"config-invalid"`) indicating whether a column mapping is active. When `configMode` is `"config-invalid"`, a `configModeReason` string explains the problem.
+- **ConfigContext:** Fetches `/api/config` when a session is present. Exposes the `SpreadsheetConfig` object and methods to save/clear/refresh. The config includes a `configMode` field (`"default"` | `"config-driven"` | `"config-invalid"`) indicating whether a column mapping is active. When `configMode` is `"config-invalid"`, a `configModeReason` string explains the problem. `hiddenColumns: string[]` lists canonical field names hidden from the Add Expense form; `toggleColumnVisibility(field, hidden)` updates this list optimistically with server sync and automatic revert on failure.
 - **DatasetContext:** Manages the loaded expense dataset. Key behaviors:
   - `loadDataset()` — fetches from `/api/expenses` unless a valid cached snapshot exists.
   - `invalidateDataset()` — called after a successful Add, forcing the next Tail/Search to reload.
@@ -420,7 +451,7 @@ Frontend services in `src/services/` are thin wrappers around `fetch`:
 
 - **`http.ts`** — `requestJson<T>()` and `requestNoContent()`: attach credentials, `X-Requested-With` header, parse errors into typed `AppError`.
 - **`authApi.ts`** — session check, login redirect, logout.
-- **`googleSheets.ts`** — config CRUD, expense load/append, FX rate backup.
+- **`googleSheets.ts`** — config CRUD, expense load/append, FX rate backup, column visibility toggle.
 - **`googlePicker.ts`** — loads Google Picker script, opens file picker dialog.
 - **`currency.ts`** — manual FX rate parsing and USD conversion logic.
 - **`localConfig.ts`** — per-email localStorage cache for spreadsheet config (fallback/optimization).

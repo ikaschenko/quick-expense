@@ -20,7 +20,7 @@ Run `npm run build` after TypeScript changes and `npm test` after any logic chan
 ## Dev Environment
 
 - Copy `.env.example` → `.env` and fill in Google OAuth credentials — see [README.md](../README.md) for details.
-- PostgreSQL is required — see [db/README.md](../db/README.md) for local setup (native or Docker).
+- PostgreSQL is required — see [db/database.md](../db/database.md) for local setup (native or Docker).
 - Vite dev server runs on `:5173` and proxies `/api` to the Express backend on `:3001`.
 - Node.js `20.19.0` (pinned in `.nvmrc`). Supported range: `^20.19.0 || ^22.12.0`.
 

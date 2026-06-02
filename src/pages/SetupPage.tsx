@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { FileSpreadsheet, Wand2, ChevronDown, ChevronUp, X, Plus, Pencil, Trash2, Check, TableProperties } from "lucide-react";
+import { FileSpreadsheet, Wand2, ChevronDown, ChevronUp, X, Plus, Pencil, Trash2, Check, TableProperties, Eye, EyeOff } from "lucide-react";
 import { Layout } from "../components/Layout";
 import { LoadingBlock } from "../components/LoadingBlock";
 import { StatusBanner } from "../components/StatusBanner";
@@ -14,6 +14,29 @@ import { deriveHeaderRowDetails, validateColumnName } from "../utils/spreadsheet
 import { REQUIRED_QE_FIELDS } from "../constants/expenses";
 
 type ColumnType = "mandatory-field" | "mandatory-currency" | "optional-currency" | "custom-column";
+
+interface ColumnInfo {
+  name: string;
+  type: ColumnType;
+  /** Whether this column can be hidden from the Add Expense form. */
+  hideable: boolean;
+}
+
+/**
+ * Asserts that a ColumnInfo has a consistent combination of type and hideable.
+ * Called on every classifyColumns() invocation (i.e., on every backend load/save cycle).
+ */
+function assertColumnInfoConsistency(col: ColumnInfo): void {
+  if (col.type === "mandatory-currency" && col.hideable) {
+    throw new Error(`ColumnInfo inconsistency: "${col.name}" is mandatory-currency but hideable=true`);
+  }
+  if (col.type === "optional-currency" && !col.hideable) {
+    throw new Error(`ColumnInfo inconsistency: "${col.name}" is optional-currency but hideable=false`);
+  }
+  if (col.type === "custom-column" && !col.hideable) {
+    throw new Error(`ColumnInfo inconsistency: "${col.name}" is custom-column but hideable=false`);
+  }
+}
 
 function configModeBadgeLabel(mode: ConfigMode): string {
   switch (mode) {
@@ -40,16 +63,19 @@ interface ColumnInfo {
 
 function classifyColumns(currencies: string[], customColumns: string[]): ColumnInfo[] {
   const result: ColumnInfo[] = [];
-  result.push({ name: "Date", type: "mandatory-field" });
+  result.push({ name: "Date", type: "mandatory-field", hideable: false });
   for (const code of currencies) {
-    result.push({ name: code, type: "optional-currency" });
+    result.push({ name: code, type: "optional-currency", hideable: true });
   }
-  result.push({ name: "USD", type: "mandatory-currency" });
-  result.push({ name: "Category", type: "mandatory-field" });
-  result.push({ name: "Spent By", type: "mandatory-field" });
-  result.push({ name: "Comment", type: "mandatory-field" });
+  result.push({ name: "USD", type: "mandatory-currency", hideable: false });
+  result.push({ name: "Category", type: "mandatory-field", hideable: false });
+  result.push({ name: "Spent By", type: "mandatory-field", hideable: false });
+  result.push({ name: "Comment", type: "mandatory-field", hideable: true });
   for (const col of customColumns) {
-    result.push({ name: col, type: "custom-column" });
+    result.push({ name: col, type: "custom-column", hideable: true });
+  }
+  for (const col of result) {
+    assertColumnInfoConsistency(col);
   }
   return result;
 }
@@ -68,7 +94,7 @@ const MAX_CUSTOM_COLUMNS = 10;
 type SetupPath = "choose" | "fresh" | "existing" | "configured";
 
 export function SetupPage(): JSX.Element {
-  const { config, isConfigLoading, error: configError, saveConfig, updateStructure, fileName, isFileNameLoading } = useConfig();
+  const { config, isConfigLoading, error: configError, saveConfig, updateStructure, toggleColumnVisibility, fileName, isFileNameLoading } = useConfig();
   const [spreadsheetUrl, setSpreadsheetUrl] = useState("");  const [error, setError] = useState<string | null>(null);
   const [headerDetails, setHeaderDetails] = useState<HeaderDetails | null>(null);
   const [showMappingEditor, setShowMappingEditor] = useState(false);
@@ -105,6 +131,22 @@ export function SetupPage(): JSX.Element {
 
   // Field-level error for inline forms
   const [fieldError, setFieldError] = useState<string | null>(null);
+
+  // ─── Toggle Column Visibility ────────────────────────────────────────────────────
+
+  const handleToggleVisibility = async (fieldName: string): Promise<void> => {
+    if (!config) return;
+    clearActionBanners();
+    const isCurrentlyHidden = (config.hiddenColumns ?? []).includes(fieldName);
+    setActionBusy(true);
+    try {
+      await toggleColumnVisibility(fieldName, !isCurrentlyHidden);
+    } catch (err) {
+      setActionError((err as Error).message);
+    } finally {
+      setActionBusy(false);
+    }
+  };
 
   // Column mapping state (configured path)
   const [mappingData, setMappingData] = useState<{
@@ -811,7 +853,7 @@ export function SetupPage(): JSX.Element {
                     {col.name}
                     <span className={`custom-columns-type-badge custom-columns-type-badge--${col.type}`}>{typeLabel(col.type)}</span>
                   </span>
-                  {!isMandatory ? (
+                  {(col.hideable || !isMandatory) ? (
                     <div className="custom-columns-actions">
                       {isCurrency ? (
                         <>
@@ -857,24 +899,43 @@ export function SetupPage(): JSX.Element {
                           </button>
                         </>
                       ) : null}
-                      <button
-                        className="btn-icon"
-                        type="button"
-                        disabled={actionBusy}
-                        onClick={() => startRenaming(col.name)}
-                        aria-label={`Rename ${col.name}`}
-                      >
-                        <Pencil size={16} />
-                      </button>
-                      <button
-                        className="btn-icon btn-icon-danger"
-                        type="button"
-                        disabled={actionBusy}
-                        onClick={() => startRemove(col.name)}
-                        aria-label={`Remove ${col.name}`}
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      {!isMandatory ? (
+                        <button
+                          className="btn-icon"
+                          type="button"
+                          disabled={actionBusy}
+                          onClick={() => startRenaming(col.name)}
+                          aria-label={`Rename ${col.name}`}
+                        >
+                          <Pencil size={16} />
+                        </button>
+                      ) : null}
+                      {col.hideable ? (() => {
+                        const isHidden = (config?.hiddenColumns ?? []).includes(col.name);
+                        return (
+                          <button
+                            className="btn-icon"
+                            type="button"
+                            disabled={actionBusy}
+                            onClick={() => void handleToggleVisibility(col.name)}
+                            aria-label={isHidden ? `Show ${col.name} on Add form` : `Hide ${col.name} from Add form`}
+                            title={isHidden ? "Hidden from Add form" : "Visible on Add form"}
+                          >
+                            {isHidden ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        );
+                      })() : null}
+                      {!isMandatory ? (
+                        <button
+                          className="btn-icon btn-icon-danger"
+                          type="button"
+                          disabled={actionBusy}
+                          onClick={() => startRemove(col.name)}
+                          aria-label={`Remove ${col.name}`}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      ) : null}
                     </div>
                   ) : null}
                 </li>

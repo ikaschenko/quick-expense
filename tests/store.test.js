@@ -17,6 +17,9 @@ let getUserRecord;
 let updateUserRecord;
 let saveFxRateBackup;
 let getLatestFxRateBackup;
+let getHiddenColumns;
+let setColumnVisibility;
+let renameVisibilityEntry;
 
 beforeAll(async () => {
   ({
@@ -24,6 +27,9 @@ beforeAll(async () => {
     updateUserRecord,
     saveFxRateBackup,
     getLatestFxRateBackup,
+    getHiddenColumns,
+    setColumnVisibility,
+    renameVisibilityEntry,
   } = await import("../server/store.js"));
 });
 
@@ -215,6 +221,103 @@ describe("getLatestFxRateBackup", () => {
         EUR: "1.160000",
       },
     });
+  });
+});
+
+describe("getHiddenColumns", () => {
+  it("returns an empty array when no hidden columns exist", async () => {
+    mockQuery.mockResolvedValue({ rows: [] });
+
+    const result = await getHiddenColumns("user@test.com", "sheet-1");
+
+    expect(result).toEqual([]);
+    expect(mockQuery).toHaveBeenCalledWith(
+      expect.stringContaining("SELECT canonical_field_name"),
+      ["user@test.com", "sheet-1"],
+    );
+  });
+
+  it("returns the canonical field names of hidden columns", async () => {
+    mockQuery.mockResolvedValue({
+      rows: [
+        { canonical_field_name: "Comment" },
+        { canonical_field_name: "PLN" },
+      ],
+    });
+
+    const result = await getHiddenColumns("user@test.com", "sheet-1");
+
+    expect(result).toEqual(["Comment", "PLN"]);
+  });
+
+  it("normalizes email to lowercase before querying", async () => {
+    mockQuery.mockResolvedValue({ rows: [] });
+
+    await getHiddenColumns("User@Test.COM", "sheet-1");
+
+    expect(mockQuery.mock.calls[0][1][0]).toBe("user@test.com");
+  });
+});
+
+describe("setColumnVisibility", () => {
+  it("inserts a row when hidden=true", async () => {
+    mockQuery.mockResolvedValue({ rows: [] });
+
+    await setColumnVisibility("user@test.com", "sheet-1", "Comment", true);
+
+    expect(mockQuery).toHaveBeenCalledTimes(1);
+    const [sql, params] = mockQuery.mock.calls[0];
+    expect(sql).toContain("INSERT INTO user_column_visibility");
+    expect(sql).toContain("ON CONFLICT");
+    expect(params).toEqual(["user@test.com", "sheet-1", "Comment"]);
+  });
+
+  it("deletes the row when hidden=false", async () => {
+    mockQuery.mockResolvedValue({ rows: [] });
+
+    await setColumnVisibility("user@test.com", "sheet-1", "PLN", false);
+
+    expect(mockQuery).toHaveBeenCalledTimes(1);
+    const [sql, params] = mockQuery.mock.calls[0];
+    expect(sql).toContain("DELETE FROM user_column_visibility");
+    expect(params).toEqual(["user@test.com", "sheet-1", "PLN"]);
+  });
+
+  it("normalizes email to lowercase", async () => {
+    mockQuery.mockResolvedValue({ rows: [] });
+
+    await setColumnVisibility("UPPER@TEST.COM", "sheet-1", "Comment", true);
+
+    expect(mockQuery.mock.calls[0][1][0]).toBe("upper@test.com");
+  });
+});
+
+describe("renameVisibilityEntry", () => {
+  it("issues an UPDATE with the new field name", async () => {
+    mockQuery.mockResolvedValue({ rows: [] });
+
+    await renameVisibilityEntry("user@test.com", "sheet-1", "OldName", "NewName");
+
+    expect(mockQuery).toHaveBeenCalledTimes(1);
+    const [sql, params] = mockQuery.mock.calls[0];
+    expect(sql).toContain("UPDATE user_column_visibility");
+    expect(params).toEqual(["user@test.com", "sheet-1", "OldName", "NewName"]);
+  });
+
+  it("normalizes email to lowercase", async () => {
+    mockQuery.mockResolvedValue({ rows: [] });
+
+    await renameVisibilityEntry("User@Test.COM", "sheet-1", "OldName", "NewName");
+
+    expect(mockQuery.mock.calls[0][1][0]).toBe("user@test.com");
+  });
+
+  it("is a no-op when the old name does not exist", async () => {
+    mockQuery.mockResolvedValue({ rowCount: 0 });
+
+    await expect(
+      renameVisibilityEntry("user@test.com", "sheet-1", "DoesNotExist", "NewName"),
+    ).resolves.toBeUndefined();
   });
 });
 

@@ -110,6 +110,16 @@ export function AddExpensePage(): JSX.Element {
 
   const activeCurrencies = useMemo(() => config?.currencies ?? [], [config?.currencies]);
   const customColumns = useMemo(() => config?.customColumns ?? [], [config?.customColumns]);
+  const hiddenColumns = useMemo(() => config?.hiddenColumns ?? [], [config?.hiddenColumns]);
+  const visibleCurrencies = useMemo(
+    () => activeCurrencies.filter((c) => !hiddenColumns.includes(c)),
+    [activeCurrencies, hiddenColumns],
+  );
+  const isCommentHidden = hiddenColumns.includes("Comment");
+  const visibleCustomColumns = useMemo(
+    () => customColumns.filter((c) => !hiddenColumns.includes(c)),
+    [customColumns, hiddenColumns],
+  );
 
   const [draft, setDraft] = useState<ExpenseDraft>(
     createInitialDraft(auth.session?.email ?? "", activeCurrencies, customColumns),
@@ -124,7 +134,7 @@ export function AddExpensePage(): JSX.Element {
   );
   const [fxErrors, setFxErrors] = useState<Partial<Record<string, string>>>({});
   const [activeNonUsdCurrency, setActiveNonUsdCurrency] = useState<string | null>(
-    activeCurrencies[0] ?? null,
+    visibleCurrencies[0] ?? null,
   );
   const [hasManuallySelectedCurrency, setHasManuallySelectedCurrency] = useState(false);
   const [currencyDictionary, setCurrencyDictionary] = useState<CurrencyDictionary | null>(null);
@@ -147,14 +157,14 @@ export function AddExpensePage(): JSX.Element {
   const latestSavedCurrency = useMemo(() => {
     const records = dataset.snapshot?.records;
     const latestRecord = records && records.length > 0 ? records[records.length - 1] : null;
-    return getPreferredCurrency(latestRecord, activeCurrencies);
-  }, [dataset.snapshot, activeCurrencies]);
+    return getPreferredCurrency(latestRecord, visibleCurrencies);
+  }, [dataset.snapshot, visibleCurrencies]);
 
   useEffect(() => {
     setDraft(createInitialDraft(auth.session?.email ?? "", activeCurrencies, customColumns));
     setManualFxRates(createEmptyFxRates(activeCurrencies));
     setFxErrors({});
-    setActiveNonUsdCurrency(activeCurrencies[0] ?? null);
+    setActiveNonUsdCurrency(visibleCurrencies[0] ?? null);
     setHasManuallySelectedCurrency(false);
   }, [auth.session?.email, activeCurrencies, customColumns]);
 
@@ -193,7 +203,8 @@ export function AddExpensePage(): JSX.Element {
 
         const rates: ManualFxRates = {};
         for (const code of activeCurrencies) {
-          rates[code] = backup.rates[code] ?? "";
+          const raw = backup.rates[code];
+          rates[code] = raw ? Number(raw).toFixed(2) : "";
         }
         setManualFxRates(rates);
       })
@@ -453,10 +464,10 @@ export function AddExpensePage(): JSX.Element {
           </div>
         )}
 
-        {/* Currency pills — only when active currencies exist */}
-        {activeCurrencies.length > 0 ? (
+        {/* Currency pills — only when visible currencies exist */}
+        {visibleCurrencies.length > 0 ? (
           <div className="currency-pills" role="tablist" aria-label="Select currency">
-            {activeCurrencies.map((currency) => (
+            {visibleCurrencies.map((currency) => (
               <button
                 key={currency}
                 className={`currency-pill${currency === activeNonUsdCurrency ? " active" : ""}`}
@@ -591,6 +602,7 @@ export function AddExpensePage(): JSX.Element {
         </div>
 
         {/* Comment */}
+        {!isCommentHidden ? (
         <div className="input-group">
           <label className="input-label" htmlFor="comment-field">Comment</label>
           <input
@@ -601,9 +613,10 @@ export function AddExpensePage(): JSX.Element {
             placeholder="Add a note…"
           />
         </div>
+        ) : null}
 
         {/* Custom columns */}
-        {customColumns.map((col) => (
+        {visibleCustomColumns.map((col) => (
           <div key={col} className="input-group">
             <label className="input-label" htmlFor={`custom-field-${col}`}>{formatColumnLabel(col)}</label>
             <input

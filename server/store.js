@@ -97,3 +97,43 @@ export async function getLatestFxRateBackup(email, spreadsheetId) {
 
   return { rates };
 }
+
+// ─── Column Visibility ────────────────────────────────────────────────────────
+
+export async function getHiddenColumns(email, spreadsheetId) {
+  const normalizedEmail = email.toLowerCase();
+  const { rows } = await pool.query(
+    `SELECT canonical_field_name FROM user_column_visibility
+     WHERE user_email = $1 AND spreadsheet_id = $2`,
+    [normalizedEmail, spreadsheetId],
+  );
+  return rows.map((r) => r.canonical_field_name);
+}
+
+export async function setColumnVisibility(email, spreadsheetId, fieldName, hidden) {
+  const normalizedEmail = email.toLowerCase();
+  if (hidden) {
+    await pool.query(
+      `INSERT INTO user_column_visibility (user_email, spreadsheet_id, canonical_field_name)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (user_email, spreadsheet_id, canonical_field_name) DO NOTHING`,
+      [normalizedEmail, spreadsheetId, fieldName],
+    );
+  } else {
+    await pool.query(
+      `DELETE FROM user_column_visibility
+       WHERE user_email = $1 AND spreadsheet_id = $2 AND canonical_field_name = $3`,
+      [normalizedEmail, spreadsheetId, fieldName],
+    );
+  }
+}
+
+export async function renameVisibilityEntry(email, spreadsheetId, oldName, newName) {
+  const normalizedEmail = email.toLowerCase();
+  await pool.query(
+    `UPDATE user_column_visibility
+     SET canonical_field_name = $4
+     WHERE user_email = $1 AND spreadsheet_id = $2 AND canonical_field_name = $3`,
+    [normalizedEmail, spreadsheetId, oldName, newName],
+  );
+}
