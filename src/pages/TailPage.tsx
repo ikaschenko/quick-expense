@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
 import { MAX_TAIL_RECORDS } from "../constants/expenses";
@@ -8,11 +8,18 @@ import { LoadingBlock } from "../components/LoadingBlock";
 import { StatusBanner } from "../components/StatusBanner";
 import { useConfig } from "../contexts/ConfigContext";
 import { useDataset } from "../contexts/DatasetContext";
+import { googleSheetsService } from "../services/googleSheets";
+import { getDisplayAmount } from "../utils/expenseTable";
+import { ExpenseRecord } from "../types/expense";
 
 export function TailPage(): JSX.Element {
   const { config, isConfigLoading, error: configError } = useConfig();
   const dataset = useDataset();
   const navigate = useNavigate();
+
+  const [confirmRecord, setConfirmRecord] = useState<ExpenseRecord | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     // Only redirect to setup if config is truly missing AND not loading/errored
@@ -31,6 +38,28 @@ export function TailPage(): JSX.Element {
     () => dataset.snapshot?.records.slice(-MAX_TAIL_RECORDS) ?? [],
     [dataset.snapshot?.records],
   );
+
+  const lastRecord = visibleRecords.at(-1) ?? null;
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!confirmRecord || !dataset.snapshot) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await googleSheetsService.deleteLastExpenseRow(dataset.snapshot.records.length);
+      setConfirmRecord(null);
+      await dataset.reloadDataset();
+    } catch (error) {
+      setDeleteError((error as Error).message);
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [confirmRecord, dataset]);
+
+  const handleDeleteCancel = useCallback(() => {
+    setConfirmRecord(null);
+    setDeleteError(null);
+  }, []);
 
   return (
     <Layout title="History">
@@ -63,7 +92,52 @@ export function TailPage(): JSX.Element {
           sheetCurrencies={config?.currencies}
           activeCurrencies={config?.currencies}
           customColumns={config?.customColumns}
+          lastRecordRowNumber={lastRecord?.rowNumber}
+          onDeleteRequest={setConfirmRecord}
         />
+      ) : null}
+
+      {confirmRecord ? (
+        <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+          <div className="confirm-dialog">
+            <h3 className="confirm-title" id="confirm-title">Delete expense?</h3>
+            <div className="confirm-record-preview">
+              <div className="confirm-preview-row">
+                <span className="confirm-preview-label">Date</span>
+                <span>{confirmRecord.Date}</span>
+              </div>
+              <div className="confirm-preview-row">
+                <span className="confirm-preview-label">Amount</span>
+                <span>{getDisplayAmount(confirmRecord, config?.currencies ?? [])}</span>
+              </div>
+              <div className="confirm-preview-row">
+                <span className="confirm-preview-label">Category</span>
+                <span>{confirmRecord.Category}</span>
+              </div>
+            </div>
+            <p className="confirm-warning">This will permanently remove the row from your spreadsheet.</p>
+            {deleteError ? <StatusBanner variant="error" message={deleteError} /> : null}
+            <div className="confirm-actions">
+              <button
+                className="btn btn-secondary btn-inline"
+                type="button"
+                onClick={handleDeleteCancel}
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-danger btn-inline"
+                type="button"
+                onClick={() => void handleDeleteConfirm()}
+                disabled={isDeleting}
+                aria-busy={isDeleting}
+              >
+                {isDeleting ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </Layout>
   );

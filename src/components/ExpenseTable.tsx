@@ -15,6 +15,7 @@ import {
   Gift,
   Dumbbell,
   Pill,
+  Trash2,
 } from "lucide-react";
 import { ExpenseRecord } from "../types/expense";
 import { COMMENT_PREVIEW_LENGTH, getCustomColumnLabel, getDisplayAmount, hasDetails } from "../utils/expenseTable";
@@ -30,6 +31,10 @@ interface ExpenseTableProps {
   activeCurrencies?: string[];
   /** User's active custom column names. */
   customColumns?: string[];
+  /** Row number of the record that may be deleted (last record). */
+  lastRecordRowNumber?: number;
+  /** Called when the user requests deletion of a record. */
+  onDeleteRequest?: (record: ExpenseRecord) => void;
 }
 
 type LucideIcon = React.ForwardRefExoticComponent<Omit<LucideProps, "ref"> & React.RefAttributes<SVGSVGElement>>;
@@ -88,12 +93,14 @@ interface ExpenseCardProps {
   record: ExpenseRecord;
   sheetCurrencies: string[];
   customColumns: string[];
+  isLastRecord?: boolean;
+  onDeleteRequest?: (record: ExpenseRecord) => void;
 }
 
-function ExpenseCard({ record, sheetCurrencies, customColumns }: ExpenseCardProps): JSX.Element {
+function ExpenseCard({ record, sheetCurrencies, customColumns, isLastRecord, onDeleteRequest }: ExpenseCardProps): JSX.Element {
   const [isOpen, setIsOpen] = useState(false);
   const Icon = getCategoryIcon(record.Category);
-  const cardHasDetails = hasDetails(record, customColumns);
+  const cardHasDetails = hasDetails(record, customColumns) || (isLastRecord && !!onDeleteRequest);
   const preview = getCommentPreview(record);
 
   return (
@@ -137,6 +144,19 @@ function ExpenseCard({ record, sheetCurrencies, customColumns }: ExpenseCardProp
                 </div>
               );
             })}
+            {isLastRecord && onDeleteRequest ? (
+              <div className="expense-card-actions">
+                <button
+                  className="btn btn-danger btn-sm"
+                  type="button"
+                  aria-label="Delete this expense"
+                  onClick={(e) => { e.stopPropagation(); onDeleteRequest(record); }}
+                >
+                  <Trash2 size={14} aria-hidden />
+                  Delete
+                </button>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -171,6 +191,8 @@ export function ExpenseTable({
   sheetCurrencies = [],
   activeCurrencies = [],
   customColumns = [],
+  lastRecordRowNumber,
+  onDeleteRequest,
 }: ExpenseTableProps): JSX.Element {
   const groups = useMemo(() => groupByDate(records), [records]);
 
@@ -194,6 +216,8 @@ export function ExpenseTable({
               record={record}
               sheetCurrencies={sheetCurrencies}
               customColumns={customColumns}
+              isLastRecord={record.rowNumber === lastRecordRowNumber}
+              onDeleteRequest={onDeleteRequest}
             />
           ))}
         </div>

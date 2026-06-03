@@ -989,6 +989,50 @@ export async function deleteColumnFromSheet(accessToken, spreadsheetId, colIndex
   );
 }
 
+/**
+ * Delete the last data row from the Expenses sheet.
+ * Performs a conflict check: if the sheet's actual data row count does not match
+ * expectedDataRowCount, throws an error with code "CONFLICT" instead of deleting.
+ */
+export async function deleteLastExpenseRow(accessToken, spreadsheetId, expectedDataRowCount) {
+  // Conflict check: count actual data rows (column A minus header)
+  const colA = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A:A`);
+  const actualDataRowCount = Math.max(0, colA.length - 1);
+
+  if (actualDataRowCount !== expectedDataRowCount) {
+    const err = new Error("The sheet was updated since last load. Please reload before deleting.");
+    err.code = "CONFLICT";
+    throw err;
+  }
+
+  if (actualDataRowCount === 0) {
+    throw new Error("No expense rows to delete.");
+  }
+
+  const metadata = await getMetadata(accessToken, spreadsheetId);
+  const expenseSheet = metadata.sheets?.find((s) => s.properties?.title === SHEET_NAME);
+  if (!expenseSheet) throw new Error("Expenses sheet not found.");
+  const sheetId = expenseSheet.properties.sheetId;
+
+  // Last data row: 0-based index = actualDataRowCount (header is index 0)
+  const rowIdx0 = actualDataRowCount;
+  await requestNoContent(
+    accessToken,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+    {
+      method: "POST",
+      headers: createHeaders(accessToken, true),
+      body: JSON.stringify({
+        requests: [{
+          deleteDimension: {
+            range: { sheetId, dimension: "ROWS", startIndex: rowIdx0, endIndex: rowIdx0 + 1 },
+          },
+        }],
+      }),
+    },
+  );
+}
+
 /** Find the 1-based column index of a named column in the sheet header (case-insensitive). */
 export async function findColumnIndex(accessToken, spreadsheetId, columnName, mapping = null) {
   const headerRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!1:1`);

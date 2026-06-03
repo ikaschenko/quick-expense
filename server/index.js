@@ -19,6 +19,7 @@ import { validateMappingRequestBody } from "./validation.js";
 import {
   appendExpenseRow,
   createSpreadsheet,
+  deleteLastExpenseRow,
   loadExpenses,
   parseSpreadsheetUrl,
   getSpreadsheetFileMeta,
@@ -615,6 +616,28 @@ app.post("/api/expenses", requireAuthenticatedUser, async (req, res) => {
     res.status(204).end();
   } catch (error) {
     res.status(400).json({ message: (error).message });
+  }
+});
+
+app.delete("/api/expenses/last", requireAuthenticatedUser, async (req, res) => {
+  try {
+    if (!req.userRecord.spreadsheetId) {
+      res.status(400).json({ message: "Spreadsheet is not configured." });
+      return;
+    }
+
+    const expectedRowCount = req.body?.expectedRowCount;
+    if (typeof expectedRowCount !== "number" || !Number.isInteger(expectedRowCount) || expectedRowCount < 0) {
+      res.status(400).json({ message: "expectedRowCount must be a non-negative integer." });
+      return;
+    }
+
+    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    await deleteLastExpenseRow(accessToken, req.userRecord.spreadsheetId, expectedRowCount);
+    res.status(204).end();
+  } catch (error) {
+    const status = error.code === "CONFLICT" ? 409 : 400;
+    res.status(status).json({ message: error.message });
   }
 });
 

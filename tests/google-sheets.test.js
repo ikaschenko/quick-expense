@@ -28,6 +28,7 @@ let detectConfigSheet;
 let createSpreadsheet;
 let reorderCustomColumnsInSheet;
 let findColumnIndex;
+let deleteLastExpenseRow;
 
 beforeAll(async () => {
   ({
@@ -35,6 +36,7 @@ beforeAll(async () => {
     writeConfigSheetMapping, detectConfigSheet, readExpensesSheetHeader, createSpreadsheet,
     reorderCustomColumnsInSheet,
     findColumnIndex,
+    deleteLastExpenseRow,
   } = await import("../server/google-sheets.js"));
 });
 
@@ -1027,5 +1029,66 @@ describe("createSpreadsheet", () => {
       expect(nr.range.sheetId).toBe(2002); // remapped from template 1002 → new 2002
       expect(nr.namedRangeId).toBeUndefined(); // ID stripped, Google assigns a new one
     });
+  });
+});
+
+describe("deleteLastExpenseRow", () => {
+  const TOKEN = "test-token";
+  const SHEET_ID = "spreadsheet-123";
+  const SHEET_GID = 0;
+
+  function colAResponse(dataRowCount) {
+    // First row is header "Date", followed by dataRowCount data rows
+    const rows = [["Date"], ...Array.from({ length: dataRowCount }, (_, i) => [`2026-01-0${i + 1}`])];
+    return jsonResponse({ values: rows });
+  }
+
+  function metadataResponse() {
+    return jsonResponse({
+      sheets: [{ properties: { sheetId: SHEET_GID, title: "Expenses" } }],
+    });
+  }
+
+  function noContent() {
+    return { ok: true, status: 204, json: () => Promise.resolve(null) };
+  }
+
+  it("deletes the last row when expected count matches actual count", async () => {
+    setupFetchSequence([
+      colAResponse(3),      // getValues Expenses!A:A — 3 data rows
+      metadataResponse(),   // getMetadata for sheetId
+      noContent(),          // batchUpdate deleteDimension
+    ]);
+
+    await deleteLastExpenseRow(TOKEN, SHEET_ID, 3);
+
+    const batchCall = mockFetch.mock.calls[2];
+    expect(batchCall[0]).toContain(":batchUpdate");
+    const body = JSON.parse(batchCall[1].body);
+    const range = body.requests[0].deleteDimension.range;
+    expect(range.dimension).toBe("ROWS");
+    expect(range.startIndex).toBe(3); // 0-based: header=0, row1=1, row2=2, row3=3
+    expect(range.endIndex).toBe(4);
+    expect(range.sheetId).toBe(SHEET_GID);
+  });
+
+  it("throws CONFLICT error when actual row count differs from expected", async () => {
+    setupFetchSequence([
+      colAResponse(4), // sheet has 4 rows, caller expects 3
+    ]);
+
+    const err = await deleteLastExpenseRow(TOKEN, SHEET_ID, 3).catch((e) => e);
+    expect(err.code).toBe("CONFLICT");
+    expect(err.message).toMatch(/updated since last load/i);
+    // batchUpdate must not have been called
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("throws when sheet has no data rows", async () => {
+    setupFetchSequence([
+      colAResponse(0), // only header row present
+    ]);
+
+    await expect(deleteLastExpenseRow(TOKEN, SHEET_ID, 0)).rejects.toThrow("No expense rows to delete");
   });
 });
