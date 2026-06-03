@@ -17,8 +17,9 @@ import {
 } from "./google-client.js";
 import { validateMappingRequestBody } from "./validation.js";
 import {
-  appendExpenseRow,
   createSpreadsheet,
+  appendExpenseRow,
+  updateExpenseRow,
   deleteLastExpenseRow,
   loadExpenses,
   parseSpreadsheetUrl,
@@ -616,6 +617,40 @@ app.post("/api/expenses", requireAuthenticatedUser, async (req, res) => {
     res.status(204).end();
   } catch (error) {
     res.status(400).json({ message: (error).message });
+  }
+});
+
+app.put("/api/expenses/:rowNumber", requireAuthenticatedUser, async (req, res) => {
+  try {
+    if (!req.userRecord.spreadsheetId) {
+      res.status(400).json({ message: "Spreadsheet is not configured." });
+      return;
+    }
+
+    const rowNumber = parseInt(req.params.rowNumber, 10);
+    if (isNaN(rowNumber) || rowNumber < 2) {
+      res.status(400).json({ message: "rowNumber must be an integer >= 2." });
+      return;
+    }
+
+    const values = req.body?.values;
+    if (!Array.isArray(values)) {
+      res.status(400).json({ message: "Expense row values are required." });
+      return;
+    }
+
+    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const { mode: expenseMode, mapping: expenseMapping = null } = await detectConfigSheet(accessToken, req.userRecord.spreadsheetId);
+    const mapping = expenseMode === "config-driven" ? expenseMapping : null;
+    await updateExpenseRow(accessToken, req.userRecord.spreadsheetId, rowNumber, values, mapping);
+
+    if (req.body?.fxRateBackup && typeof req.body.fxRateBackup === "object") {
+      await saveFxRateBackup(req.userRecord.email, req.userRecord.spreadsheetId, req.body.fxRateBackup);
+    }
+
+    res.status(204).end();
+  } catch (error) {
+    res.status(400).json({ message: error.message });
   }
 });
 

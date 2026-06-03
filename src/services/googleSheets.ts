@@ -58,6 +58,13 @@ export const googleSheetsService = {
     });
   },
 
+  async updateExpenseRow(rowNumber: number, values: string[], fxRateBackup?: FxRateBackupPayload): Promise<void> {
+    await requestNoContent(`/api/expenses/${rowNumber}`, {
+      method: "PUT",
+      body: JSON.stringify({ values, fxRateBackup }),
+    });
+  },
+
   async deleteLastExpenseRow(expectedRowCount: number): Promise<void> {
     await requestNoContent("/api/expenses/last", {
       method: "DELETE",

@@ -1124,4 +1124,42 @@ export async function appendExpenseRow(accessToken, spreadsheetId, values, mappi
   return { sheetCurrencies: report.sheetCurrencies };
 }
 
+export async function updateExpenseRow(accessToken, spreadsheetId, rowNumber, values, mapping = null) {
+  const report = await validateSpreadsheet(accessToken, spreadsheetId, mapping);
+  const canonicalHeaders = buildExpenseHeaders(report.sheetCurrencies, report.customColumns);
+
+  const headerRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!1:1`);
+  const actualHeaders = normalizeHeaders(headerRows[0] ?? []);
+  const targetHeaders = actualHeaders.length > 0 ? actualHeaders : canonicalHeaders;
+  const endCol = columnLetter(targetHeaders.length);
+
+  const valueByCanonicalHeader = new Map();
+  for (let index = 0; index < canonicalHeaders.length; index += 1) {
+    valueByCanonicalHeader.set(canonicalHeaders[index].toLowerCase(), values[index] ?? "");
+  }
+
+  if (mapping) {
+    for (const [qeField, userCol] of Object.entries(mapping)) {
+      if (!targetHeaders.some((h) => h.toLowerCase() === userCol.toLowerCase())) {
+        throw new Error(`Column '${userCol}' (mapped from '${qeField}') not found in sheet.`);
+      }
+      const val = valueByCanonicalHeader.get(qeField.toLowerCase());
+      if (val !== undefined) {
+        valueByCanonicalHeader.set(userCol.toLowerCase(), val);
+      }
+    }
+  }
+
+  const alignedValues = targetHeaders.map((header) => valueByCanonicalHeader.get(header.toLowerCase()) ?? "");
+
+  await updateValues(
+    accessToken,
+    spreadsheetId,
+    `${SHEET_NAME}!A${rowNumber}:${endCol}${rowNumber}`,
+    [alignedValues],
+  );
+
+  return { sheetCurrencies: report.sheetCurrencies };
+}
+
 export { SHEET_NAME, DEFAULT_CUSTOM_COLUMNS, MAX_CUSTOM_COLUMNS, MAX_OPTIONAL_CURRENCIES };

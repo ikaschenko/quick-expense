@@ -8,9 +8,10 @@ import { FEEDBACK_FORM_URL } from "../constants/feedback";
 
 interface LayoutProps extends PropsWithChildren {
   title?: string;
+  onBack?: () => void;
 }
 
-export function Layout({ children, title }: LayoutProps): JSX.Element {
+export function Layout({ children, title, onBack }: LayoutProps): JSX.Element {
   const auth = useAuth();
   const config = useConfig();
   const dataset = useDataset();
@@ -53,7 +54,7 @@ export function Layout({ children, title }: LayoutProps): JSX.Element {
           {!isHome ? (
             <button
               className="topbar-back"
-              onClick={() => navigate(-1)}
+              onClick={() => onBack ? onBack() : navigate(-1)}
               type="button"
               aria-label="Go back"
             >

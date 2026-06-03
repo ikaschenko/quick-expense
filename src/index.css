@@ -1091,6 +1091,16 @@ button { cursor: pointer; }
   border-top: 1px solid var(--color-border);
   display: flex;
   gap: var(--space-2);
+  align-items: center;
+}
+
+.expense-saved-badge {
+  color: var(--color-success);
+  font-size: var(--font-size-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-right: auto;
 }
 
 /* ===== Delete Confirmation Overlay ===== */

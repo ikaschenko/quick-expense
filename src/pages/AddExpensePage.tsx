@@ -1,5 +1,5 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Navigate, useNavigate, useParams, useLocation } from "react-router-dom";
 import { Check, Calendar } from "lucide-react";
 import DatePicker from "react-datepicker";
 import { Layout } from "../components/Layout";
@@ -13,6 +13,7 @@ import { googleSheetsService } from "../services/googleSheets";
 import {
   CurrencyDictionary,
   ExpenseDraft,
+  ExpenseRecord,
   FxRateBackupPayload,
   ManualFxRates,
 } from "../types/expense";
@@ -49,6 +50,40 @@ function createEmptyFxRates(currencies: string[]): ManualFxRates {
   const rates: ManualFxRates = {};
   for (const code of currencies) {
     rates[code] = "";
+  }
+  return rates;
+}
+
+function createDraftFromRecord(record: ExpenseRecord, currencies: string[], customColumns: string[]): ExpenseDraft {
+  const currencyAmounts: Record<string, string> = {};
+  for (const code of currencies) {
+    currencyAmounts[code] = record.currencyAmounts[code] ?? "";
+  }
+  const customFields: Record<string, string> = {};
+  for (const col of customColumns) {
+    customFields[col] = record.customFields?.[col] ?? "";
+  }
+  return {
+    Date: record.Date,
+    USD: record.USD,
+    Category: record.Category,
+    spentBy: record.spentBy,
+    Comment: record.Comment,
+    currencyAmounts,
+    customFields,
+  };
+}
+
+function deriveInitialFxRates(record: ExpenseRecord, currencies: string[]): ManualFxRates {
+  const rates: ManualFxRates = {};
+  const usdValue = parseFloat(record.USD);
+  for (const code of currencies) {
+    const amount = parseFloat(record.currencyAmounts[code] ?? "");
+    if (!isNaN(usdValue) && usdValue !== 0 && !isNaN(amount) && amount !== 0) {
+      rates[code] = (Math.abs(amount) / Math.abs(usdValue)).toFixed(2);
+    } else {
+      rates[code] = "";
+    }
   }
   return rates;
 }
@@ -107,6 +142,18 @@ export function AddExpensePage(): JSX.Element {
   const { config } = useConfig();
   const dataset = useDataset();
   const navigate = useNavigate();
+  const { rowNumber: rowNumberParam } = useParams<{ rowNumber?: string }>();
+  const location = useLocation();
+
+  const isEditMode = !!rowNumberParam;
+  const editRowNumber = rowNumberParam ? parseInt(rowNumberParam, 10) : null;
+  const editState = (location.state as { record?: ExpenseRecord; origin?: string } | null);
+  const editRecord = editState?.record ?? null;
+  const editOrigin = editState?.origin ?? "/tail";
+
+  const handleEditBack = useCallback(() => {
+    navigate(editOrigin, { state: { editResult: { rowNumber: editRowNumber, saved: false } }, replace: true });
+  }, [navigate, editOrigin, editRowNumber]);
 
   const activeCurrencies = useMemo(() => config?.currencies ?? [], [config?.currencies]);
   const customColumns = useMemo(() => config?.customColumns ?? [], [config?.customColumns]);
@@ -161,12 +208,23 @@ export function AddExpensePage(): JSX.Element {
   }, [dataset.snapshot, visibleCurrencies]);
 
   useEffect(() => {
+    if (isEditMode) return;
     setDraft(createInitialDraft(auth.session?.email ?? "", activeCurrencies, customColumns));
     setManualFxRates(createEmptyFxRates(activeCurrencies));
     setFxErrors({});
     setActiveNonUsdCurrency(visibleCurrencies[0] ?? null);
     setHasManuallySelectedCurrency(false);
-  }, [auth.session?.email, activeCurrencies, customColumns]);
+  }, [auth.session?.email, activeCurrencies, customColumns, isEditMode]);
+
+  // In edit mode: pre-fill draft and derive FX rates from the original record.
+  useEffect(() => {
+    if (!isEditMode || !editRecord) return;
+    setDraft(createDraftFromRecord(editRecord, activeCurrencies, customColumns));
+    setManualFxRates(deriveInitialFxRates(editRecord, activeCurrencies));
+    setActiveNonUsdCurrency(getPreferredCurrency(editRecord, visibleCurrencies));
+    setHasManuallySelectedCurrency(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally run once on mount
 
   useEffect(() => {
     if (hasManuallySelectedCurrency || !dataset.snapshot) {
@@ -187,7 +245,7 @@ export function AddExpensePage(): JSX.Element {
   }, [config, dataset]);
 
   useEffect(() => {
-    if (!config || activeCurrencies.length === 0) {
+    if (isEditMode || !config || activeCurrencies.length === 0) {
       return;
     }
 
@@ -218,7 +276,7 @@ export function AddExpensePage(): JSX.Element {
     return () => {
       isActive = false;
     };
-  }, [config?.spreadsheetId, activeCurrencies]);
+  }, [isEditMode, config?.spreadsheetId, activeCurrencies]);
 
   // Auto-convert non-USD → USD
   const draftCurrencyDeps = activeCurrencies.map((c) => draft.currencyAmounts[c]).join("|");
@@ -257,6 +315,10 @@ export function AddExpensePage(): JSX.Element {
 
   if (!config) {
     return <Navigate to="/setup" replace />;
+  }
+
+  if (isEditMode && !editRecord) {
+    return <Navigate to="/tail" replace />;
   }
 
   const updateDraft = <K extends keyof Omit<ExpenseDraft, "currencyAmounts" | "customFields">>(
@@ -381,13 +443,31 @@ export function AddExpensePage(): JSX.Element {
         normalizedDraft.USD = usdValue ? usdValue.toFixed(2) : "";
       }
 
-      await googleSheetsService.appendExpenseRow(
-        expenseDraftToRowValues(normalizedDraft, activeCurrencies, customColumns),
-        buildFxBackupPayload(normalizedDraft, manualFxRates, activeCurrencies),
-      );
+      if (isEditMode && editRowNumber !== null) {
+        await googleSheetsService.updateExpenseRow(
+          editRowNumber,
+          expenseDraftToRowValues(normalizedDraft, activeCurrencies, customColumns),
+          buildFxBackupPayload(normalizedDraft, manualFxRates, activeCurrencies),
+        );
+      } else {
+        await googleSheetsService.appendExpenseRow(
+          expenseDraftToRowValues(normalizedDraft, activeCurrencies, customColumns),
+          buildFxBackupPayload(normalizedDraft, manualFxRates, activeCurrencies),
+        );
+      }
 
       const submittedCurrency = getPreferredCurrency(normalizedDraft, activeCurrencies);
       dataset.invalidateDataset();
+
+      if (isEditMode && editRowNumber !== null) {
+        navigate(editOrigin, {
+          state: { editResult: { rowNumber: editRowNumber, saved: true } },
+          replace: true,
+        });
+        trackEvent("expense_edited", { currency: submittedCurrency ?? "USD" });
+        return;
+      }
+
       setDraft(createInitialDraft(auth.session?.email ?? "", activeCurrencies, customColumns));
 
       // Preserve current FX rates
@@ -426,7 +506,7 @@ export function AddExpensePage(): JSX.Element {
   );
 
   return (
-    <Layout title="Add Expense">
+    <Layout title={isEditMode ? "Edit Expense" : "Add Expense"} onBack={isEditMode ? handleEditBack : undefined}>
       {success ? <StatusBanner variant="success" message={success} /> : null}
       {error ? <StatusBanner variant="error" message={error} /> : null}
 
@@ -663,7 +743,7 @@ export function AddExpensePage(): JSX.Element {
                 Saving…
               </>
             ) : (
-              "Save Expense"
+              isEditMode ? "Save Changes" : "Save Expense"
             )}
           </button>
         )}

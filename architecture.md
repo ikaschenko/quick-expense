@@ -249,6 +249,7 @@ All API routes are defined in `server/index.js`.
 | POST | `/api/config/mapping` | Yes | Save column mapping to Config sheet (requires `confirmed: true`) |
 | GET | `/api/expenses` | Yes | Load all expense records from the spreadsheet |
 | POST | `/api/expenses` | Yes | Append a new expense row |
+| PUT | `/api/expenses/:rowNumber` | Yes | Overwrite an existing expense row in-place (last-writer-wins) |
 | DELETE | `/api/expenses/last` | Yes | Delete the last expense row (with row-count conflict check) |
 | GET | `/api/fx-backup` | Yes | Get the latest saved FX rate backup |
 | GET | `/api/currencies/available` | Yes | Get the currency dictionary (all supported codes + max limit) |
@@ -536,7 +537,7 @@ The backend validates all required env vars at startup and fails fast if any are
 1. **PostgreSQL via Supabase Free** — user records, FX rate backups, and sessions are stored in a managed PostgreSQL database. The app container is stateless.
 2. **Expense data in Google Sheets only** — the app is a thin client over Google Sheets API. No expense data is cached or stored server-side.
 3. **Client-side search** — the full dataset is loaded into the browser. Capped at 10 MB JSON payload.
-4. **No edit of existing records** — append-only by design (v1). Delete is scoped to the **last row only**, available from Tail view. Protected by a row-count conflict check: the client passes the expected row count; the backend rejects with HTTP 409 if the sheet was updated concurrently.
+4. **Edit of existing records** — supported via `PUT /api/expenses/:rowNumber`. Last-writer-wins (no conflict check). Delete is scoped to the **last row only**, available from Tail view. Protected by a row-count conflict check: the client passes the expected row count; the backend rejects with HTTP 409 if the sheet was updated concurrently.
 5. **No duplicate detection** — each Save appends a new row unconditionally.
 6. **Currency:** Users configure up to 3 non-USD currencies from a dictionary of 25 (stored in `config/currencies.json` and `user_currencies` DB table). At most one non-USD currency at a time per expense, optionally alongside USD. Manual FX rate conversion (no external API). Archived currency columns remain in the sheet.
 7. **No pagination** — search results capped at 100.

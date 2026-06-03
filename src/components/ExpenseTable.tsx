@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useEffect, useState } from "react";
 import {
   ShoppingCart,
   Bus,
@@ -16,6 +16,8 @@ import {
   Dumbbell,
   Pill,
   Trash2,
+  Pencil,
+  Check,
 } from "lucide-react";
 import { ExpenseRecord } from "../types/expense";
 import { COMMENT_PREVIEW_LENGTH, getCustomColumnLabel, getDisplayAmount, hasDetails } from "../utils/expenseTable";
@@ -35,6 +37,12 @@ interface ExpenseTableProps {
   lastRecordRowNumber?: number;
   /** Called when the user requests deletion of a record. */
   onDeleteRequest?: (record: ExpenseRecord) => void;
+  /** Called when the user requests editing of a record. */
+  onEditRequest?: (record: ExpenseRecord) => void;
+  /** Row number of a record to auto-open and scroll to (Back or Save from Edit). */
+  highlightedRowNumber?: number | null;
+  /** Row number of a record that was just successfully saved (shows badge). */
+  savedRowNumber?: number | null;
 }
 
 type LucideIcon = React.ForwardRefExoticComponent<Omit<LucideProps, "ref"> & React.RefAttributes<SVGSVGElement>>;
@@ -95,16 +103,27 @@ interface ExpenseCardProps {
   customColumns: string[];
   isLastRecord?: boolean;
   onDeleteRequest?: (record: ExpenseRecord) => void;
+  onEditRequest?: (record: ExpenseRecord) => void;
+  isHighlighted?: boolean;
+  isSaved?: boolean;
 }
 
-function ExpenseCard({ record, sheetCurrencies, customColumns, isLastRecord, onDeleteRequest }: ExpenseCardProps): JSX.Element {
-  const [isOpen, setIsOpen] = useState(false);
+function ExpenseCard({ record, sheetCurrencies, customColumns, isLastRecord, onDeleteRequest, onEditRequest, isHighlighted, isSaved }: ExpenseCardProps): JSX.Element {
+  const [isOpen, setIsOpen] = useState(isHighlighted ?? false);
+  const cardRef = useRef<HTMLDivElement>(null);
   const Icon = getCategoryIcon(record.Category);
-  const cardHasDetails = hasDetails(record, customColumns) || (isLastRecord && !!onDeleteRequest);
+  const cardHasDetails = hasDetails(record, customColumns) || (isLastRecord && !!onDeleteRequest) || !!onEditRequest;
   const preview = getCommentPreview(record);
+
+  useEffect(() => {
+    if (isHighlighted) {
+      cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [isHighlighted]);
 
   return (
     <div
+      ref={cardRef}
       className={`expense-card${cardHasDetails ? " expense-card--interactive" : ""}`}
       onClick={() => { if (cardHasDetails) setIsOpen((prev) => !prev); }}
     >
@@ -144,17 +163,36 @@ function ExpenseCard({ record, sheetCurrencies, customColumns, isLastRecord, onD
                 </div>
               );
             })}
-            {isLastRecord && onDeleteRequest ? (
+            {(onEditRequest || (isLastRecord && onDeleteRequest)) ? (
               <div className="expense-card-actions">
-                <button
-                  className="btn btn-danger btn-sm"
-                  type="button"
-                  aria-label="Delete this expense"
-                  onClick={(e) => { e.stopPropagation(); onDeleteRequest(record); }}
-                >
-                  <Trash2 size={14} aria-hidden />
-                  Delete
-                </button>
+                {isSaved ? (
+                  <span className="expense-saved-badge">
+                    <Check size={11} aria-hidden />
+                    Saved
+                  </span>
+                ) : null}
+                {onEditRequest ? (
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    type="button"
+                    aria-label="Edit this expense"
+                    onClick={(e) => { e.stopPropagation(); onEditRequest(record); }}
+                  >
+                    <Pencil size={14} aria-hidden />
+                    Edit
+                  </button>
+                ) : null}
+                {isLastRecord && onDeleteRequest ? (
+                  <button
+                    className="btn btn-danger btn-sm"
+                    type="button"
+                    aria-label="Delete this expense"
+                    onClick={(e) => { e.stopPropagation(); onDeleteRequest(record); }}
+                  >
+                    <Trash2 size={14} aria-hidden />
+                    Delete
+                  </button>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -193,6 +231,9 @@ export function ExpenseTable({
   customColumns = [],
   lastRecordRowNumber,
   onDeleteRequest,
+  onEditRequest,
+  highlightedRowNumber,
+  savedRowNumber,
 }: ExpenseTableProps): JSX.Element {
   const groups = useMemo(() => groupByDate(records), [records]);
 
@@ -218,6 +259,9 @@ export function ExpenseTable({
               customColumns={customColumns}
               isLastRecord={record.rowNumber === lastRecordRowNumber}
               onDeleteRequest={onDeleteRequest}
+              onEditRequest={onEditRequest}
+              isHighlighted={record.rowNumber === highlightedRowNumber}
+              isSaved={record.rowNumber === savedRowNumber}
             />
           ))}
         </div>

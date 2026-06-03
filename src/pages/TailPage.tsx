@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
 import { MAX_TAIL_RECORDS } from "../constants/expenses";
 import { ExpenseTable } from "../components/ExpenseTable";
@@ -20,6 +20,25 @@ export function TailPage(): JSX.Element {
   const [confirmRecord, setConfirmRecord] = useState<ExpenseRecord | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const location = useLocation();
+  const [highlightedRowNumber, setHighlightedRowNumber] = useState<number | null>(
+    (location.state as { editResult?: { rowNumber: number; saved: boolean } } | null)?.editResult?.rowNumber ?? null,
+  );
+  const [savedRowNumber, setSavedRowNumber] = useState<number | null>(
+    (location.state as { editResult?: { rowNumber: number; saved: boolean } } | null)?.editResult?.saved
+      ? ((location.state as { editResult: { rowNumber: number } }).editResult.rowNumber)
+      : null,
+  );
+
+  useEffect(() => {
+    if (savedRowNumber === null) return;
+    const timer = setTimeout(() => setSavedRowNumber(null), 4000);
+    return () => clearTimeout(timer);
+  }, [savedRowNumber]);
+
+  const handleEditRequest = useCallback((record: ExpenseRecord) => {
+    navigate(`/edit/${record.rowNumber}`, { state: { record, origin: "/tail" } });
+  }, [navigate]);
 
   useEffect(() => {
     // Only redirect to setup if config is truly missing AND not loading/errored
@@ -94,6 +113,9 @@ export function TailPage(): JSX.Element {
           customColumns={config?.customColumns}
           lastRecordRowNumber={lastRecord?.rowNumber}
           onDeleteRequest={setConfirmRecord}
+          onEditRequest={handleEditRequest}
+          highlightedRowNumber={highlightedRowNumber}
+          savedRowNumber={savedRowNumber}
         />
       ) : null}
 

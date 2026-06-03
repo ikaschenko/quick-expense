@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Search as SearchIcon, SearchX, RefreshCw } from "lucide-react";
 import { ExpenseTable } from "../components/ExpenseTable";
 import { Layout } from "../components/Layout";
@@ -9,13 +9,33 @@ import { useConfig } from "../contexts/ConfigContext";
 import { useDataset } from "../contexts/DatasetContext";
 import { filterExpenses } from "../utils/search";
 import { trackEvent } from "../services/analytics";
+import { ExpenseRecord } from "../types/expense";
 
 export function SearchPage(): JSX.Element {
   const { config } = useConfig();
   const dataset = useDataset();
   const navigate = useNavigate();
+  const location = useLocation();
   const [hasSearched, setHasSearched] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [highlightedRowNumber, setHighlightedRowNumber] = useState<number | null>(
+    (location.state as { editResult?: { rowNumber: number; saved: boolean } } | null)?.editResult?.rowNumber ?? null,
+  );
+  const [savedRowNumber, setSavedRowNumber] = useState<number | null>(
+    (location.state as { editResult?: { rowNumber: number; saved: boolean } } | null)?.editResult?.saved
+      ? ((location.state as { editResult: { rowNumber: number } }).editResult.rowNumber)
+      : null,
+  );
+
+  useEffect(() => {
+    if (savedRowNumber === null) return;
+    const timer = setTimeout(() => setSavedRowNumber(null), 4000);
+    return () => clearTimeout(timer);
+  }, [savedRowNumber]);
+
+  const handleEditRequest = (record: ExpenseRecord): void => {
+    navigate(`/edit/${record.rowNumber}`, { state: { record, origin: "/search" } });
+  };
 
   useEffect(() => { searchInputRef.current?.focus(); }, []);
 
@@ -161,6 +181,9 @@ export function SearchPage(): JSX.Element {
                 sheetCurrencies={config?.currencies}
                 activeCurrencies={config?.currencies}
                 customColumns={config?.customColumns}
+                onEditRequest={handleEditRequest}
+                highlightedRowNumber={highlightedRowNumber}
+                savedRowNumber={savedRowNumber}
               />
             </>
           )}

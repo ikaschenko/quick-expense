@@ -46,6 +46,14 @@ export default function App(): JSX.Element {
               }
             />
             <Route
+              path="/edit/:rowNumber"
+              element={
+                <ProtectedRoute>
+                  <AddExpensePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/tail"
               element={
                 <ProtectedRoute>
