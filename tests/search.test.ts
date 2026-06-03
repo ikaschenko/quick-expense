@@ -95,3 +95,40 @@ describe("expense search", () => {
     expect(outcome.allMatches[0].Category).toBe("Food");
   });
 });
+
+describe("filterExpenses truncation", () => {
+  function makeRecord(rowNumber: number, comment: string): ExpenseRecord {
+    return {
+      rowNumber,
+      Date: `2020-01-${String(rowNumber).padStart(2, "0")}`,
+      USD: "1.00",
+      currencyAmounts: {},
+      Category: "Test",
+      spentBy: "",
+      Comment: comment,
+      customFields: {},
+    };
+  }
+
+  // 101 records all matching "allegro", row 2 = oldest, row 102 = newest
+  const bigRecords: ExpenseRecord[] = Array.from({ length: 101 }, (_, i) =>
+    makeRecord(i + 2, "allegro.pl - item"),
+  );
+
+  it("when matches exceed 100, visibleMatches contains the newest 100, not the oldest", () => {
+    const outcome = filterExpenses(bigRecords, { categories: [], comment: "allegro" });
+    expect(outcome.allMatches).toHaveLength(101);
+    expect(outcome.truncated).toBe(true);
+    expect(outcome.visibleMatches).toHaveLength(100);
+    // oldest record (rowNumber 2) must be excluded
+    expect(outcome.visibleMatches.some((r) => r.rowNumber === 2)).toBe(false);
+    // newest record (rowNumber 102) must be included
+    expect(outcome.visibleMatches.some((r) => r.rowNumber === 102)).toBe(true);
+  });
+
+  it("when matches are exactly 100, all are visible and truncated is false", () => {
+    const outcome = filterExpenses(bigRecords.slice(0, 100), { categories: [], comment: "allegro" });
+    expect(outcome.truncated).toBe(false);
+    expect(outcome.visibleMatches).toHaveLength(100);
+  });
+});

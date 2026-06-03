@@ -172,7 +172,7 @@ export function SearchPage(): JSX.Element {
               {outcome.truncated ? (
                 <StatusBanner
                   variant="info"
-                  message={`Showing first 100 of ${outcome.allMatches.length} results.`}
+                  message={`Showing most recent 100 of ${outcome.allMatches.length} results. Refine your search to see older entries.`}
                 />
               ) : null}
               <ExpenseTable

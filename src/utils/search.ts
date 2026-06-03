@@ -26,7 +26,7 @@ export function filterExpenses(records: ExpenseRecord[], filters: SearchFilters)
 
   return {
     allMatches: matches,
-    visibleMatches: matches.slice(0, MAX_SEARCH_RESULTS),
+    visibleMatches: matches.slice(-MAX_SEARCH_RESULTS),
     truncated: matches.length > MAX_SEARCH_RESULTS,
   };
 }
