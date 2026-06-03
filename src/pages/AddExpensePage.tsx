@@ -444,29 +444,28 @@ export function AddExpensePage(): JSX.Element {
       }
 
       if (isEditMode && editRowNumber !== null) {
-        await googleSheetsService.updateExpenseRow(
+        const updatedRecord = await googleSheetsService.updateExpenseRow(
           editRowNumber,
           expenseDraftToRowValues(normalizedDraft, activeCurrencies, customColumns),
           buildFxBackupPayload(normalizedDraft, manualFxRates, activeCurrencies),
         );
-      } else {
-        await googleSheetsService.appendExpenseRow(
-          expenseDraftToRowValues(normalizedDraft, activeCurrencies, customColumns),
-          buildFxBackupPayload(normalizedDraft, manualFxRates, activeCurrencies),
-        );
-      }
-
-      const submittedCurrency = getPreferredCurrency(normalizedDraft, activeCurrencies);
-      dataset.invalidateDataset();
-
-      if (isEditMode && editRowNumber !== null) {
+        const submittedCurrency = getPreferredCurrency(normalizedDraft, activeCurrencies);
+        dataset.updateInDataset(updatedRecord);
         navigate(editOrigin, {
           state: { editResult: { rowNumber: editRowNumber, saved: true } },
           replace: true,
         });
         trackEvent("expense_edited", { currency: submittedCurrency ?? "USD" });
         return;
+      } else {
+        const addedRecord = await googleSheetsService.appendExpenseRow(
+          expenseDraftToRowValues(normalizedDraft, activeCurrencies, customColumns),
+          buildFxBackupPayload(normalizedDraft, manualFxRates, activeCurrencies),
+        );
+        dataset.appendToDataset(addedRecord);
       }
+
+      const submittedCurrency = getPreferredCurrency(normalizedDraft, activeCurrencies);
 
       setDraft(createInitialDraft(auth.session?.email ?? "", activeCurrencies, customColumns));
 

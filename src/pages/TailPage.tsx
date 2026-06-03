@@ -67,7 +67,7 @@ export function TailPage(): JSX.Element {
     try {
       await googleSheetsService.deleteLastExpenseRow(dataset.snapshot.records.length);
       setConfirmRecord(null);
-      await dataset.reloadDataset();
+      dataset.removeLastFromDataset();
     } catch (error) {
       setDeleteError((error as Error).message);
     } finally {

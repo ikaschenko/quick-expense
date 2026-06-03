@@ -1106,7 +1106,7 @@ export async function appendExpenseRow(accessToken, spreadsheetId, values, mappi
 
   const alignedValues = targetHeaders.map((header) => valueByCanonicalHeader.get(header.toLowerCase()) ?? "");
 
-  await requestNoContent(
+  const appendResult = await requestJson(
     accessToken,
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(
       `${SHEET_NAME}!A:${endCol}`,
@@ -1121,7 +1121,11 @@ export async function appendExpenseRow(accessToken, spreadsheetId, values, mappi
     },
   );
 
-  return { sheetCurrencies: report.sheetCurrencies };
+  const updatedRange = appendResult?.updates?.updatedRange ?? "";
+  const rowNumber = parseInt(/([0-9]+)$/.exec(updatedRange)?.[1] ?? "0", 10);
+  const record = buildRecordFromCanonicalValues(values, rowNumber, report.sheetCurrencies, report.customColumns);
+
+  return { record, sheetCurrencies: report.sheetCurrencies, customColumns: report.customColumns };
 }
 
 export async function updateExpenseRow(accessToken, spreadsheetId, rowNumber, values, mapping = null) {
@@ -1159,7 +1163,34 @@ export async function updateExpenseRow(accessToken, spreadsheetId, rowNumber, va
     [alignedValues],
   );
 
-  return { sheetCurrencies: report.sheetCurrencies };
+  const record = buildRecordFromCanonicalValues(values, rowNumber, report.sheetCurrencies, report.customColumns);
+  return { record, sheetCurrencies: report.sheetCurrencies, customColumns: report.customColumns };
+}
+
+/**
+ * Build an ExpenseRecord from canonical-order values (the order produced by buildExpenseHeaders).
+ * Used to construct the return payload for write operations without a second sheet read.
+ */
+function buildRecordFromCanonicalValues(values, rowNumber, sheetCurrencies, customColumns) {
+  const currencyAmounts = {};
+  for (let i = 0; i < sheetCurrencies.length; i++) {
+    currencyAmounts[sheetCurrencies[i]] = values[1 + i] ?? "";
+  }
+  const fixedStart = 1 + sheetCurrencies.length;
+  const customFields = {};
+  for (let i = 0; i < customColumns.length; i++) {
+    customFields[customColumns[i]] = values[fixedStart + 4 + i] ?? "";
+  }
+  return {
+    Date: values[0] ?? "",
+    currencyAmounts,
+    USD: values[fixedStart] ?? "",
+    Category: values[fixedStart + 1] ?? "",
+    spentBy: values[fixedStart + 2] ?? "",
+    Comment: values[fixedStart + 3] ?? "",
+    customFields,
+    rowNumber,
+  };
 }
 
 export { SHEET_NAME, DEFAULT_CUSTOM_COLUMNS, MAX_CUSTOM_COLUMNS, MAX_OPTIONAL_CURRENCIES };

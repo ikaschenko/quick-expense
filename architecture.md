@@ -114,7 +114,7 @@ quick-expense/
 │   ├── contexts/              ← React context providers (global state)
 │   │   ├── AuthContext.tsx     ← authentication state + sign-in/sign-out
 │   │   ├── ConfigContext.tsx   ← spreadsheet config state
-│   │   └── DatasetContext.tsx  ← expense dataset loading, caching, invalidation
+│   │   └── DatasetContext.tsx  ← expense dataset loading, caching, surgical mutations
 │   ├── pages/                 ← route-level page components
 │   │   ├── AddExpensePage.tsx  ← expense form with currency conversion
 │   │   ├── AuthCallbackPage.tsx ← post-OAuth redirect handler
@@ -248,8 +248,8 @@ All API routes are defined in `server/index.js`.
 | GET | `/api/config/mapping` | Yes | Get current column mapping, config mode, and detected columns |
 | POST | `/api/config/mapping` | Yes | Save column mapping to Config sheet (requires `confirmed: true`) |
 | GET | `/api/expenses` | Yes | Load all expense records from the spreadsheet |
-| POST | `/api/expenses` | Yes | Append a new expense row |
-| PUT | `/api/expenses/:rowNumber` | Yes | Overwrite an existing expense row in-place (last-writer-wins) |
+| POST | `/api/expenses` | Yes | Append a new expense row; returns `201` + the created `ExpenseRecord` (including assigned row number) |
+| PUT | `/api/expenses/:rowNumber` | Yes | Overwrite an existing expense row in-place (last-writer-wins); returns `200` + the updated `ExpenseRecord` |
 | DELETE | `/api/expenses/last` | Yes | Delete the last expense row (with row-count conflict check) |
 | GET | `/api/fx-backup` | Yes | Get the latest saved FX rate backup |
 | GET | `/api/currencies/available` | Yes | Get the currency dictionary (all supported codes + max limit) |
@@ -420,7 +420,7 @@ The SPA uses three nested context providers (wrapped in `App.tsx`):
 ```
 <AuthProvider>          ← authentication state, sign-in/out methods
   <ConfigProvider>      ← spreadsheet config (loaded from backend on session init)
-    <DatasetProvider>   ← expense dataset: load, cache, invalidate, search filters
+    <DatasetProvider>   ← expense dataset: load, cache, mutate, search filters
       <Routes>
 ```
 
@@ -428,8 +428,12 @@ The SPA uses three nested context providers (wrapped in `App.tsx`):
 - **ConfigContext:** Fetches `/api/config` when a session is present. Exposes the `SpreadsheetConfig` object and methods to save/clear/refresh. The config includes a `configMode` field (`"default"` | `"config-driven"` | `"config-invalid"`) indicating whether a column mapping is active. When `configMode` is `"config-invalid"`, a `configModeReason` string explains the problem. `hiddenColumns: string[]` lists canonical field names hidden from the Add Expense form; `toggleColumnVisibility(field, hidden)` updates this list optimistically with server sync and automatic revert on failure.
 - **DatasetContext:** Manages the loaded expense dataset. Key behaviors:
   - `loadDataset()` — fetches from `/api/expenses` unless a valid cached snapshot exists.
-  - `invalidateDataset()` — called after a successful Add, forcing the next Tail/Search to reload.
+  - `invalidateDataset()` — marks the snapshot stale, forcing a full reload on the next Tail/Search visit. Reserved for error-recovery and future external-change detection scenarios.
   - `reloadDataset()` — explicit Reload button action, force-fetches regardless of cache.
+  - `appendToDataset(record)` — called after a successful Add; appends the returned `ExpenseRecord` to the in-memory array and recomputes `distinctValues`. No full reload.
+  - `updateInDataset(record)` — called after a successful Edit; replaces the matching record (by `rowNumber`) and recomputes `distinctValues`. No full reload.
+  - `removeLastFromDataset()` — called after a successful Delete (last row); removes the last entry from the in-memory array and recomputes `distinctValues`. No full reload.
+  - All three mutation methods are no-ops when the snapshot has not yet been loaded.
   - Shared between Tail and Search pages (they reuse the same in-memory dataset).
   - Holds `searchFilters` state so Search page filter values persist across navigation.
 

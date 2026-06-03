@@ -21,6 +21,7 @@ let validateSpreadsheet;
 let parseSpreadsheetUrl;
 let loadExpenses;
 let appendExpenseRow;
+let updateExpenseRow;
 let hasExactItemSet;
 let readExpensesSheetHeader;
 let writeConfigSheetMapping;
@@ -32,7 +33,7 @@ let deleteLastExpenseRow;
 
 beforeAll(async () => {
   ({
-    validateSpreadsheet, parseSpreadsheetUrl, loadExpenses, appendExpenseRow, hasExactItemSet,
+    validateSpreadsheet, parseSpreadsheetUrl, loadExpenses, appendExpenseRow, updateExpenseRow, hasExactItemSet,
     writeConfigSheetMapping, detectConfigSheet, readExpensesSheetHeader, createSpreadsheet,
     reorderCustomColumnsInSheet,
     findColumnIndex,
@@ -299,8 +300,10 @@ describe("appendExpenseRow", () => {
     return jsonResponse({ values: rows });
   }
 
-  function appendResponse() {
-    return { ok: true, status: 200, json: () => Promise.resolve({}) };
+  function appendResponse(rowNumber = 42) {
+    return jsonResponse({
+      updates: { updatedRange: `Expenses!A${rowNumber}:I${rowNumber}` },
+    });
   }
 
   it("aligns outgoing row values to actual header order when custom columns appear before Comment", async () => {
@@ -412,6 +415,104 @@ describe("appendExpenseRow", () => {
       "cash",
       "Trip",
     ]);
+  });
+
+  it("returns an ExpenseRecord with rowNumber parsed from updatedRange", async () => {
+    const header = ["Date", "USD", "Category", "Spent By", "Comment"];
+    const canonicalValues = ["2026-06-03", "15", "Food", "ivan@x.com", "lunch"];
+
+    setupFetchSequence([
+      metadataResponse(["Expenses"]),
+      valuesResponse([header]),
+      valuesResponse([header]),
+      appendResponse(7),
+    ]);
+
+    const { record } = await appendExpenseRow(TOKEN, SHEET_ID, canonicalValues);
+
+    expect(record.rowNumber).toBe(7);
+    expect(record.Date).toBe("2026-06-03");
+    expect(record.USD).toBe("15");
+    expect(record.Category).toBe("Food");
+    expect(record.spentBy).toBe("ivan@x.com");
+    expect(record.Comment).toBe("lunch");
+    expect(record.currencyAmounts).toEqual({});
+    expect(record.customFields).toEqual({});
+  });
+
+  it("returns rowNumber 0 when updatedRange is missing from response", async () => {
+    const header = ["Date", "USD", "Category", "Spent By", "Comment"];
+    const canonicalValues = ["2026-06-03", "10", "Other", "ivan@x.com", "misc"];
+
+    setupFetchSequence([
+      metadataResponse(["Expenses"]),
+      valuesResponse([header]),
+      valuesResponse([header]),
+      jsonResponse({ updates: {} }),
+    ]);
+
+    const { record } = await appendExpenseRow(TOKEN, SHEET_ID, canonicalValues);
+    expect(record.rowNumber).toBe(0);
+  });
+});
+
+describe("updateExpenseRow", () => {
+  const TOKEN = "test-token";
+  const SHEET_ID = "spreadsheet-123";
+
+  function metadataResponse(sheetNames) {
+    return jsonResponse({
+      sheets: sheetNames.map((title, i) => ({ properties: { sheetId: i, title } })),
+    });
+  }
+
+  function valuesResponse(rows) {
+    return jsonResponse({ values: rows });
+  }
+
+  function updateResponse() {
+    return jsonResponse({});
+  }
+
+  it("returns an ExpenseRecord with the given rowNumber and updated values", async () => {
+    const header = ["Date", "USD", "Category", "Spent By", "Comment"];
+    const canonicalValues = ["2026-06-03", "25", "Transport", "ivan@x.com", "taxi"];
+
+    setupFetchSequence([
+      metadataResponse(["Expenses"]),
+      valuesResponse([header]),
+      valuesResponse([header]),
+      updateResponse(),
+    ]);
+
+    const { record } = await updateExpenseRow(TOKEN, SHEET_ID, 5, canonicalValues);
+
+    expect(record.rowNumber).toBe(5);
+    expect(record.Date).toBe("2026-06-03");
+    expect(record.USD).toBe("25");
+    expect(record.Category).toBe("Transport");
+    expect(record.spentBy).toBe("ivan@x.com");
+    expect(record.Comment).toBe("taxi");
+    expect(record.currencyAmounts).toEqual({});
+    expect(record.customFields).toEqual({});
+  });
+
+  it("includes currency amounts in returned record when currencies are present", async () => {
+    const header = ["Date", "PLN", "USD", "Category", "Spent By", "Comment"];
+    const canonicalValues = ["2026-06-03", "50", "20", "Food", "ivan@x.com", "groceries"];
+
+    setupFetchSequence([
+      metadataResponse(["Expenses"]),
+      valuesResponse([header]),
+      valuesResponse([header]),
+      updateResponse(),
+    ]);
+
+    const { record } = await updateExpenseRow(TOKEN, SHEET_ID, 10, canonicalValues);
+
+    expect(record.rowNumber).toBe(10);
+    expect(record.currencyAmounts).toEqual({ PLN: "50" });
+    expect(record.USD).toBe("20");
   });
 });
 

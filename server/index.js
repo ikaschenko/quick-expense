@@ -608,13 +608,13 @@ app.post("/api/expenses", requireAuthenticatedUser, async (req, res) => {
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
     const { mode: expenseMode, mapping: expenseMapping = null } = await detectConfigSheet(accessToken, req.userRecord.spreadsheetId);
     const mapping = expenseMode === "config-driven" ? expenseMapping : null;
-    await appendExpenseRow(accessToken, req.userRecord.spreadsheetId, values, mapping);
+    const { record } = await appendExpenseRow(accessToken, req.userRecord.spreadsheetId, values, mapping);
 
     if (req.body?.fxRateBackup && typeof req.body.fxRateBackup === "object") {
       await saveFxRateBackup(req.userRecord.email, req.userRecord.spreadsheetId, req.body.fxRateBackup);
     }
 
-    res.status(204).end();
+    res.status(201).json(record);
   } catch (error) {
     res.status(400).json({ message: (error).message });
   }
@@ -642,13 +642,13 @@ app.put("/api/expenses/:rowNumber", requireAuthenticatedUser, async (req, res) =
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
     const { mode: expenseMode, mapping: expenseMapping = null } = await detectConfigSheet(accessToken, req.userRecord.spreadsheetId);
     const mapping = expenseMode === "config-driven" ? expenseMapping : null;
-    await updateExpenseRow(accessToken, req.userRecord.spreadsheetId, rowNumber, values, mapping);
+    const { record } = await updateExpenseRow(accessToken, req.userRecord.spreadsheetId, rowNumber, values, mapping);
 
     if (req.body?.fxRateBackup && typeof req.body.fxRateBackup === "object") {
       await saveFxRateBackup(req.userRecord.email, req.userRecord.spreadsheetId, req.body.fxRateBackup);
     }
 
-    res.status(204).end();
+    res.status(200).json(record);
   } catch (error) {
     res.status(400).json({ message: error.message });
   }

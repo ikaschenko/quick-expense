@@ -9,7 +9,7 @@ import {
 } from "react";
 import { googleSheetsService } from "../services/googleSheets";
 import { RetryBackoff } from "../services/retryBackoff";
-import { DatasetSnapshot, DistinctValues, SearchFilters } from "../types/expense";
+import { DatasetSnapshot, DistinctValues, ExpenseRecord, SearchFilters } from "../types/expense";
 import { buildDistinctValues, mergeCategories } from "../utils/spreadsheet";
 import { useAuth } from "./AuthContext";
 import { useConfig } from "./ConfigContext";
@@ -25,6 +25,9 @@ interface DatasetContextValue {
   loadDataset: (force?: boolean) => Promise<DatasetSnapshot>;
   reloadDataset: () => Promise<DatasetSnapshot>;
   invalidateDataset: () => void;
+  appendToDataset: (record: ExpenseRecord) => void;
+  updateInDataset: (record: ExpenseRecord) => void;
+  removeLastFromDataset: () => void;
   clearError: () => void;
   distinctValues: DistinctValues;
 }
@@ -111,6 +114,39 @@ export function DatasetProvider({ children }: PropsWithChildren): JSX.Element {
 
   const invalidateDataset = useCallback(() => setIsInvalidated(true), []);
 
+  const appendToDataset = useCallback(
+    (record: ExpenseRecord): void => {
+      setSnapshot((prev) => {
+        if (!prev) return prev;
+        const records = [...prev.records, record];
+        const customColumnNames = config?.customColumns ?? [];
+        return { ...prev, records, distinctValues: buildDistinctValues(records, customColumnNames) };
+      });
+    },
+    [config],
+  );
+
+  const updateInDataset = useCallback(
+    (record: ExpenseRecord): void => {
+      setSnapshot((prev) => {
+        if (!prev) return prev;
+        const records = prev.records.map((r) => (r.rowNumber === record.rowNumber ? record : r));
+        const customColumnNames = config?.customColumns ?? [];
+        return { ...prev, records, distinctValues: buildDistinctValues(records, customColumnNames) };
+      });
+    },
+    [config],
+  );
+
+  const removeLastFromDataset = useCallback((): void => {
+    setSnapshot((prev) => {
+      if (!prev || prev.records.length === 0) return prev;
+      const records = prev.records.slice(0, -1);
+      const customColumnNames = config?.customColumns ?? [];
+      return { ...prev, records, distinctValues: buildDistinctValues(records, customColumnNames) };
+    });
+  }, [config]);
+
   const clearError = useCallback(() => setError(null), []);
 
   const distinctValues = useMemo(() => {
@@ -130,10 +166,13 @@ export function DatasetProvider({ children }: PropsWithChildren): JSX.Element {
       loadDataset,
       reloadDataset,
       invalidateDataset,
+      appendToDataset,
+      updateInDataset,
+      removeLastFromDataset,
       clearError,
       distinctValues,
     }),
-    [clearError, distinctValues, error, invalidateDataset, loadDataset, reloadDataset, searchFilters, snapshot, status],
+    [clearError, distinctValues, error, invalidateDataset, appendToDataset, updateInDataset, removeLastFromDataset, loadDataset, reloadDataset, searchFilters, snapshot, status],
   );
 
   return <DatasetContext.Provider value={value}>{children}</DatasetContext.Provider>;

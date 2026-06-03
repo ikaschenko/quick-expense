@@ -51,15 +51,15 @@ export const googleSheetsService = {
     return requestJson("/api/expenses");
   },
 
-  async appendExpenseRow(values: string[], fxRateBackup?: FxRateBackupPayload): Promise<void> {
-    await requestNoContent("/api/expenses", {
+  async appendExpenseRow(values: string[], fxRateBackup?: FxRateBackupPayload): Promise<ExpenseRecord> {
+    return requestJson<ExpenseRecord>("/api/expenses", {
       method: "POST",
       body: JSON.stringify({ values, fxRateBackup }),
     });
   },
 
-  async updateExpenseRow(rowNumber: number, values: string[], fxRateBackup?: FxRateBackupPayload): Promise<void> {
-    await requestNoContent(`/api/expenses/${rowNumber}`, {
+  async updateExpenseRow(rowNumber: number, values: string[], fxRateBackup?: FxRateBackupPayload): Promise<ExpenseRecord> {
+    return requestJson<ExpenseRecord>(`/api/expenses/${rowNumber}`, {
       method: "PUT",
       body: JSON.stringify({ values, fxRateBackup }),
     });
