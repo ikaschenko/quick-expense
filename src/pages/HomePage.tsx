@@ -77,23 +77,23 @@ export function HomePage(): JSX.Element {
         {config && !isConfigLoading ? (
           <Link to="/tail" className="card card-hover home-secondary-card">
             <Clock size={24} className="home-secondary-card-icon" aria-hidden />
-            <span className="home-secondary-card-label">Last 20</span>
+            <span className="home-secondary-card-label">History (last 20)</span>
           </Link>
         ) : (
           <div className="card home-secondary-card home-secondary-card-disabled">
             <Clock size={24} className="home-secondary-card-icon" aria-hidden />
-            <span className="home-secondary-card-label">Last 20</span>
+            <span className="home-secondary-card-label">History (last 20)</span>
           </div>
         )}
         {config && !isConfigLoading ? (
           <Link to="/search" className="card card-hover home-secondary-card">
             <Search size={24} className="home-secondary-card-icon" aria-hidden />
-            <span className="home-secondary-card-label">Find expense</span>
+            <span className="home-secondary-card-label">Search</span>
           </Link>
         ) : (
           <div className="card home-secondary-card home-secondary-card-disabled">
             <Search size={24} className="home-secondary-card-icon" aria-hidden />
-            <span className="home-secondary-card-label">Find expense</span>
+            <span className="home-secondary-card-label">Search</span>
           </div>
         )}
       </div>
