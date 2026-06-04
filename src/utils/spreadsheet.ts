@@ -117,11 +117,21 @@ export function mapRowsToExpenseRecords(rows: string[][], sheetCurrencies: strin
   });
 }
 
-export function expenseDraftToRowValues(draft: ExpenseDraft, sheetCurrencies: string[], customColumns: string[] = []): string[] {
+export function expenseDraftToRowValues(
+  draft: ExpenseDraft,
+  sheetCurrencies: string[],
+  customColumns: string[] = [],
+  dateFormatter?: (date: Date) => string,
+): string[] {
   const currencyValues = sheetCurrencies.map((code) => draft.currencyAmounts[code] ?? "");
   const customValues = customColumns.map((name) => draft.customFields[name] ?? "");
+  let dateValue = draft.Date;
+  if (dateFormatter) {
+    const [y, m, d] = draft.Date.split("-").map(Number);
+    if (y && m && d) dateValue = dateFormatter(new Date(y, m - 1, d));
+  }
   return [
-    draft.Date,
+    dateValue,
     ...currencyValues,
     draft.USD,
     draft.Category,

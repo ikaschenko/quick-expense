@@ -17,7 +17,7 @@ import {
   FxRateBackupPayload,
   ManualFxRates,
 } from "../types/expense";
-import { formatLocalDate, getTodayLocalDate } from "../utils/date";
+import { formatLocalDate, getTodayLocalDate, detectDateFormat } from "../utils/date";
 import { expenseDraftToRowValues } from "../utils/spreadsheet";
 import { parseOptionalDecimal, parsePositiveDecimal, validateExpenseDraft } from "../utils/validation";
 import { trackEvent } from "../services/analytics";
@@ -206,6 +206,11 @@ export function AddExpensePage(): JSX.Element {
     const latestRecord = records && records.length > 0 ? records[records.length - 1] : null;
     return getPreferredCurrency(latestRecord, visibleCurrencies);
   }, [dataset.snapshot, visibleCurrencies]);
+
+  const detectedDateFormatter = useMemo(
+    () => detectDateFormat(dataset.snapshot?.records.map((r) => r.Date) ?? []) ?? undefined,
+    [dataset.snapshot],
+  );
 
   useEffect(() => {
     if (isEditMode) return;
@@ -446,7 +451,7 @@ export function AddExpensePage(): JSX.Element {
       if (isEditMode && editRowNumber !== null) {
         const updatedRecord = await googleSheetsService.updateExpenseRow(
           editRowNumber,
-          expenseDraftToRowValues(normalizedDraft, activeCurrencies, customColumns),
+          expenseDraftToRowValues(normalizedDraft, activeCurrencies, customColumns, detectedDateFormatter),
           buildFxBackupPayload(normalizedDraft, manualFxRates, activeCurrencies),
         );
         const submittedCurrency = getPreferredCurrency(normalizedDraft, activeCurrencies);
@@ -459,7 +464,7 @@ export function AddExpensePage(): JSX.Element {
         return;
       } else {
         const addedRecord = await googleSheetsService.appendExpenseRow(
-          expenseDraftToRowValues(normalizedDraft, activeCurrencies, customColumns),
+          expenseDraftToRowValues(normalizedDraft, activeCurrencies, customColumns, detectedDateFormatter),
           buildFxBackupPayload(normalizedDraft, manualFxRates, activeCurrencies),
         );
         dataset.appendToDataset(addedRecord);
