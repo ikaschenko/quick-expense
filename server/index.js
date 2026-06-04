@@ -167,7 +167,9 @@ app.use((req, res, next) => {
 });
 
 function getUserSession(req) {
-  return req.session.userEmail ? { email: req.session.userEmail } : null;
+  return req.session.userEmail
+    ? { email: req.session.userEmail, givenName: req.session.userGivenName ?? null, picture: req.session.userPicture ?? null }
+    : null;
 }
 
 const requireAuthenticatedUser = createRequireAuthenticatedUser({
@@ -281,6 +283,8 @@ app.get("/api/auth/callback", async (req, res) => {
         return;
       }
       req.session.userEmail = userInfo.email;
+      req.session.userGivenName = userInfo.given_name ?? null;
+      req.session.userPicture = userInfo.picture ?? null;
       res.redirect(`${getFrontendBaseUrl()}/home`);
     });
   } catch (callbackError) {
@@ -309,6 +313,8 @@ app.get("/api/auth/session", async (req, res) => {
       authenticated: true,
       session: {
         email: userRecord.email,
+        givenName: sessionUser.givenName,
+        picture: sessionUser.picture,
         lastAuthenticatedAt: userRecord.lastAuthenticatedAt,
         lastActivityAt: userRecord.lastActivityAt,
       },

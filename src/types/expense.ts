@@ -134,6 +134,8 @@ export interface DatasetSnapshot {
 
 export interface AuthSession {
   email: string;
+  givenName: string | null;
+  picture: string | null;
   lastAuthenticatedAt: number;
   lastActivityAt: number;
 }

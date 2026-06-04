@@ -169,7 +169,7 @@ export function AddExpensePage(): JSX.Element {
   );
 
   const [draft, setDraft] = useState<ExpenseDraft>(
-    createInitialDraft(auth.session?.email ?? "", activeCurrencies, customColumns),
+    createInitialDraft(auth.session?.givenName ?? auth.session?.email ?? "", activeCurrencies, customColumns),
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState<string | null>(null);
@@ -209,7 +209,7 @@ export function AddExpensePage(): JSX.Element {
 
   useEffect(() => {
     if (isEditMode) return;
-    setDraft(createInitialDraft(auth.session?.email ?? "", activeCurrencies, customColumns));
+    setDraft(createInitialDraft(auth.session?.givenName ?? auth.session?.email ?? "", activeCurrencies, customColumns));
     setManualFxRates(createEmptyFxRates(activeCurrencies));
     setFxErrors({});
     setActiveNonUsdCurrency(visibleCurrencies[0] ?? null);
@@ -467,7 +467,7 @@ export function AddExpensePage(): JSX.Element {
 
       const submittedCurrency = getPreferredCurrency(normalizedDraft, activeCurrencies);
 
-      setDraft(createInitialDraft(auth.session?.email ?? "", activeCurrencies, customColumns));
+      setDraft(createInitialDraft(auth.session?.givenName ?? auth.session?.email ?? "", activeCurrencies, customColumns));
 
       // Preserve current FX rates
       const keptRates: ManualFxRates = {};

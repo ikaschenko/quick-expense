@@ -18,11 +18,13 @@ export function Layout({ children, title, onBack }: LayoutProps): JSX.Element {
   const location = useLocation();
   const navigate = useNavigate();
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const [avatarImgError, setAvatarImgError] = useState(false);
   const [showErrorBanner, setShowErrorBanner] = useState(false);
   const avatarRef = useRef<HTMLDivElement>(null);
 
   const isHome = location.pathname === "/home";
   const avatarLetter = auth.session?.email?.charAt(0) ?? "?";
+  const avatarPicture = auth.session?.picture ?? null;
   
   // Show banner when auth, config, or dataset has an error
   const activeError = auth.error || config.error || dataset.error;
@@ -74,7 +76,14 @@ export function Layout({ children, title, onBack }: LayoutProps): JSX.Element {
                 type="button"
                 aria-label="Account menu"
               >
-                {avatarLetter}
+                {avatarPicture && !avatarImgError ? (
+                  <img
+                    src={avatarPicture}
+                    alt=""
+                    className="topbar-avatar-img"
+                    onError={() => setAvatarImgError(true)}
+                  />
+                ) : avatarLetter}
               </button>
               {avatarMenuOpen ? (
                 <div className="topbar-avatar-menu">

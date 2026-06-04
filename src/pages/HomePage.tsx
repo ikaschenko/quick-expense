@@ -21,7 +21,7 @@ function getFirstName(email: string): string {
 export function HomePage(): JSX.Element {
   const { config, isConfigLoading, fileName, isFileNameLoading } = useConfig();
   const { session } = useAuth();
-  const firstName = session?.email ? getFirstName(session.email) : "";
+  const firstName = session?.givenName ?? (session?.email ? getFirstName(session.email) : "");
 
   return (
     <Layout title="Quick Expense">
