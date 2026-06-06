@@ -2,7 +2,7 @@ import { AppError, ExpenseDraft } from "../types/expense";
 
 export type ExpenseValidationErrors = Record<string, string>;
 
-const decimalPattern = /^-?\d+(\.\d+)?$/;
+const decimalPattern = /^-?\d+([.,]\d+)?$/;
 const positiveDecimalPattern = /^\d+([.,]\d+)?$/;
 
 export function parseOptionalDecimal(value: string): number | null {
@@ -12,10 +12,10 @@ export function parseOptionalDecimal(value: string): number | null {
   }
 
   if (!decimalPattern.test(trimmed)) {
-    throw new AppError("validation", "Currency fields accept decimal numbers with dot separator.");
+    throw new AppError("validation", "Currency fields accept decimal numbers with dot or comma separator.");
   }
 
-  return Number(trimmed);
+  return Number(trimmed.replace(",", "."));
 }
 
 export function parsePositiveDecimal(value: string): number | null {

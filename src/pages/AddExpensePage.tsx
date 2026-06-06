@@ -207,24 +207,18 @@ export function AddExpensePage(): JSX.Element {
     return getPreferredCurrency(latestRecord, visibleCurrencies);
   }, [dataset.snapshot, visibleCurrencies]);
 
-  const detectedDateFormatter = useMemo(
-    () => detectDateFormat(dataset.snapshot?.records.map((r) => r.Date) ?? []) ?? undefined,
+  const detectedDateFormat = useMemo(
+    () => detectDateFormat(dataset.snapshot?.records.map((r) => r.Date) ?? []),
     [dataset.snapshot],
   );
 
-  useEffect(() => {
-    if (isEditMode) return;
-    setDraft(createInitialDraft(auth.session?.givenName ?? auth.session?.email ?? "", activeCurrencies, customColumns));
-    setManualFxRates(createEmptyFxRates(activeCurrencies));
-    setFxErrors({});
-    setActiveNonUsdCurrency(visibleCurrencies[0] ?? null);
-    setHasManuallySelectedCurrency(false);
-  }, [auth.session?.email, activeCurrencies, customColumns, isEditMode]);
-
-  // In edit mode: pre-fill draft and derive FX rates from the original record.
+  // Pre-fill draft from the edit record once on mount; normalise the sheet date to ISO.
+  // Add mode: the useState initialiser already sets a blank draft with today's ISO date.
+  // Both modes init once — background config changes no longer reset in-progress input.
   useEffect(() => {
     if (!isEditMode || !editRecord) return;
-    setDraft(createDraftFromRecord(editRecord, activeCurrencies, customColumns));
+    const normalizedDate = detectedDateFormat?.toIso(editRecord.Date) ?? editRecord.Date;
+    setDraft(createDraftFromRecord({ ...editRecord, Date: normalizedDate }, activeCurrencies, customColumns));
     setManualFxRates(deriveInitialFxRates(editRecord, activeCurrencies));
     setActiveNonUsdCurrency(getPreferredCurrency(editRecord, visibleCurrencies));
     setHasManuallySelectedCurrency(true);
@@ -430,9 +424,13 @@ export function AddExpensePage(): JSX.Element {
       const normalizedDraft: ExpenseDraft = {
         ...draft,
         Date: draft.Date.trim(),
+        USD: draft.USD.trim().replace(",", "."),
         Category: draft.Category.trim(),
         spentBy: draft.spentBy.trim(),
         Comment: draft.Comment.trim(),
+        currencyAmounts: Object.fromEntries(
+          Object.entries(draft.currencyAmounts).map(([k, v]) => [k, v.trim().replace(",", ".")]),
+        ),
         customFields: Object.fromEntries(
           Object.entries(draft.customFields).map(([k, v]) => [k, v.trim()]),
         ),
@@ -451,7 +449,7 @@ export function AddExpensePage(): JSX.Element {
       if (isEditMode && editRowNumber !== null) {
         const updatedRecord = await googleSheetsService.updateExpenseRow(
           editRowNumber,
-          expenseDraftToRowValues(normalizedDraft, activeCurrencies, customColumns, detectedDateFormatter),
+          expenseDraftToRowValues(normalizedDraft, activeCurrencies, customColumns, detectedDateFormat?.toSheet),
           buildFxBackupPayload(normalizedDraft, manualFxRates, activeCurrencies),
         );
         const submittedCurrency = getPreferredCurrency(normalizedDraft, activeCurrencies);
@@ -464,7 +462,7 @@ export function AddExpensePage(): JSX.Element {
         return;
       } else {
         const addedRecord = await googleSheetsService.appendExpenseRow(
-          expenseDraftToRowValues(normalizedDraft, activeCurrencies, customColumns, detectedDateFormatter),
+          expenseDraftToRowValues(normalizedDraft, activeCurrencies, customColumns, detectedDateFormat?.toSheet),
           buildFxBackupPayload(normalizedDraft, manualFxRates, activeCurrencies),
         );
         dataset.appendToDataset(addedRecord);

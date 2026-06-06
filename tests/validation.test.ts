@@ -89,4 +89,47 @@ describe("expense validation", () => {
     expect(parsePositiveDecimal("3.25")).toBe(3.25);
     expect(parsePositiveDecimal("3,25")).toBe(3.25);
   });
+
+  it("accepts currency amounts with comma as decimal separator", () => {
+    const errors = validateExpenseDraft(
+      makeDraft({
+        Date: "2026-03-14",
+        Category: "Misc",
+        spentBy: "ivan@example.com",
+        currencyAmounts: { PLN: "10,25", BYN: "", EUR: "" },
+      }),
+      ACTIVE_CURRENCIES,
+    );
+
+    expect(errors).toEqual({});
+  });
+
+  it("accepts negative currency amount with comma separator", () => {
+    const errors = validateExpenseDraft(
+      makeDraft({
+        Date: "2026-03-14",
+        Category: "Misc",
+        spentBy: "ivan@example.com",
+        currencyAmounts: { PLN: "-10,25", BYN: "", EUR: "" },
+      }),
+      ACTIVE_CURRENCIES,
+    );
+
+    expect(errors).toEqual({});
+  });
+
+  it("accepts USD amount with comma separator", () => {
+    const errors = validateExpenseDraft(
+      makeDraft({
+        Date: "2026-03-14",
+        USD: "2,80",
+        Category: "Misc",
+        spentBy: "ivan@example.com",
+        currencyAmounts: { PLN: "", BYN: "", EUR: "" },
+      }),
+      ACTIVE_CURRENCIES,
+    );
+
+    expect(errors).toEqual({});
+  });
 });

@@ -15,7 +15,7 @@ export function getTodayLocalDate(): string {
  * (resolved by finding a non-year segment with value > 12 across samples).
  * Returns null when the format cannot be determined — callers should fall back to ISO.
  */
-export function detectDateFormat(samples: string[]): ((date: Date) => string) | null {
+export function detectDateFormat(samples: string[]): { toSheet: (date: Date) => string; toIso: (dateStr: string) => string | null } | null {
   let sep: string | null = null;
   let yearFirst: boolean | null = null;
   let dayFirst: boolean | null = null;
@@ -53,11 +53,24 @@ export function detectDateFormat(samples: string[]): ((date: Date) => string) | 
   const yf = yearFirst;
   const df = dayFirst;
 
-  return (date: Date): string => {
+  const toSheet = (date: Date): string => {
     const y = String(date.getFullYear());
     const m = String(date.getMonth() + 1).padStart(2, "0");
     const d = String(date.getDate()).padStart(2, "0");
     const [first, second] = df ? [d, m] : [m, d];
     return yf ? [y, first, second].join(s) : [first, second, y].join(s);
   };
+
+  const toIso = (dateStr: string): string | null => {
+    const parts = dateStr.split(s);
+    if (parts.length !== 3) return null;
+    const [p0, p1, p2] = parts;
+    const [yearStr, firstStr, secondStr] = yf ? [p0, p1, p2] : [p2, p0, p1];
+    const monthStr = df ? secondStr : firstStr;
+    const dayStr = df ? firstStr : secondStr;
+    if (!/^\d{4}$/.test(yearStr)) return null;
+    return `${yearStr}-${monthStr.padStart(2, "0")}-${dayStr.padStart(2, "0")}`;
+  };
+
+  return { toSheet, toIso };
 }
