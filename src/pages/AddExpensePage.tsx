@@ -18,8 +18,9 @@ import {
   ManualFxRates,
 } from "../types/expense";
 import { formatLocalDate, getTodayLocalDate, detectDateFormat } from "../utils/date";
-import { expenseDraftToRowValues } from "../utils/spreadsheet";
+import { buildCommentSuggestions, expenseDraftToRowValues } from "../utils/spreadsheet";
 import { parseOptionalDecimal, parsePositiveDecimal, validateExpenseDraft } from "../utils/validation";
+import { AutosuggestInput } from "../components/AutosuggestInput";
 import { trackEvent } from "../services/analytics";
 
 function formatColumnLabel(name: string): string {
@@ -311,6 +312,10 @@ export function AddExpensePage(): JSX.Element {
   }, [draftCurrencyDeps, manualFxRates, activeCurrencies]);
 
   const suggestionLists = useMemo(() => dataset.distinctValues, [dataset.distinctValues]);
+  const commentSuggestions = useMemo(
+    () => buildCommentSuggestions(dataset.snapshot?.records ?? []),
+    [dataset.snapshot],
+  );
 
   if (!config) {
     return <Navigate to="/setup" replace />;
@@ -687,11 +692,12 @@ export function AddExpensePage(): JSX.Element {
         {!isCommentHidden ? (
         <div className="input-group">
           <label className="input-label" htmlFor="comment-field">Comment</label>
-          <input
+          <AutosuggestInput
             id="comment-field"
-            className="input"
             value={draft.Comment}
-            onChange={(event) => updateDraft("Comment", event.target.value)}
+            onChange={(value) => updateDraft("Comment", value)}
+            allSuggestions={commentSuggestions}
+            minChars={3}
             placeholder="Add a note…"
           />
         </div>

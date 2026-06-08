@@ -1,4 +1,5 @@
 import {
+  buildCommentSuggestions,
   buildDistinctValues,
   deriveHeaderRowDetails,
   mapRowsToExpenseRecords,
@@ -195,5 +196,57 @@ describe("mergeCategories", () => {
 
   it("keeps first occurrence when both variants start with a capital", () => {
     expect(mergeCategories(["Food"], ["FOOD"])).toEqual(["Food"]);
+  });
+});
+
+describe("buildCommentSuggestions", () => {
+  function makeRecord(comment: string): Parameters<typeof buildCommentSuggestions>[0][number] {
+    return {
+      rowNumber: 1, Date: "2026-01-01", USD: "1", Category: "X",
+      spentBy: "a@b.com", Comment: comment, currencyAmounts: {}, customFields: {},
+    };
+  }
+
+  it("returns an empty array for an empty records list", () => {
+    expect(buildCommentSuggestions([])).toEqual([]);
+  });
+
+  it("returns an empty array when all comments are empty or whitespace", () => {
+    expect(buildCommentSuggestions([makeRecord(""), makeRecord("   ")])).toEqual([]);
+  });
+
+  it("returns comments in recency order — last record first", () => {
+    const records = [
+      makeRecord("first comment"),
+      makeRecord("second comment"),
+      makeRecord("third comment"),
+    ];
+    expect(buildCommentSuggestions(records)).toEqual([
+      "third comment",
+      "second comment",
+      "first comment",
+    ]);
+  });
+
+  it("deduplicates case-insensitively, keeping casing of the most recent occurrence", () => {
+    const records = [
+      makeRecord("Coffee"),    // oldest
+      makeRecord("coffee"),    // newer — wins for the lowercase key
+    ];
+    expect(buildCommentSuggestions(records)).toEqual(["coffee"]);
+  });
+
+  it("keeps only the first seen occurrence (most recent) per unique lowercase key", () => {
+    const records = [
+      makeRecord("Lunch"),     // oldest
+      makeRecord("Taxi"),
+      makeRecord("lunch"),     // most recent for "lunch" key — appears first in result
+    ];
+    expect(buildCommentSuggestions(records)).toEqual(["lunch", "Taxi"]);
+  });
+
+  it("trims whitespace before comparing and storing", () => {
+    const records = [makeRecord("  coffee  "), makeRecord("coffee")];
+    expect(buildCommentSuggestions(records)).toEqual(["coffee"]);
   });
 });

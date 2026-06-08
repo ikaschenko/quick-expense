@@ -209,4 +209,23 @@ export function mergeCategories(fromDataset: string[], predefined: string[]): st
   return [...map.values()].sort((a, b) => a.localeCompare(b));
 }
 
+/**
+ * Derive a deduplicated list of comment suggestions from the dataset,
+ * ordered by recency (most recent first).
+ */
+export function buildCommentSuggestions(records: ExpenseRecord[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (let i = records.length - 1; i >= 0; i--) {
+    const value = records[i].Comment.trim();
+    if (!value) continue;
+    const lower = value.toLowerCase();
+    if (!seen.has(lower)) {
+      seen.add(lower);
+      result.push(value);
+    }
+  }
+  return result;
+}
+
 export { SHEET_NAME };
