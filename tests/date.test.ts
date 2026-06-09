@@ -73,6 +73,34 @@ describe("detectDateFormat", () => {
     expect(fmt!.toSheet(date)).toBe(formatLocalDate(date));
   });
 
+  describe("unpadded (single-digit) month/day", () => {
+    it("detects unpadded m/d/yyyy and formats without leading zeroes", () => {
+      // Historical sheet dates like 6/3/2026 — no zero padding
+      const fmt = detectDateFormat(["4/15/2024"]);
+      expect(fmt).not.toBeNull();
+      expect(fmt!.toSheet(new Date(2026, 5, 9))).toBe("6/9/2026");
+    });
+
+    it("detects unpadded d/m/yyyy and formats without leading zeroes", () => {
+      const fmt = detectDateFormat(["25/4/2024"]);
+      expect(fmt).not.toBeNull();
+      expect(fmt!.toSheet(new Date(2026, 5, 9))).toBe("9/6/2026");
+    });
+
+    it("resolves padding from second sample when first has all values ≥ 10", () => {
+      // First sample: 12/25/2023 — both non-year parts ≥ 10, can't tell padding
+      // Second sample: 1/3/2024 — non-year part < 10, length 1 → unpadded
+      const fmt = detectDateFormat(["12/25/2023", "1/3/2024"]);
+      expect(fmt).not.toBeNull();
+      expect(fmt!.toSheet(new Date(2026, 5, 9))).toBe("6/9/2026");
+    });
+
+    it("round-trips unpadded toSheet then toIso back to ISO", () => {
+      const fmt = detectDateFormat(["4/15/2024"]);
+      expect(fmt!.toIso(fmt!.toSheet(new Date(2026, 5, 9)))).toBe("2026-06-09");
+    });
+  });
+
   describe("toIso (sheet date → ISO round-trip)", () => {
     it("parses mm/dd/yyyy back to ISO", () => {
       const fmt = detectDateFormat(["04/15/2024"]);

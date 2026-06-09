@@ -403,7 +403,7 @@ export function AddExpensePage(): JSX.Element {
         }
 
         if (amount !== null && amount !== 0 && !draft.USD.trim() && rate === null) {
-          nextFxErrors[currency] = "Enter a USD rate here or fill USD manually.";
+          nextFxErrors[currency] = "USD amount is required — enter an exchange rate here or fill the USD field directly.";
         }
       } catch (fxError) {
         nextFxErrors[currency] = (fxError as Error).message;

@@ -36,6 +36,8 @@ Without login, no option is available, but only the "sign in" button which shoul
 
 After user signs in, on main screen there are 4 key buttons: Setup, Add, Tail, Search. For details how each button should work - see below in separate sections.
 
+> **As of the Home Screen redesign (issue #36):** the main screen is no longer a menu of buttons. It is a spending dashboard — see **§2.7 Home Screen Dashboard**. The Setup, Tail, Search, and Add Expense functions are accessible via the global bottom navigation bar. The bottom nav's Setup icon shows a status badge (green ✓ or red ⚠) reflecting the current sheet connection state.
+
 Application is intended for any Google user who has access to the spreadsheet.
 
 Any Google user with edit access to the configured spreadsheet can use the application.
@@ -169,6 +171,8 @@ After a successful Setup validation, the application reports what actions were t
 
 Can multiple currency fields be filled simultaneously? Answer: Allow USD together with at most one non-USD currency. Only one non-USD currency may be filled at a time (regardless of which currencies are configured).
 
+**USD is mandatory when a non-USD amount is entered.** If the user fills a non-USD currency field, the USD amount must also be provided — either entered directly or derived via an exchange rate. The form blocks submission and shows a single error: *"USD amount is required — enter an exchange rate here or fill the USD field directly."* The backend enforces the same rule independently (HTTP 400).
+
 Currency conversion: Here are key cases:
 
 * If a non-USD field is being filled, the user may enter a manual USD conversion rate for that currency and the application derives the USD field from it.
@@ -204,9 +208,9 @@ After successful Add, where does user go? Answer: After Save - show a success me
 
 On Back - return to a previous screen.
 
-## 2.4 Preload for Tail and Search
+## 2.4 Preload for Home Dashboard, Tail and Search
 
-For operations like Tail and Search - upon clicking appropriate buttons on main screen, the application should check if the dataset is loaded from back-end. Key rules:
+For the Home dashboard and for Tail and Search operations — upon mounting the relevant screen, the application should check if the dataset is loaded from back-end. Key rules:
 
 * If never loaded (or invalidated a previously loaded data) - then automatically load a fresh dataset.
 * If dataset is already loaded in memory and has not been invalidated (by Add or Reload), the application must reuse the in-memory dataset without performing another API call.
@@ -285,6 +289,50 @@ Available buttons on this screen:
 * "Back" - persist filter values during session only, then return to a previous screen.
 * "Clear" - clear entered values (if any), remain on the current screen.
 * "Reload" - for on-demand refresh of data from backend. What exactly does Reload refresh? Answer: Reload should a) Re-fetch spreadsheet, b) Rebuild distinct values lists, c) Clear in-memory cache.
+
+## 2.7 Home Screen Dashboard
+
+When a user is authenticated **and** has a sheet configured **and** the sheet contains at least one expense record, the home screen displays a spending summary dashboard instead of a simple navigation menu.
+
+### 2.7.1 Data source and loading
+
+Dashboard data is loaded via the same mechanism as Tail/Search (shared in-memory dataset). If a valid cache exists (e.g. from a recent Tail or Add visit), it is reused without an extra network call. While loading, skeleton placeholders are shown for each metric card. If loading fails, an error banner with a Retry action is shown.
+
+### 2.7.2 TODAY card
+
+- Header: **"TODAY · {local date}"** (e.g. "TODAY · Jun 9")
+- Right side: link **"N entries →"** navigating to Tail/History
+- Body: if no entries today — *"No expense entries"*; otherwise the USD total (`$Y`)
+- **Dual-currency display:** if *all* today's entries share exactly one non-USD currency code AND each has a USD amount, display **"PLN X / $Y"** (sum of that currency / sum of USD). In all other cases show USD only.
+
+### 2.7.3 JUNE SO FAR (MTD) card
+
+- Header: **"{MONTH NAME} SO FAR"** (e.g. "JUNE SO FAR")
+- Right side: **"N entries →"** link to Tail/History
+- Body: USD total for Jan 1 – today's date of the current month
+- **Year-over-year deviation** (shown only when prior-year data exists in the dataset for the same calendar-month period): `▲ +X% · +$Y vs Jun '25` or `▼ -X%...`. Omitted entirely when no prior-year data is present.
+- **Mini area chart:** daily USD totals for each day in the current month (past days filled, future days empty). Gray vertical lines mark week boundaries (each Monday). Tapping a data point shows a tooltip `{date} · ${amount}`.
+
+### 2.7.4 YEAR SO FAR (YTD) card
+
+- Header: **"{YEAR} SO FAR"** (e.g. "2026 SO FAR")
+- Right side: **"Details"** link (inline, not navigating) — tapping shows *"This feature is in development — coming soon."* inline; tapping anywhere else dismisses it
+- Body: USD total for Jan 1 – today of the current year
+- **Year-over-year deviation:** same logic as MTD, scaled to year-to-date comparison
+
+### 2.7.5 Aggregation rules
+
+- All aggregations cover **all rows in the sheet for all users** (all `WhoSpent` values). No per-user filtering.
+- USD column is used for all monetary totals. Non-USD columns are used only for the dual-currency TODAY display.
+- Records with empty USD (legacy or migration data) contribute $0 to totals — no error shown.
+
+### 2.7.6 Setup status badge
+
+The Setup item in the global bottom navigation bar shows an overlaid status icon on the gear icon:
+- **Green ✓:** sheet is connected and configuration is valid
+- **Red ⚠:** no sheet connected, or `configMode === 'config-invalid'`, or last validation failed
+
+The badge is visible on all pages (rendered by `Layout`). The "Connected · {sheet name}" card that previously appeared inside the Home content area has been removed.
 
 # 3\. NON FUNCTIONAL REQUIREMENTS
 

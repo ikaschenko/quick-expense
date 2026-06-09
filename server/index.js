@@ -15,7 +15,7 @@ import {
   createPkcePair,
   refreshAccessToken,
 } from "./google-client.js";
-import { validateMappingRequestBody } from "./validation.js";
+import { validateMappingRequestBody, validateUsdMandatory } from "./validation.js";
 import {
   createSpreadsheet,
   appendExpenseRow,
@@ -629,6 +629,14 @@ app.post("/api/expenses", requireAuthenticatedUser, async (req, res) => {
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
     const { mode: expenseMode, mapping: expenseMapping = null } = await detectConfigSheet(accessToken, req.userRecord.spreadsheetId);
     const mapping = expenseMode === "config-driven" ? expenseMapping : null;
+
+    const report = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping);
+    const usdValidationError = validateUsdMandatory(values, report.sheetCurrencies);
+    if (usdValidationError) {
+      res.status(400).json({ message: usdValidationError });
+      return;
+    }
+
     const { record } = await appendExpenseRow(accessToken, req.userRecord.spreadsheetId, values, mapping);
 
     if (req.body?.fxRateBackup && typeof req.body.fxRateBackup === "object") {
@@ -663,6 +671,14 @@ app.put("/api/expenses/:rowNumber", requireAuthenticatedUser, async (req, res) =
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
     const { mode: expenseMode, mapping: expenseMapping = null } = await detectConfigSheet(accessToken, req.userRecord.spreadsheetId);
     const mapping = expenseMode === "config-driven" ? expenseMapping : null;
+
+    const report = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping);
+    const usdValidationError = validateUsdMandatory(values, report.sheetCurrencies);
+    if (usdValidationError) {
+      res.status(400).json({ message: usdValidationError });
+      return;
+    }
+
     const { record } = await updateExpenseRow(accessToken, req.userRecord.spreadsheetId, rowNumber, values, mapping);
 
     if (req.body?.fxRateBackup && typeof req.body.fxRateBackup === "object") {

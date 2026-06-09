@@ -29,6 +29,7 @@ describe("expense validation", () => {
     const errors = validateExpenseDraft(
       makeDraft({
         Date: "2026-03-14",
+        USD: "2.50",
         Category: "Misc",
         spentBy: "ivan@example.com",
         currencyAmounts: { PLN: "-10.25", BYN: "", EUR: "" },
@@ -94,6 +95,7 @@ describe("expense validation", () => {
     const errors = validateExpenseDraft(
       makeDraft({
         Date: "2026-03-14",
+        USD: "2.50",
         Category: "Misc",
         spentBy: "ivan@example.com",
         currencyAmounts: { PLN: "10,25", BYN: "", EUR: "" },
@@ -108,6 +110,7 @@ describe("expense validation", () => {
     const errors = validateExpenseDraft(
       makeDraft({
         Date: "2026-03-14",
+        USD: "-2.50",
         Category: "Misc",
         spentBy: "ivan@example.com",
         currencyAmounts: { PLN: "-10,25", BYN: "", EUR: "" },

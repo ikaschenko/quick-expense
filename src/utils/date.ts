@@ -19,6 +19,7 @@ export function detectDateFormat(samples: string[]): { toSheet: (date: Date) => 
   let sep: string | null = null;
   let yearFirst: boolean | null = null;
   let dayFirst: boolean | null = null;
+  let zeroPadded: boolean | null = null;
 
   for (const sample of samples) {
     if (!sample) continue;
@@ -44,7 +45,19 @@ export function detectDateFormat(samples: string[]): { toSheet: (date: Date) => 
       else if (b > 12) dayFirst = false;
     }
 
-    if (dayFirst !== null) break; // all info gathered
+    // Detect zero-padding from a non-year segment whose value is unambiguously < 10
+    if (zeroPadded === null) {
+      for (const i of [0, 1, 2]) {
+        if (i === yIdx) continue;
+        const v = parseInt(parts[i], 10);
+        if (v < 10) {
+          zeroPadded = parts[i].length === 2; // "06" → padded, "6" → unpadded
+          break;
+        }
+      }
+    }
+
+    if (dayFirst !== null && zeroPadded !== null) break; // all info gathered
   }
 
   if (sep === null || yearFirst === null || dayFirst === null) return null;
@@ -52,11 +65,14 @@ export function detectDateFormat(samples: string[]): { toSheet: (date: Date) => 
   const s = sep;
   const yf = yearFirst;
   const df = dayFirst;
+  const zp = zeroPadded ?? true; // default to padded when all samples have values ≥ 10
 
   const toSheet = (date: Date): string => {
     const y = String(date.getFullYear());
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
+    const rawM = String(date.getMonth() + 1);
+    const rawD = String(date.getDate());
+    const m = zp ? rawM.padStart(2, "0") : rawM;
+    const d = zp ? rawD.padStart(2, "0") : rawD;
     const [first, second] = df ? [d, m] : [m, d];
     return yf ? [y, first, second].join(s) : [first, second, y].join(s);
   };

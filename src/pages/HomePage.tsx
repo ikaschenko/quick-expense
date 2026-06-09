@@ -1,11 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Clock, Search, AlertTriangle, Settings, FileSpreadsheet, Receipt } from "lucide-react";
+import { FileSpreadsheet, Receipt } from "lucide-react";
+import { FormattedAmount } from "../components/FormattedAmount";
 import { Layout } from "../components/Layout";
-import { SpreadsheetFileInfo } from "../components/SpreadsheetFileInfo";
+import { MtdSpendChart } from "../components/MtdSpendChart";
 import { useConfig } from "../contexts/ConfigContext";
 import { useAuth } from "../contexts/AuthContext";
-import { googleSheetsService } from "../services/googleSheets";
+import { useDataset } from "../contexts/DatasetContext";
+import { getTodayLocalDate } from "../utils/date";
+import {
+  buildIsoNormalizer,
+  getTodayStats,
+  getMtdStats,
+  getYtdStats,
+  getMtdDailyAmounts,
+  getMtdWeekBoundaryPositions,
+} from "../utils/dashboardStats";
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -53,27 +63,65 @@ function HomeEmptyState({ variant }: EmptyStateProps): JSX.Element {
   );
 }
 
-export function HomePage(): JSX.Element {
-  const { config, isConfigLoading, fileName, isFileNameLoading } = useConfig();
-  const { session } = useAuth();
-  const firstName = session?.givenName ?? (session?.email ? getFirstName(session.email) : "");
-  const [rowCount, setRowCount] = useState<number | null>(null);
-  const [isRowCountLoading, setIsRowCountLoading] = useState(false);
+function MetricCardSkeleton(): JSX.Element {
+  return <div className="skeleton-card" style={{ height: "120px" }} />;
+}
 
+export function HomePage(): JSX.Element {
+  const { config, isConfigLoading } = useConfig();
+  const { session } = useAuth();
+  const dataset = useDataset();
+  const firstName = session?.givenName ?? (session?.email ? getFirstName(session.email) : "");
+  const today = useMemo(() => getTodayLocalDate(), []);
+
+  const [showYtdComingSoon, setShowYtdComingSoon] = useState(false);
+  const ytdDetailsRef = useRef<HTMLButtonElement>(null);
+
+  // Load dataset when config is ready and dataset hasn't been loaded yet
   useEffect(() => {
     if (!config || isConfigLoading) return;
-    setIsRowCountLoading(true);
-    googleSheetsService
-      .getExpenseRowCount()
-      .then(({ rowCount: count }) => setRowCount(count))
-      .catch(() => setRowCount(null))
-      .finally(() => setIsRowCountLoading(false));
-  }, [config?.spreadsheetUrl, isConfigLoading]);
+    if (dataset.status === "idle") {
+      dataset.loadDataset().catch(() => {/* error surfaced via dataset.error */});
+    }
+  }, [config, isConfigLoading, dataset]);
 
-  const isLoading = isConfigLoading || isRowCountLoading;
-  const showEmptySheet = !isLoading && !config;
-  const showEmptyData = !isLoading && config && rowCount === 0;
-  const showDashboard = !isLoading && config && (rowCount === null || rowCount > 0);
+  // Dismiss YTD coming-soon on outside click
+  useEffect(() => {
+    if (!showYtdComingSoon) return;
+    const handleClick = (e: MouseEvent) => {
+      if (ytdDetailsRef.current && !ytdDetailsRef.current.contains(e.target as Node)) {
+        setShowYtdComingSoon(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showYtdComingSoon]);
+
+  const records = dataset.snapshot?.records ?? [];
+
+  const toIso = useMemo(() => buildIsoNormalizer(records), [records]);
+
+  const todayStats = useMemo(() => getTodayStats(records, today, toIso), [records, today, toIso]);
+  const mtdStats = useMemo(() => getMtdStats(records, today, toIso), [records, today, toIso]);
+  const ytdStats = useMemo(() => getYtdStats(records, today, toIso), [records, today, toIso]);
+  const mtdDailyAmounts = useMemo(() => getMtdDailyAmounts(records, today, toIso), [records, today, toIso]);
+
+  const [year, month] = today.split("-").map(Number);
+  const weekBoundaryPositions = useMemo(
+    () => getMtdWeekBoundaryPositions(year, month),
+    [year, month],
+  );
+
+  const monthName = new Date(year, month - 1, 1).toLocaleString("en", { month: "long" }).toUpperCase();
+  const dayLabel = new Date(year, month - 1, parseInt(today.split("-")[2], 10))
+    .toLocaleString("en", { month: "short", day: "numeric" });
+
+  const isDatasetLoading = dataset.status === "idle" || dataset.status === "loading";
+  const isLoading = isConfigLoading || isDatasetLoading;
+  const showEmptySheet = !isConfigLoading && !config;
+  const showEmptyData = !isLoading && config && dataset.status === "ready" && records.length === 0;
+  const showDashboard = !isLoading && config && dataset.status === "ready" && records.length > 0;
+  const showDashboardSkeleton = !isConfigLoading && config && isDatasetLoading;
 
   return (
     <Layout title="Quick Expense">
@@ -82,48 +130,120 @@ export function HomePage(): JSX.Element {
           {getGreeting()}, {firstName} 👋
         </p>
 
-        {isLoading ? (
-          <div className="home-status-card loading">
-            <div className="spinner spinner-sm home-status-icon" aria-hidden />
-            <div className="home-status-content">
-              <div className="home-status-label">Checking configuration…</div>
-            </div>
+        {isConfigLoading ? (
+          <div className="skeleton-list">
+            <MetricCardSkeleton />
+            <MetricCardSkeleton />
+            <MetricCardSkeleton />
           </div>
         ) : showEmptySheet ? (
           <HomeEmptyState variant="no-sheet" />
         ) : showEmptyData ? (
           <HomeEmptyState variant="no-data" />
+        ) : showDashboardSkeleton ? (
+          <div className="skeleton-list">
+            <MetricCardSkeleton />
+            <MetricCardSkeleton />
+            <MetricCardSkeleton />
+          </div>
+        ) : dataset.status === "error" ? (
+          <div className="home-dataset-error">
+            <p>Failed to load expense data.</p>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => dataset.reloadDataset().catch(() => {})}
+            >
+              Retry
+            </button>
+          </div>
         ) : showDashboard ? (
-          <>
-            <div className="home-status-card connected">
-              <Settings size={20} className="home-status-icon" aria-hidden />
-              <div className="home-status-content">
-                <div className="home-status-label">Connected</div>
-                <div className="home-status-detail">
-                  <SpreadsheetFileInfo spreadsheetUrl={config!.spreadsheetUrl} fileName={fileName} isLoading={isFileNameLoading} />
-                </div>
+          <div className="home-dashboard">
+            {/* TODAY */}
+            <div className="home-metric-card">
+              <div className="home-metric-header">
+                <span className="home-metric-title">TODAY · {dayLabel}</span>
+                <Link to="/tail" className="home-metric-link">
+                  {todayStats.count} {todayStats.count === 1 ? "entry" : "entries"} →
+                </Link>
               </div>
-              <Link to="/setup" className="home-status-action">Change</Link>
+              {todayStats.count === 0 ? (
+                <p className="home-metric-empty">No expense entries</p>
+              ) : (
+                <p className="home-metric-amount">
+                  {todayStats.dualCurrency ? (
+                    <>
+                      <FormattedAmount prefix={`${todayStats.dualCurrency.code} `} value={todayStats.dualCurrency.amount} />
+                      {" / "}
+                      <FormattedAmount prefix="$" value={todayStats.usdTotal} />
+                    </>
+                  ) : (
+                    <FormattedAmount prefix="$" value={todayStats.usdTotal} />
+                  )}
+                </p>
+              )}
             </div>
 
-            <div className="home-cta">
-              <Link to="/add" className="btn btn-primary">
-                <Plus size={20} aria-hidden />
-                Add Expense
-              </Link>
+            {/* MTD */}
+            <div className="home-metric-card">
+              <div className="home-metric-header">
+                <span className="home-metric-title">{monthName} SO FAR</span>
+                <Link to="/tail" className="home-metric-link">
+                  {mtdStats.count} {mtdStats.count === 1 ? "entry" : "entries"} →
+                </Link>
+              </div>
+              {mtdStats.count === 0 ? (
+                <p className="home-metric-empty">No expense entries</p>
+              ) : (
+                <>
+                  <p className="home-metric-amount"><FormattedAmount prefix="$" value={mtdStats.usdTotal} /></p>
+                  {mtdStats.deviation && (
+                    <p className="home-metric-yoy">
+                      {mtdStats.deviation.up ? "▲" : "▼"}{" "}
+                      {mtdStats.deviation.up ? "+" : "-"}{mtdStats.deviation.pctChange}% ·{" "}
+                      {mtdStats.deviation.up ? "+" : "-"}${mtdStats.deviation.absChange.toFixed(2)} vs {mtdStats.deviation.priorLabel}
+                    </p>
+                  )}
+                  <MtdSpendChart
+                    dailyAmounts={mtdDailyAmounts}
+                    weekBoundaryPositions={weekBoundaryPositions}
+                  />
+                </>
+              )}
             </div>
 
-            <div className="home-secondary-row">
-              <Link to="/tail" className="card card-hover home-secondary-card">
-                <Clock size={24} className="home-secondary-card-icon" aria-hidden />
-                <span className="home-secondary-card-label">History (last 20)</span>
-              </Link>
-              <Link to="/search" className="card card-hover home-secondary-card">
-                <Search size={24} className="home-secondary-card-icon" aria-hidden />
-                <span className="home-secondary-card-label">Search</span>
-              </Link>
+            {/* YTD */}
+            <div className="home-metric-card">
+              <div className="home-metric-header">
+                <span className="home-metric-title">{year} SO FAR</span>
+                <button
+                  ref={ytdDetailsRef}
+                  type="button"
+                  className="home-metric-link"
+                  onClick={() => setShowYtdComingSoon((v) => !v)}
+                >
+                  Details
+                </button>
+              </div>
+              {ytdStats.count === 0 ? (
+                <p className="home-metric-empty">No expense entries</p>
+              ) : (
+                <>
+                  <p className="home-metric-amount"><FormattedAmount prefix="$" value={ytdStats.usdTotal} /></p>
+                  {ytdStats.deviation && (
+                    <p className="home-metric-yoy">
+                      {ytdStats.deviation.up ? "▲" : "▼"}{" "}
+                      {ytdStats.deviation.up ? "+" : "-"}{ytdStats.deviation.pctChange}% ·{" "}
+                      {ytdStats.deviation.up ? "+" : "-"}${ytdStats.deviation.absChange.toFixed(2)} vs {ytdStats.deviation.priorLabel}
+                    </p>
+                  )}
+                </>
+              )}
+              {showYtdComingSoon && (
+                <p className="home-metric-coming-soon">This feature is in development — coming soon.</p>
+              )}
             </div>
-          </>
+          </div>
         ) : null}
 
         <a

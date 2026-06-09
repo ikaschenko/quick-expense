@@ -104,8 +104,9 @@ quick-expense/
 │   ├── vite-env.d.ts
 │   ├── components/            ← reusable UI components
 │   │   ├── ExpenseTable.tsx   ← expense card list; tap/click to expand full details inline
-│   │   ├── Layout.tsx         ← app shell: topbar + footer + page slot
+│   │   ├── Layout.tsx         ← app shell: topbar + footer + page slot; Setup badge
 │   │   ├── LoadingBlock.tsx   ← spinner component
+│   │   ├── MtdSpendChart.tsx  ← Chart.js area chart for MTD daily spend (Home dashboard)
 │   │   ├── ProtectedRoute.tsx ← redirect to login if unauthenticated
 │   │   └── StatusBanner.tsx   ← error/success/info banner
 │   ├── constants/
@@ -118,7 +119,7 @@ quick-expense/
 │   ├── pages/                 ← route-level page components
 │   │   ├── AddExpensePage.tsx  ← expense form with currency conversion
 │   │   ├── AuthCallbackPage.tsx ← post-OAuth redirect handler
-│   │   ├── HomePage.tsx       ← main menu (Setup / Add / Tail / Search)
+│   │   ├── HomePage.tsx       ← spending dashboard (TODAY / MTD / YTD)
 │   │   ├── LoginPage.tsx      ← sign-in screen
 │   │   ├── SearchPage.tsx     ← search with category multi-select + comment filter
 │   │   ├── SetupPage.tsx      ← spreadsheet URL configuration + Google Picker
@@ -133,7 +134,8 @@ quick-expense/
 │   ├── types/
 │   │   └── expense.ts         ← all shared types and AppError class
 │   └── utils/                 ← pure utility functions
-│       ├── date.ts            ← local date formatting
+│       ├── dashboardStats.ts  ← TODAY / MTD / YTD aggregations, ISO normalizer, chart data
+│       ├── date.ts            ← local date formatting + sheet date-format detection
 │       ├── expenseTable.ts    ← expense card helpers: preview length, display amount, detail detection
 │       ├── search.ts          ← client-side expense filtering
 │       ├── spreadsheet.ts     ← header validation, row mapping, distinct values
@@ -141,7 +143,9 @@ quick-expense/
 │       └── validation.ts      ← expense draft validation, decimal parsing
 │
 └── tests/                     ← Vitest test files
+    ├── dashboard-stats.test.ts
     ├── search.test.ts
+    ├── server-validation.test.js
     ├── spreadsheet.test.ts
     ├── store.test.js
     └── validation.test.ts
@@ -156,6 +160,7 @@ quick-expense/
 | Front-end framework | React 18 + TypeScript | SPA, client-side routing via react-router-dom v6 |
 | Build tool | Vite 7 | Dev server on port 5173, proxies `/api` to backend |
 | Test runner | Vitest 4 + jsdom | `npm test` runs `vitest run` |
+| Charts | chart.js + react-chartjs-2 | MTD area chart on Home dashboard (tree-shakeable, MIT) |
 | Icons | lucide-react | |
 | Back-end runtime | Node.js 20, Express 4 | ES modules (`"type": "module"` in package.json) |
 | Session management | express-session + connect-pg-simple | PostgreSQL-backed sessions |
@@ -427,8 +432,8 @@ The SPA uses three nested context providers (wrapped in `App.tsx`):
 - **AuthContext:** Checks `/api/auth/session` on mount. Exposes `status` (`initializing` | `signed_out` | `signed_in`), `session` (email + timestamps), `signIn()`, `signOut()`, `refreshSession()`.
 - **ConfigContext:** Fetches `/api/config` when a session is present. Exposes the `SpreadsheetConfig` object and methods to save/clear/refresh. The config includes a `configMode` field (`"default"` | `"config-driven"` | `"config-invalid"`) indicating whether a column mapping is active. When `configMode` is `"config-invalid"`, a `configModeReason` string explains the problem. `hiddenColumns: string[]` lists canonical field names hidden from the Add Expense form; `toggleColumnVisibility(field, hidden)` updates this list optimistically with server sync and automatic revert on failure.
 - **DatasetContext:** Manages the loaded expense dataset. Key behaviors:
-  - `loadDataset()` — fetches from `/api/expenses` unless a valid cached snapshot exists.
-  - `invalidateDataset()` — marks the snapshot stale, forcing a full reload on the next Tail/Search visit. Reserved for error-recovery and future external-change detection scenarios.
+  - `loadDataset()` — fetches from `/api/expenses` unless a valid cached snapshot exists. Called on Home page mount (when status is `idle`) as well as by Tail/Search pages.
+  - `invalidateDataset()` — marks the snapshot stale, forcing a full reload on the next Tail/Search/Home visit. Reserved for error-recovery and future external-change detection scenarios.
   - `reloadDataset()` — explicit Reload button action, force-fetches regardless of cache.
   - `appendToDataset(record)` — called after a successful Add; appends the returned `ExpenseRecord` to the in-memory array and recomputes `distinctValues`. No full reload.
   - `updateInDataset(record)` — called after a successful Edit; replaces the matching record (by `rowNumber`) and recomputes `distinctValues`. No full reload.
@@ -443,7 +448,7 @@ The SPA uses three nested context providers (wrapped in `App.tsx`):
 |---|---|---|---|
 | `/` | `LoginPage` | No | Sign-in screen (redirects to `/home` if already authenticated) |
 | `/auth/callback` | `AuthCallbackPage` | No | Post-OAuth redirect (immediately navigates to `/home`) |
-| `/home` | `HomePage` | Yes | Main menu: Setup, Add, Tail, Search |
+| `/home` | `HomePage` | Yes | Spending dashboard (TODAY / MTD / YTD metric cards + mini chart) |
 | `/setup` | `SetupPage` | Yes | Spreadsheet configuration + Google Picker |
 | `/add` | `AddExpensePage` | Yes | New expense form |
 | `/tail` | `TailPage` | Yes | Last 20 records |
@@ -551,3 +556,6 @@ The backend validates all required env vars at startup and fails fast if any are
 11. **No auto-creation of Config sheet** — the Config sheet is created only when the user explicitly saves a column mapping via `POST /api/config/mapping`. It is never auto-created during setup or validation flows.
 12. **Explicit consent gate for column mapping** — `POST /api/config/mapping` requires `confirmed: true` in the request body. This prevents accidental overwrites of existing Config sheet data from programmatic or double-submit scenarios.
 13. **Two-path setup model** — users choose between (a) creating a fresh spreadsheet from a template (default mode, no Config sheet) or (b) connecting an existing spreadsheet and optionally configuring a column mapping (config-driven mode). This design separates simple onboarding from advanced customization.
+14. **Home screen is a spending dashboard** — when a user is authenticated and has expense data, `/home` renders three metric cards: TODAY (today's entries + dual-currency display), JUNE SO FAR (MTD total + YoY deviation + mini area chart), and YEAR SO FAR (YTD total + YoY deviation). Dashboard data comes from `DatasetContext.loadDataset()` — no extra API call; in-memory cache is reused if valid. All aggregations cover all rows (all `WhoSpent` values). Implemented in `src/utils/dashboardStats.ts` and `src/components/MtdSpendChart.tsx`.
+15. **Setup status badge** — `Layout.tsx` overlays a green ✓ (`CheckCircle`) or red ⚠ (`AlertCircle`) badge on the Setup gear icon in the global bottom nav. Badge is computed from `ConfigContext.config.configMode`: green = sheet connected and valid; red = no sheet, or `configMode === 'config-invalid'`.
+16. **USD is mandatory when a non-USD amount is provided** — at submission time, if any non-USD currency amount is entered but USD is empty (and no FX rate is provided to auto-derive it), the Add Expense form shows a single combined error on the FX rate field: "USD amount is required — enter an exchange rate here or fill the USD field directly." The backend enforces the same rule independently via `validateUsdMandatory()` in `server/validation.js` (HTTP 400 on `POST /api/expenses` and `PUT /api/expenses/:rowNumber`).
