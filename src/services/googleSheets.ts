@@ -51,6 +51,10 @@ export const googleSheetsService = {
     return requestJson("/api/expenses");
   },
 
+  async getExpenseRowCount(): Promise<{ rowCount: number }> {
+    return requestJson<{ rowCount: number }>("/api/expenses/count");
+  },
+
   async appendExpenseRow(values: string[], fxRateBackup?: FxRateBackupPayload): Promise<ExpenseRecord> {
     return requestJson<ExpenseRecord>("/api/expenses", {
       method: "POST",

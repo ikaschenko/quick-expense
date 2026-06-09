@@ -30,6 +30,7 @@ let createSpreadsheet;
 let reorderCustomColumnsInSheet;
 let findColumnIndex;
 let deleteLastExpenseRow;
+let getExpenseRowCount;
 
 beforeAll(async () => {
   ({
@@ -38,6 +39,7 @@ beforeAll(async () => {
     reorderCustomColumnsInSheet,
     findColumnIndex,
     deleteLastExpenseRow,
+    getExpenseRowCount,
   } = await import("../server/google-sheets.js"));
 });
 
@@ -1191,5 +1193,41 @@ describe("deleteLastExpenseRow", () => {
     ]);
 
     await expect(deleteLastExpenseRow(TOKEN, SHEET_ID, 0)).rejects.toThrow("No expense rows to delete");
+  });
+});
+
+describe("getExpenseRowCount", () => {
+  const TOKEN = "tok";
+  const SHEET_ID = "sid";
+
+  function colAResponse(totalRowsIncludingHeader) {
+    const rows = Array.from({ length: totalRowsIncludingHeader }, (_, i) =>
+      i === 0 ? ["Date"] : [`2024-01-0${i}`],
+    );
+    return jsonResponse({ values: rows });
+  }
+
+  it("returns data row count when sheet has header plus data rows", async () => {
+    setupFetchSequence([colAResponse(4)]); // header + 3 data rows
+    const count = await getExpenseRowCount(TOKEN, SHEET_ID);
+    expect(count).toBe(3);
+  });
+
+  it("returns 0 when sheet has only the header row", async () => {
+    setupFetchSequence([jsonResponse({ values: [["Date"]] })]);
+    const count = await getExpenseRowCount(TOKEN, SHEET_ID);
+    expect(count).toBe(0);
+  });
+
+  it("returns 0 when sheet is completely empty", async () => {
+    setupFetchSequence([jsonResponse({})]); // no `values` key
+    const count = await getExpenseRowCount(TOKEN, SHEET_ID);
+    expect(count).toBe(0);
+  });
+
+  it("returns 0 when the Sheets API throws (safe fallback)", async () => {
+    mockFetch.mockRejectedValueOnce(new Error("Network error"));
+    const count = await getExpenseRowCount(TOKEN, SHEET_ID);
+    expect(count).toBe(0);
   });
 });

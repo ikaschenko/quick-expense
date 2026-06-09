@@ -1,5 +1,5 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { FileSpreadsheet, Wand2, ChevronDown, ChevronUp, X, Plus, Pencil, Trash2, Check, TableProperties, Eye, EyeOff } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FileSpreadsheet, Wand2, ChevronDown, ChevronUp, X, Plus, Pencil, Trash2, Check, TableProperties, Eye, EyeOff, Link2Off } from "lucide-react";
 import { Layout } from "../components/Layout";
 import { LoadingBlock } from "../components/LoadingBlock";
 import { StatusBanner } from "../components/StatusBanner";
@@ -94,7 +94,7 @@ const MAX_CUSTOM_COLUMNS = 10;
 type SetupPath = "choose" | "fresh" | "existing" | "configured";
 
 export function SetupPage(): JSX.Element {
-  const { config, isConfigLoading, error: configError, saveConfig, updateStructure, toggleColumnVisibility, fileName, isFileNameLoading } = useConfig();
+  const { config, isConfigLoading, error: configError, saveConfig, clearConfig, updateStructure, toggleColumnVisibility, fileName, isFileNameLoading } = useConfig();
   const [spreadsheetUrl, setSpreadsheetUrl] = useState("");  const [error, setError] = useState<string | null>(null);
   const [headerDetails, setHeaderDetails] = useState<HeaderDetails | null>(null);
   const [showMappingEditor, setShowMappingEditor] = useState(false);
@@ -128,6 +128,22 @@ export function SetupPage(): JSX.Element {
 
   // Remove confirmation
   const [confirmRemoveName, setConfirmRemoveName] = useState<string | null>(null);
+
+  // Unlink sheet state
+  const [isUnlinking, setIsUnlinking] = useState(false);
+  const [unlinkError, setUnlinkError] = useState<string | null>(null);
+
+  const handleUnlink = useCallback(async () => {
+    setIsUnlinking(true);
+    setUnlinkError(null);
+    try {
+      await clearConfig();
+    } catch (err) {
+      setUnlinkError((err as Error).message);
+    } finally {
+      setIsUnlinking(false);
+    }
+  }, [clearConfig]);
 
   // Field-level error for inline forms
   const [fieldError, setFieldError] = useState<string | null>(null);
@@ -771,15 +787,29 @@ export function SetupPage(): JSX.Element {
                   ) : null}
                 </div>
               </div>
-              <button
-                type="button"
-                className="home-status-action"
-                onClick={() => setSetupPath("choose")}
-              >
-                Change
-              </button>
+              <div className="home-status-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setSetupPath("choose")}
+                >
+                  <Pencil size={14} aria-hidden />
+                  Change
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger btn-sm"
+                  onClick={() => void handleUnlink()}
+                  disabled={isUnlinking}
+                  aria-busy={isUnlinking}
+                >
+                  <Link2Off size={14} aria-hidden />
+                  {isUnlinking ? "Unlinking…" : "Unlink"}
+                </button>
+              </div>
             </div>
           ) : null}
+          {unlinkError ? <StatusBanner variant="error" message={unlinkError} /> : null}
 
           <div className="card setup-card">
             <div className="setup-card-icon">

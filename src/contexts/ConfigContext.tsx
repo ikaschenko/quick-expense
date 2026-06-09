@@ -19,7 +19,7 @@ interface ConfigContextValue {
   fileName: string | null;
   isFileNameLoading: boolean;
   saveConfig: (config: SpreadsheetConfig) => void;
-  clearConfig: () => void;
+  clearConfig: () => Promise<void>;
   clearError: () => void;
   refreshConfig: () => void;
   updateStructure: (currencies: string[], customColumns: string[]) => void;
@@ -97,11 +97,10 @@ export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
         setConfig(nextConfig);
         retryBackoffRef.current.reset();
       },
-      clearConfig: () => {
-        void googleSheetsService.clearConfig().finally(() => {
-          setConfig(null);
-          retryBackoffRef.current.reset();
-        });
+      clearConfig: async () => {
+        await googleSheetsService.clearConfig();
+        setConfig(null);
+        retryBackoffRef.current.reset();
       },
       clearError: () => {
         setError(null);

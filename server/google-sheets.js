@@ -507,6 +507,19 @@ export async function getSpreadsheetFileMeta(accessToken, spreadsheetId) {
 }
 
 /**
+ * Count data rows in the Expenses sheet (excluding the header row).
+ * Returns 0 if the sheet has no rows, no header, or does not exist yet.
+ */
+export async function getExpenseRowCount(accessToken, spreadsheetId) {
+  try {
+    const rows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A:A`);
+    return Math.max(0, rows.length - 1);
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * Apply a column mapping (QE field → user column name) to a normalized header row.
  * Replaces each user column name with its QE field equivalent where a mapping entry exists.
  * Columns not in the mapping are returned unchanged.

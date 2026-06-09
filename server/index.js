@@ -22,6 +22,7 @@ import {
   updateExpenseRow,
   deleteLastExpenseRow,
   loadExpenses,
+  getExpenseRowCount,
   parseSpreadsheetUrl,
   getSpreadsheetFileMeta,
   validateSpreadsheet,
@@ -575,6 +576,20 @@ app.delete("/api/config", requireAuthenticatedUser, async (req, res) => {
 });
 
 // --- Expenses ---
+
+app.get("/api/expenses/count", requireAuthenticatedUser, async (req, res) => {
+  try {
+    if (!req.userRecord.spreadsheetId) {
+      res.status(400).json({ message: "Spreadsheet is not configured." });
+      return;
+    }
+    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const rowCount = await getExpenseRowCount(accessToken, req.userRecord.spreadsheetId);
+    res.json({ rowCount });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
 
 app.get("/api/expenses", requireAuthenticatedUser, async (req, res) => {
   try {
