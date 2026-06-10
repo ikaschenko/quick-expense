@@ -738,8 +738,8 @@ button { cursor: pointer; }
 
 .setup-badge {
   position: absolute;
-  top: -9px;
-  right: -5px;
+  top: -2px;
+  right: -4px;
 }
 
 .setup-badge--ok {
