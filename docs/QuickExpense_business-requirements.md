@@ -220,7 +220,9 @@ Loaded dataset remains valid only within the current browser session and until a
 External modifications in the spreadsheet by other users are not automatically detected unless Reload is triggered.  
 Header validation is always performed before any operation, but row-level dataset freshness is not automatically revalidated.
 
-From UI point of view, while loading the data, an icon of 'loading' should be displayed. In case of any errors during load (e.g. no file, no access, not enough memory, and so no), and error message should be displayed under the button.
+**Progressive two-phase loading:** For sheets with a significant history, the initial load returns only the most recent data (default: last 24 months), allowing the Home dashboard and Tail view to become interactive immediately. Older historical records are fetched transparently in the background. The Search screen shows a non-blocking informational message "Complete history is still loading…" while the background fetch is in progress, and removes it automatically when complete. The split threshold and recent window are configurable server-side; for sheets with few records all data loads in a single request with no behavioral difference.
+
+From UI point of view, while loading the data, an icon of 'loading' should be displayed with the text "Loading expenses from Google Sheet…". In case of any errors during load (e.g. no file, no access, not enough memory, and so no), and error message should be displayed under the button.
 
 ## 2.5 View last N expenses (Tail)
 

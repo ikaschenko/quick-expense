@@ -47,8 +47,19 @@ export const googleSheetsService = {
     payloadBytes: number;
     sheetCurrencies: string[];
     customColumns: string[];
+    loadPhase: "full" | "recent";
+    startRow: number;
+    totalRows: number;
   }> {
     return requestJson("/api/expenses");
+  },
+
+  async loadExpenseHistory(endRow: number): Promise<{
+    records: ExpenseRecord[];
+    payloadBytes: number;
+    loadPhase: "full";
+  }> {
+    return requestJson(`/api/expenses/history?endRow=${encodeURIComponent(endRow)}`);
   },
 
   async getExpenseRowCount(): Promise<{ rowCount: number }> {

@@ -252,7 +252,8 @@ All API routes are defined in `server/index.js`.
 | POST | `/api/config/create-spreadsheet` | Yes | Copy template spreadsheet into user's Drive |
 | GET | `/api/config/mapping` | Yes | Get current column mapping, config mode, and detected columns |
 | POST | `/api/config/mapping` | Yes | Save column mapping to Config sheet (requires `confirmed: true`) |
-| GET | `/api/expenses` | Yes | Load all expense records from the spreadsheet |
+| GET | `/api/expenses` | Yes | Load recent expense records (Phase 1). Response includes `loadPhase` (`"full"` or `"recent"`), `startRow`, and `totalRows`. When `loadPhase` is `"recent"`, the client fetches the historical remainder via `/api/expenses/history`. |
+| GET | `/api/expenses/history` | Yes | Load historical records older than the recent window. Query param: `endRow` (integer, last sheet row of the historical range). Response includes `loadPhase: "full"`. |
 | POST | `/api/expenses` | Yes | Append a new expense row; returns `201` + the created `ExpenseRecord` (including assigned row number) |
 | PUT | `/api/expenses/:rowNumber` | Yes | Overwrite an existing expense row in-place (last-writer-wins); returns `200` + the updated `ExpenseRecord` |
 | DELETE | `/api/expenses/last` | Yes | Delete the last expense row (with row-count conflict check) |
@@ -432,7 +433,9 @@ The SPA uses three nested context providers (wrapped in `App.tsx`):
 - **AuthContext:** Checks `/api/auth/session` on mount. Exposes `status` (`initializing` | `signed_out` | `signed_in`), `session` (email + timestamps), `signIn()`, `signOut()`, `refreshSession()`.
 - **ConfigContext:** Fetches `/api/config` when a session is present. Exposes the `SpreadsheetConfig` object and methods to save/clear/refresh. The config includes a `configMode` field (`"default"` | `"config-driven"` | `"config-invalid"`) indicating whether a column mapping is active. When `configMode` is `"config-invalid"`, a `configModeReason` string explains the problem. `hiddenColumns: string[]` lists canonical field names hidden from the Add Expense form; `toggleColumnVisibility(field, hidden)` updates this list optimistically with server sync and automatic revert on failure.
 - **DatasetContext:** Manages the loaded expense dataset. Key behaviors:
-  - `loadDataset()` — fetches from `/api/expenses` unless a valid cached snapshot exists. Called on Home page mount (when status is `idle`) as well as by Tail/Search pages.
+  - `loadDataset()` — fetches from `/api/expenses` unless a valid cached snapshot exists. Called on Home page mount (when status is `idle`) as well as by Tail/Search pages. Concurrent callers join the in-flight Promise instead of starting a duplicate request. A generation counter ensures stale Phase-2 results are discarded if a reload was triggered in the meantime.
+  - Two-phase progressive load: Phase 1 (blocking) fetches the configurable recent window and sets `status = "ready"` — the UI becomes interactive. If the server returns `loadPhase: "recent"`, Phase 2 immediately fires a background call to `/api/expenses/history` to retrieve older records and merges them into the snapshot when complete. Phase 2 failures are silently swallowed (recent window remains available).
+  - `isLoadingHistory` — boolean exposed in context; `true` while the Phase-2 background fetch is in progress. The Search page displays a non-blocking info banner while this is `true`.
   - `invalidateDataset()` — marks the snapshot stale, forcing a full reload on the next Tail/Search/Home visit. Reserved for error-recovery and future external-change detection scenarios.
   - `reloadDataset()` — explicit Reload button action, force-fetches regardless of cache.
   - `appendToDataset(record)` — called after a successful Add; appends the returned `ExpenseRecord` to the in-memory array and recomputes `distinctValues`. No full reload.
@@ -516,8 +519,9 @@ In development, Vite proxies all `/api` requests to `http://localhost:3001` (con
 | `FRONTEND_BASE_URL` | Base URL where the SPA is served (e.g. `http://localhost:5173`) |
 | `SESSION_SECRET` | Secret for express-session cookie signing |
 | `DATABASE_URL` | PostgreSQL connection string (e.g. `postgresql://user:pass@host:5432/db`) |
+| `EXPENSE_RECENT_MONTHS` | *(Optional)* Number of months of recent expense data loaded in Phase 1. Default: `24`. Older records are fetched in the background after the UI is ready. |
 
-The backend validates all required env vars at startup and fails fast if any are missing.
+The backend validates all required env vars at startup and fails fast if any are missing. `EXPENSE_RECENT_MONTHS` is optional and not validated at startup.
 
 ---
 
@@ -558,4 +562,6 @@ The backend validates all required env vars at startup and fails fast if any are
 13. **Two-path setup model** — users choose between (a) creating a fresh spreadsheet from a template (default mode, no Config sheet) or (b) connecting an existing spreadsheet and optionally configuring a column mapping (config-driven mode). This design separates simple onboarding from advanced customization.
 14. **Home screen is a spending dashboard** — when a user is authenticated and has expense data, `/home` renders three metric cards: TODAY (today's entries + dual-currency display), JUNE SO FAR (MTD total + YoY deviation + mini area chart), and YEAR SO FAR (YTD total + YoY deviation). Dashboard data comes from `DatasetContext.loadDataset()` — no extra API call; in-memory cache is reused if valid. All aggregations cover all rows (all `WhoSpent` values). Implemented in `src/utils/dashboardStats.ts` and `src/components/MtdSpendChart.tsx`.
 15. **Setup status badge** — `Layout.tsx` overlays a green ✓ (`CheckCircle`) or red ⚠ (`AlertCircle`) badge on the Setup gear icon in the global bottom nav. Badge is computed from `ConfigContext.config.configMode`: green = sheet connected and valid; red = no sheet, or `configMode === 'config-invalid'`.
+17. **Two-phase progressive dataset load** — `GET /api/expenses` performs a date-column binary search (`findExpenseStartRow`) to determine whether the sheet has enough historical rows (≥ 20) to justify splitting. When a split is warranted, only records within the last `EXPENSE_RECENT_MONTHS` months (default: 24) are returned in Phase 1. The client's `DatasetContext` immediately presents this data to the user, then fetches the remainder via `GET /api/expenses/history?endRow=N` in the background. `DatasetSnapshot.loadPhase` (`"recent"` | `"full"`) tracks completion. The `detectConfigSheet` → `validateSpreadsheet` call chain now passes the already-fetched metadata object to eliminate a duplicate `getMetadata` round-trip per load.
+
 16. **USD is mandatory when a non-USD amount is provided** — at submission time, if any non-USD currency amount is entered but USD is empty (and no FX rate is provided to auto-derive it), the Add Expense form shows a single combined error on the FX rate field: "USD amount is required — enter an exchange rate here or fill the USD field directly." The backend enforces the same rule independently via `validateUsdMandatory()` in `server/validation.js` (HTTP 400 on `POST /api/expenses` and `PUT /api/expenses/:rowNumber`).

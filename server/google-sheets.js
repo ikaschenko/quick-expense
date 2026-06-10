@@ -311,7 +311,7 @@ async function migrateLegacyColumnOrder(accessToken, spreadsheetId, customColumn
  * When a mapping is provided, QE field name lookups are aliased to the user's
  * actual column names so returned records always use QE field names.
  */
-function mapRowsToExpenseRecords(rows, sheetCurrencies, customColumns = [], actualHeaderRow = [], mapping = null) {
+function mapRowsToExpenseRecords(rows, sheetCurrencies, customColumns = [], actualHeaderRow = [], mapping = null, rowOffset = 0) {
   const postStart = 1 + sheetCurrencies.length; // assumed index of USD (fallback)
 
   // Build a lookup: lowercase column name → actual column index
@@ -369,13 +369,141 @@ function mapRowsToExpenseRecords(rows, sheetCurrencies, customColumns = [], actu
       "spentBy": padded[spentByIdx] ?? "",
       Comment: padded[commentIdx] ?? "",
       customFields,
-      rowNumber: index + 2,
+      rowNumber: index + 2 + rowOffset,
     };
   });
 }
 
 function calculateJsonByteSize(value) {
   return new TextEncoder().encode(JSON.stringify(value)).length;
+}
+
+const MIN_HISTORY_ROWS = 20;
+
+/**
+ * Parse a date string from a Google Sheet cell into epoch milliseconds (UTC midnight).
+ * Supports: YYYY-MM-DD, MM/DD/YYYY, DD/MM/YYYY, DD.MM.YYYY, MM.DD.YYYY.
+ * Returns null when the string cannot be parsed.
+ * Requires a pre-built formatParser from buildDateParser(); the parser encodes the
+ * detected field order so this function stays O(1) per call.
+ */
+export function parseDateToMs(dateStr, formatParser) {
+  if (!dateStr || typeof dateStr !== "string") return null;
+  if (!formatParser) return null;
+  return formatParser(dateStr);
+}
+
+/**
+ * Build a date-format parser by sampling up to 30 non-empty date strings.
+ * Returns a function (dateStr) => epoch-ms | null, or null when the format
+ * cannot be determined from the samples.
+ *
+ * Detection rules (applied in order):
+ *   1. If any part[0] > 12 across samples → DD/sep/MM/sep/YYYY
+ *   2. If any part[1] > 12 across samples → MM/sep/DD/sep/YYYY
+ *   3. Default assumption: MM/sep/DD/sep/YYYY
+ *
+ * YYYY-MM-DD is detected by the 4-digit leading part and handled separately.
+ */
+export function buildDateParser(dateSamples) {
+  // Fast path: ISO format (YYYY-MM-DD)
+  const isoSample = dateSamples.find((s) => s && /^\d{4}-\d{2}-\d{2}$/.test(s));
+  if (isoSample) {
+    return (s) => {
+      if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+      const ms = Date.parse(s);
+      return isNaN(ms) ? null : ms;
+    };
+  }
+
+  // Detect separator and field order from non-ISO samples
+  let sep = null;
+  let dayFirst = null;
+
+  const nonEmpty = dateSamples.filter(Boolean).slice(0, 30);
+  for (const sample of nonEmpty) {
+    const foundSep = ["/", "."].find((c) => sample.split(c).length === 3);
+    if (!foundSep) continue;
+    if (sep === null) sep = foundSep;
+    else if (foundSep !== sep) continue;
+
+    const parts = sample.split(foundSep);
+    if (parts.some((p) => !/^\d+$/.test(p))) continue;
+    // Identify year part (4 digits)
+    const yIdx = parts.findIndex((p) => p.length === 4);
+    if (yIdx !== 2) continue; // year must be last for MM/DD/YYYY or DD/MM/YYYY
+    const a = parseInt(parts[0], 10);
+    const b = parseInt(parts[1], 10);
+    if (a > 12) { dayFirst = true; break; }
+    if (b > 12) { dayFirst = false; break; }
+  }
+
+  if (sep === null) return null; // unrecognisable format
+  const isoDayFirst = dayFirst ?? false; // default: month first
+
+  return (s) => {
+    if (!s) return null;
+    const parts = s.split(sep);
+    if (parts.length !== 3) return null;
+    const [p0, p1, p2] = parts;
+    if (p2.length !== 4) return null;
+    const year = parseInt(p2, 10);
+    const month = isoDayFirst ? parseInt(p1, 10) : parseInt(p0, 10);
+    const day   = isoDayFirst ? parseInt(p0, 10) : parseInt(p1, 10);
+    if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    return Date.UTC(year, month - 1, day);
+  };
+}
+
+/**
+ * Binary-search the date column of the Expenses sheet to find the first spreadsheet row
+ * whose date is >= (today − recentMonths months).
+ *
+ * Returns { startRow, totalRows, isSplit }:
+ *   startRow  — 1-based spreadsheet row of the first "recent" record (≥ 2).
+ *   totalRows — total data rows (excluding header).
+ *   isSplit   — true when a meaningful split was found (enough historical rows to justify it).
+ *
+ * Falls back to { startRow: 2, totalRows, isSplit: false } when:
+ *   - All data is within the recent window (no historical rows).
+ *   - Fewer than MIN_HISTORY_ROWS historical rows (split overhead not worth it).
+ *   - Date format is unrecognizable.
+ *   - Any unexpected error.
+ */
+export async function findExpenseStartRow(accessToken, spreadsheetId, recentMonths) {
+  const dateRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A:A`);
+  const totalRows = Math.max(0, dateRows.length - 1); // exclude header
+
+  if (totalRows === 0) return { startRow: 2, totalRows: 0, isSplit: false };
+
+  const dateValues = dateRows.slice(1).map((r) => r[0] ?? "");
+  const parser = buildDateParser(dateValues.filter(Boolean).slice(0, 30));
+  if (!parser) return { startRow: 2, totalRows, isSplit: false };
+
+  const now = new Date();
+  // Subtract recentMonths: JS Date handles month underflow correctly
+  const cutoffMs = Date.UTC(
+    new Date(now.getFullYear(), now.getMonth() - recentMonths, 1).getFullYear(),
+    new Date(now.getFullYear(), now.getMonth() - recentMonths, 1).getMonth(),
+    1,
+  );
+
+  // Binary search for first index i where date >= cutoffMs
+  let lo = 0;
+  let hi = dateValues.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    const ms = parseDateToMs(dateValues[mid], parser);
+    if (ms === null || ms < cutoffMs) lo = mid + 1;
+    else hi = mid;
+  }
+
+  const historicalRows = lo;
+  if (historicalRows < MIN_HISTORY_ROWS) return { startRow: 2, totalRows, isSplit: false };
+
+  // startRow: lo is 0-based index in dateValues; spreadsheet row = lo + 2 (header=1, data starts at 2)
+  return { startRow: lo + 2, totalRows, isSplit: true };
 }
 
 /**
@@ -548,7 +676,7 @@ export async function detectConfigSheet(accessToken, spreadsheetId) {
   try {
     const metadata = await getMetadata(accessToken, spreadsheetId);
     const configSheet = metadata.sheets?.find((s) => s.properties?.title === "Config");
-    if (!configSheet) return { mode: "default", predefinedCategories: [] };
+    if (!configSheet) return { mode: "default", predefinedCategories: [], metadata };
 
     const rows = await getValues(accessToken, spreadsheetId, "Config!A:B");
 
@@ -568,20 +696,20 @@ export async function detectConfigSheet(accessToken, spreadsheetId) {
     // Parse column_mapping — absence is not an error.
     const mappingRow = rows.find((r) => r[0] === "column_mapping");
     if (!mappingRow || !mappingRow[1]) {
-      return { mode: "config-no-mapping", predefinedCategories };
+      return { mode: "config-no-mapping", predefinedCategories, metadata };
     }
 
     try {
       const parsed = JSON.parse(mappingRow[1]);
       if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-        return { mode: "config-invalid", reason: "column_mapping is not a valid JSON object.", predefinedCategories };
+        return { mode: "config-invalid", reason: "column_mapping is not a valid JSON object.", predefinedCategories, metadata };
       }
-      return { mode: "config-driven", mapping: parsed, predefinedCategories };
+      return { mode: "config-driven", mapping: parsed, predefinedCategories, metadata };
     } catch {
-      return { mode: "config-invalid", reason: "column_mapping contains invalid JSON.", predefinedCategories };
+      return { mode: "config-invalid", reason: "column_mapping contains invalid JSON.", predefinedCategories, metadata };
     }
   } catch {
-    return { mode: "default", predefinedCategories: [] };
+    return { mode: "default", predefinedCategories: [], metadata: null };
   }
 }
 
@@ -624,10 +752,10 @@ export async function readExpensesSheetHeader(accessToken, spreadsheetId) {
   }
 }
 
-export async function validateSpreadsheet(accessToken, spreadsheetId, mapping = null) {
-  const report = { tabAction: "found", headersAction: "valid", sheetCurrencies: [], customColumns: [] };
+export async function validateSpreadsheet(accessToken, spreadsheetId, mapping = null, cachedMetadata = null) {
+  const report = { tabAction: "found", headersAction: "valid", sheetCurrencies: [], customColumns: [], headerRow: [] };
 
-  const metadata = await getMetadata(accessToken, spreadsheetId);
+  const metadata = cachedMetadata ?? await getMetadata(accessToken, spreadsheetId);
   const hasExpenseSheet = metadata.sheets?.some(
     (sheet) => sheet.properties?.title === SHEET_NAME,
   );
@@ -660,6 +788,7 @@ export async function validateSpreadsheet(accessToken, spreadsheetId, mapping = 
     report.headersAction = "created";
     report.sheetCurrencies = [];
     report.customColumns = [...DEFAULT_CUSTOM_COLUMNS];
+    report.headerRow = headers;
     return report;
   }
 
@@ -669,6 +798,7 @@ export async function validateSpreadsheet(accessToken, spreadsheetId, mapping = 
     report.headersAction = "migrated";
     report.sheetCurrencies = ["PLN", "BYN", "EUR"];
     report.customColumns = customCols;
+    report.headerRow = buildExpenseHeaders(["PLN", "BYN", "EUR"], customCols);
     return report;
   }
 
@@ -692,6 +822,7 @@ export async function validateSpreadsheet(accessToken, spreadsheetId, mapping = 
 
   report.sheetCurrencies = structure.currencies;
   report.customColumns = structure.customColumns;
+  report.headerRow = headerRow;
   return report;
 }
 
@@ -1066,14 +1197,32 @@ function columnLetter(n) {
   return result;
 }
 
-export async function loadExpenses(accessToken, spreadsheetId, mapping = null) {
-  const report = await validateSpreadsheet(accessToken, spreadsheetId, mapping);
-  const sheetCurrencies = report.sheetCurrencies;
-  const customColumns = report.customColumns;
+export async function loadExpenses(accessToken, spreadsheetId, mapping = null, options = {}) {
+  const { startRow = null, endRow = null, precomputedReport = null } = options;
+  const report = precomputedReport ?? await validateSpreadsheet(accessToken, spreadsheetId, mapping);
+  const { sheetCurrencies, customColumns } = report;
   const headers = buildExpenseHeaders(sheetCurrencies, customColumns);
   const endCol = columnLetter(headers.length);
-  const rows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A:${endCol}`);
-  const records = mapRowsToExpenseRecords(rows.slice(1), sheetCurrencies, customColumns, rows[0], mapping);
+
+  let rows;
+  let actualHeaderRow;
+  let rowOffset;
+
+  if (startRow === null) {
+    // Default path (full load, backward-compatible): fetch from A1 including header row
+    rows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A:${endCol}`);
+    actualHeaderRow = rows[0];
+    rows = rows.slice(1);
+    rowOffset = 0;
+  } else {
+    // Partial path: fetch only [startRow..endRow] — data rows only, no header
+    const rangeEnd = endRow !== null ? `${endCol}${endRow}` : endCol;
+    rows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A${startRow}:${rangeEnd}`);
+    actualHeaderRow = report.headerRow;
+    rowOffset = startRow - 2;
+  }
+
+  const records = mapRowsToExpenseRecords(rows, sheetCurrencies, customColumns, actualHeaderRow, mapping, rowOffset);
   const payloadBytes = calculateJsonByteSize(records);
 
   if (payloadBytes > MAX_DATASET_BYTES) {

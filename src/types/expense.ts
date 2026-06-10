@@ -130,6 +130,7 @@ export interface DatasetSnapshot {
   distinctValues: DistinctValues;
   loadedAt: number;
   payloadBytes: number;
+  loadPhase: "full" | "recent";
 }
 
 export interface AuthSession {

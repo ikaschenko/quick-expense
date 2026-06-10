@@ -83,7 +83,7 @@ export function HomePage(): JSX.Element {
     if (dataset.status === "idle") {
       dataset.loadDataset().catch(() => {/* error surfaced via dataset.error */});
     }
-  }, [config, isConfigLoading, dataset]);
+  }, [config, isConfigLoading, dataset.status, dataset.loadDataset]);
 
   // Dismiss YTD coming-soon on outside click
   useEffect(() => {
@@ -145,6 +145,7 @@ export function HomePage(): JSX.Element {
             <MetricCardSkeleton />
             <MetricCardSkeleton />
             <MetricCardSkeleton />
+            <p className="home-loading-hint">Loading expenses from Google Sheet…</p>
           </div>
         ) : dataset.status === "error" ? (
           <div className="home-dataset-error">

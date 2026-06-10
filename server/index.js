@@ -38,6 +38,7 @@ import {
   detectConfigSheet,
   readExpensesSheetHeader,
   writeConfigSheetMapping,
+  findExpenseStartRow,
   DEFAULT_CUSTOM_COLUMNS,
   MAX_CUSTOM_COLUMNS,
   MAX_OPTIONAL_CURRENCIES,
@@ -96,6 +97,11 @@ function validateStartupEnv() {
 }
 
 validateStartupEnv();
+
+// Number of months of recent expense data loaded in Phase 1 (blocking).
+// Older data is fetched in the background after the UI is ready (Phase 2).
+// Override via EXPENSE_RECENT_MONTHS env var if needed.
+const RECENT_MONTHS = parseInt(process.env.EXPENSE_RECENT_MONTHS ?? "24", 10);
 
 app.use("/api", express.json({ limit: maxApiJsonBodySize }));
 
@@ -591,6 +597,34 @@ app.get("/api/expenses/count", requireAuthenticatedUser, async (req, res) => {
   }
 });
 
+app.get("/api/expenses/history", requireAuthenticatedUser, async (req, res) => {
+  try {
+    if (!req.userRecord.spreadsheetId) {
+      res.status(400).json({ message: "Spreadsheet is not configured." });
+      return;
+    }
+
+    const endRow = parseInt(req.query.endRow, 10);
+    if (isNaN(endRow) || endRow < 2 || endRow > 500_000) {
+      res.status(400).json({ message: "endRow must be an integer between 2 and 500000." });
+      return;
+    }
+
+    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const { mode, mapping: configMapping = null, metadata } = await detectConfigSheet(accessToken, req.userRecord.spreadsheetId);
+    const mapping = mode === "config-driven" ? configMapping : null;
+    const report = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping, metadata);
+    const snapshot = await loadExpenses(accessToken, req.userRecord.spreadsheetId, mapping, {
+      startRow: 2,
+      endRow,
+      precomputedReport: report,
+    });
+    res.json({ ...snapshot, loadPhase: "full" });
+  } catch (error) {
+    res.status(400).json({ message: (error).message });
+  }
+});
+
 app.get("/api/expenses", requireAuthenticatedUser, async (req, res) => {
   try {
     if (!req.userRecord.spreadsheetId) {
@@ -599,10 +633,20 @@ app.get("/api/expenses", requireAuthenticatedUser, async (req, res) => {
     }
 
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    const { mode, mapping: configMapping = null } = await detectConfigSheet(accessToken, req.userRecord.spreadsheetId);
+    const { mode, mapping: configMapping = null, metadata } = await detectConfigSheet(accessToken, req.userRecord.spreadsheetId);
     const mapping = mode === "config-driven" ? configMapping : null;
-    const snapshot = await loadExpenses(accessToken, req.userRecord.spreadsheetId, mapping);
-    res.json(snapshot);
+    const report = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping, metadata);
+    const { startRow, totalRows, isSplit } = await findExpenseStartRow(accessToken, req.userRecord.spreadsheetId, RECENT_MONTHS);
+    const snapshot = await loadExpenses(accessToken, req.userRecord.spreadsheetId, mapping, {
+      startRow: isSplit ? startRow : null,
+      precomputedReport: report,
+    });
+    res.json({
+      ...snapshot,
+      totalRows,
+      startRow,
+      loadPhase: isSplit ? "recent" : "full",
+    });
   } catch (error) {
     res.status(400).json({ message: (error).message });
   }

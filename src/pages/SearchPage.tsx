@@ -48,7 +48,7 @@ export function SearchPage(): JSX.Element {
     if (!dataset.snapshot && dataset.status !== "loading") {
       void dataset.loadDataset().catch(() => undefined);
     }
-  }, [config, dataset, navigate]);
+  }, [config, dataset.snapshot, dataset.status, dataset.loadDataset, navigate]);
 
   const outcome = useMemo(() => {
     if (!dataset.snapshot) {
@@ -60,6 +60,9 @@ export function SearchPage(): JSX.Element {
 
   return (
     <Layout title="Search">
+      {dataset.isLoadingHistory && (
+        <StatusBanner variant="info" message="Complete history is still loading…" />
+      )}
       {/* Search bar */}
       <div className="input-label mb-2">Comment</div>
       <div className="search-hero-input">

@@ -242,7 +242,7 @@ export function AddExpensePage(): JSX.Element {
     if (!dataset.snapshot && dataset.status !== "loading") {
       void dataset.loadDataset().catch(() => undefined);
     }
-  }, [config, dataset]);
+  }, [config, dataset.snapshot, dataset.status, dataset.loadDataset]);
 
   useEffect(() => {
     if (isEditMode || !config || activeCurrencies.length === 0) {

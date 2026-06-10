@@ -31,6 +31,9 @@ let reorderCustomColumnsInSheet;
 let findColumnIndex;
 let deleteLastExpenseRow;
 let getExpenseRowCount;
+let parseDateToMs;
+let buildDateParser;
+let findExpenseStartRow;
 
 beforeAll(async () => {
   ({
@@ -40,6 +43,9 @@ beforeAll(async () => {
     findColumnIndex,
     deleteLastExpenseRow,
     getExpenseRowCount,
+    parseDateToMs,
+    buildDateParser,
+    findExpenseStartRow,
   } = await import("../server/google-sheets.js"));
 });
 
@@ -696,7 +702,7 @@ describe("detectConfigSheet", () => {
   it("returns { mode: 'default', predefinedCategories: [] } when Config sheet does not exist", async () => {
     setupFetchSequence([metadataResponse(["Expenses"])]);
     const result = await detectConfigSheet(TOKEN, SHEET_ID);
-    expect(result).toEqual({ mode: "default", predefinedCategories: [] });
+    expect(result).toEqual(expect.objectContaining({ mode: "default", predefinedCategories: [] }));
   });
 
   it("returns { mode: 'config-driven', mapping, predefinedCategories: [] } for a valid Config sheet with no categories", async () => {
@@ -706,7 +712,7 @@ describe("detectConfigSheet", () => {
       valuesResponse([["column_mapping", JSON.stringify(mapping)]]),
     ]);
     const result = await detectConfigSheet(TOKEN, SHEET_ID);
-    expect(result).toEqual({ mode: "config-driven", mapping, predefinedCategories: [] });
+    expect(result).toEqual(expect.objectContaining({ mode: "config-driven", mapping, predefinedCategories: [] }));
   });
 
   it("ignores schema_version row and still returns config-driven for legacy Config sheets", async () => {
@@ -716,7 +722,7 @@ describe("detectConfigSheet", () => {
       valuesResponse([["schema_version", "1"], ["column_mapping", JSON.stringify(mapping)]]),
     ]);
     const result = await detectConfigSheet(TOKEN, SHEET_ID);
-    expect(result).toEqual({ mode: "config-driven", mapping, predefinedCategories: [] });
+    expect(result).toEqual(expect.objectContaining({ mode: "config-driven", mapping, predefinedCategories: [] }));
   });
 
   it("returns config-no-mapping when Config sheet has no column_mapping row", async () => {
@@ -725,7 +731,7 @@ describe("detectConfigSheet", () => {
       valuesResponse([["some_other_key", "value"]]),
     ]);
     const result = await detectConfigSheet(TOKEN, SHEET_ID);
-    expect(result).toEqual({ mode: "config-no-mapping", predefinedCategories: [] });
+    expect(result).toEqual(expect.objectContaining({ mode: "config-no-mapping", predefinedCategories: [] }));
   });
 
   it("returns config-invalid when column_mapping contains invalid JSON", async () => {
@@ -753,7 +759,7 @@ describe("detectConfigSheet", () => {
   it("returns { mode: 'default', predefinedCategories: [] } (never throws) when a network error occurs", async () => {
     mockFetch.mockRejectedValueOnce(new Error("network failure"));
     const result = await detectConfigSheet(TOKEN, SHEET_ID);
-    expect(result).toEqual({ mode: "default", predefinedCategories: [] });
+    expect(result).toEqual(expect.objectContaining({ mode: "default", predefinedCategories: [] }));
   });
 
   it("parses categories_list block and returns them in config-no-mapping mode", async () => {
@@ -1229,5 +1235,137 @@ describe("getExpenseRowCount", () => {
     mockFetch.mockRejectedValueOnce(new Error("Network error"));
     const count = await getExpenseRowCount(TOKEN, SHEET_ID);
     expect(count).toBe(0);
+  });
+});
+
+describe("buildDateParser / parseDateToMs", () => {
+  it("parses ISO YYYY-MM-DD dates", () => {
+    const parser = buildDateParser(["2024-06-15"]);
+    expect(parseDateToMs("2024-06-15", parser)).toBe(Date.UTC(2024, 5, 15));
+  });
+
+  it("detects MM/DD/YYYY when no segment exceeds 12 (defaults to month-first)", () => {
+    const parser = buildDateParser(["01/06/2024"]);
+    // Default assumption: month=01, day=06
+    expect(parseDateToMs("01/06/2024", parser)).toBe(Date.UTC(2024, 0, 6));
+  });
+
+  it("detects DD/MM/YYYY when first segment exceeds 12", () => {
+    const parser = buildDateParser(["15/06/2024", "20/03/2023"]);
+    expect(parseDateToMs("15/06/2024", parser)).toBe(Date.UTC(2024, 5, 15));
+  });
+
+  it("detects MM/DD/YYYY when second segment exceeds 12", () => {
+    const parser = buildDateParser(["06/15/2024", "03/20/2023"]);
+    expect(parseDateToMs("06/15/2024", parser)).toBe(Date.UTC(2024, 5, 15));
+  });
+
+  it("parses dot-separated DD.MM.YYYY when first segment exceeds 12", () => {
+    const parser = buildDateParser(["15.06.2024"]);
+    expect(parseDateToMs("15.06.2024", parser)).toBe(Date.UTC(2024, 5, 15));
+  });
+
+  it("returns null for empty string", () => {
+    const parser = buildDateParser(["2024-01-01"]);
+    expect(parseDateToMs("", parser)).toBeNull();
+  });
+
+  it("returns null for null input", () => {
+    const parser = buildDateParser(["2024-01-01"]);
+    expect(parseDateToMs(null, parser)).toBeNull();
+  });
+
+  it("returns null when parser is null", () => {
+    expect(parseDateToMs("2024-01-01", null)).toBeNull();
+  });
+
+  it("returns null for unrecognized format", () => {
+    const parser = buildDateParser(["2024-01-01"]);
+    expect(parseDateToMs("not-a-date", parser)).toBeNull();
+  });
+
+  it("buildDateParser returns null for empty samples array", () => {
+    expect(buildDateParser([])).toBeNull();
+  });
+
+  it("buildDateParser returns null when samples are unrecognizable", () => {
+    expect(buildDateParser(["foo", "bar"])).toBeNull();
+  });
+});
+
+describe("findExpenseStartRow", () => {
+  const TOKEN = "tok";
+  const SHEET_ID = "sid";
+
+  function colAResponse(dates) {
+    const rows = [["Date"], ...dates.map((d) => [d])];
+    return jsonResponse({ values: rows });
+  }
+
+  it("returns isSplit:false for an empty sheet", async () => {
+    setupFetchSequence([jsonResponse({ values: [["Date"]] })]);
+    const result = await findExpenseStartRow(TOKEN, SHEET_ID, 24);
+    expect(result).toEqual({ startRow: 2, totalRows: 0, isSplit: false });
+  });
+
+  it("returns isSplit:false when all records are within the recent window", async () => {
+    const recentDates = Array.from({ length: 50 }, (_, i) => {
+      const d = new Date();
+      d.setMonth(d.getMonth() - 6);
+      d.setDate(d.getDate() + i);
+      return d.toISOString().slice(0, 10);
+    });
+    setupFetchSequence([colAResponse(recentDates)]);
+    const result = await findExpenseStartRow(TOKEN, SHEET_ID, 24);
+    expect(result.isSplit).toBe(false);
+    expect(result.startRow).toBe(2);
+  });
+
+  it("splits correctly when enough historical rows exist", async () => {
+    // Build 30 old rows (3 years ago) + 30 recent rows (6 months ago)
+    const oldDates = Array.from({ length: 30 }, (_, i) => {
+      const d = new Date();
+      d.setFullYear(d.getFullYear() - 3);
+      d.setDate(d.getDate() + i);
+      return d.toISOString().slice(0, 10);
+    });
+    const recentDates = Array.from({ length: 30 }, (_, i) => {
+      const d = new Date();
+      d.setMonth(d.getMonth() - 6);
+      d.setDate(d.getDate() + i);
+      return d.toISOString().slice(0, 10);
+    });
+    setupFetchSequence([colAResponse([...oldDates, ...recentDates])]);
+    const result = await findExpenseStartRow(TOKEN, SHEET_ID, 24);
+    expect(result.isSplit).toBe(true);
+    expect(result.startRow).toBeGreaterThan(2);
+    expect(result.totalRows).toBe(60);
+    // startRow should point to the first recent record: index 30 → spreadsheet row 32
+    expect(result.startRow).toBe(32);
+  });
+
+  it("returns isSplit:false when historical row count is below MIN_HISTORY_ROWS threshold", async () => {
+    // Only 5 old rows — not worth splitting
+    const fewOld = Array.from({ length: 5 }, (_, i) => {
+      const d = new Date();
+      d.setFullYear(d.getFullYear() - 3);
+      d.setDate(d.getDate() + i);
+      return d.toISOString().slice(0, 10);
+    });
+    const recent = Array.from({ length: 30 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - 30 + i);
+      return d.toISOString().slice(0, 10);
+    });
+    setupFetchSequence([colAResponse([...fewOld, ...recent])]);
+    const result = await findExpenseStartRow(TOKEN, SHEET_ID, 24);
+    expect(result.isSplit).toBe(false);
+  });
+
+  it("returns isSplit:false when date format is unrecognizable", async () => {
+    const badDates = Array.from({ length: 40 }, () => "not-a-date");
+    setupFetchSequence([colAResponse(badDates)]);
+    const result = await findExpenseStartRow(TOKEN, SHEET_ID, 24);
+    expect(result.isSplit).toBe(false);
   });
 });

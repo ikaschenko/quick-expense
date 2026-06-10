@@ -728,6 +728,13 @@ button { cursor: pointer; }
   margin-bottom: var(--space-5);
 }
 
+.home-loading-hint {
+  text-align: center;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin-top: var(--space-3);
+}
+
 /* ─── Setup badge on bottom nav ─── */
 .bottom-nav-icon-wrap {
   position: relative;

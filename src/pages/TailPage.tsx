@@ -51,7 +51,7 @@ export function TailPage(): JSX.Element {
     if (config && !dataset.snapshot && dataset.status !== "loading") {
       void dataset.loadDataset().catch(() => undefined);
     }
-  }, [config, configError, isConfigLoading, dataset, navigate]);
+  }, [config, configError, isConfigLoading, dataset.snapshot, dataset.status, dataset.loadDataset, navigate]);
 
   const visibleRecords = useMemo(
     () => dataset.snapshot?.records.slice(-MAX_TAIL_RECORDS) ?? [],
