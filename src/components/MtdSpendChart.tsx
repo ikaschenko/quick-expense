@@ -97,7 +97,7 @@ export function MtdSpendChart({ dailyAmounts, weekBoundaryPositions }: MtdSpendC
             grid: { display: false },
             ticks: {
               maxTicksLimit: 6,
-              font: { size: 10 },
+              font: { size: 12 },
               color: "var(--color-text-placeholder)",
               maxRotation: 0,
             },

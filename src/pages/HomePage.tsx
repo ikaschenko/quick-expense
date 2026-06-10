@@ -68,6 +68,24 @@ function MetricCardSkeleton(): JSX.Element {
   return <div className="skeleton-card" style={{ height: "120px" }} />;
 }
 
+interface DeviationProps {
+  deviation: { up: boolean; pctChange: number; absChange: number; priorLabel: string };
+}
+
+function DeviationLine({ deviation }: DeviationProps): JSX.Element {
+  const isGrowing = deviation.up && deviation.absChange > 0;
+  const sign = deviation.up ? "+" : "-";
+  const arrow = deviation.up ? "▲" : "▼";
+  return (
+    <p className="home-metric-yoy">
+      <span className={isGrowing ? "yoy-up" : "yoy-down"}>
+        {arrow} {sign}{deviation.pctChange}% ({sign}${Math.round(deviation.absChange)})
+      </span>{" "}
+      vs {deviation.priorLabel}
+    </p>
+  );
+}
+
 export function HomePage(): JSX.Element {
   const { config, isConfigLoading } = useConfig();
   const { session } = useAuth();
@@ -188,13 +206,7 @@ export function HomePage(): JSX.Element {
               ) : (
                 <>
                   <p className="home-metric-amount"><FormattedAmount prefix="$" value={mtdStats.usdTotal} /></p>
-                  {mtdStats.deviation && (
-                    <p className="home-metric-yoy">
-                      {mtdStats.deviation.up ? "▲" : "▼"}{" "}
-                      {mtdStats.deviation.up ? "+" : "-"}{mtdStats.deviation.pctChange}% ·{" "}
-                      {mtdStats.deviation.up ? "+" : "-"}${mtdStats.deviation.absChange.toFixed(2)} vs {mtdStats.deviation.priorLabel}
-                    </p>
-                  )}
+                  {mtdStats.deviation && <DeviationLine deviation={mtdStats.deviation} />}
                   <MtdSpendChart
                     dailyAmounts={mtdDailyAmounts}
                     weekBoundaryPositions={weekBoundaryPositions}
@@ -214,13 +226,7 @@ export function HomePage(): JSX.Element {
                 ) : (
                   <>
                     <p className="home-metric-amount"><FormattedAmount prefix="$" value={ytdStats.usdTotal} /></p>
-                    {ytdStats.deviation && (
-                      <p className="home-metric-yoy">
-                        {ytdStats.deviation.up ? "▲" : "▼"}{" "}
-                        {ytdStats.deviation.up ? "+" : "-"}{ytdStats.deviation.pctChange}% ·{" "}
-                        {ytdStats.deviation.up ? "+" : "-"}${ytdStats.deviation.absChange.toFixed(2)} vs {ytdStats.deviation.priorLabel}
-                      </p>
-                    )}
+                    {ytdStats.deviation && <DeviationLine deviation={ytdStats.deviation} />}
                   </>
                 )}
               </div>
@@ -228,20 +234,14 @@ export function HomePage(): JSX.Element {
               {/* ROLLING 12M */}
               <div className="home-metric-card">
                 <div className="home-metric-header">
-                  <span className="home-metric-title">ROLLING 12M</span>
+                  <span className="home-metric-title">ROLLING 12M EXPENSES</span>
                 </div>
                 {rolling12mStats.count === 0 ? (
                   <p className="home-metric-empty">No expense entries</p>
                 ) : (
                   <>
                     <p className="home-metric-amount"><FormattedAmount prefix="$" value={rolling12mStats.usdTotal} /></p>
-                    {rolling12mStats.deviation && (
-                      <p className="home-metric-yoy">
-                        {rolling12mStats.deviation.up ? "▲" : "▼"}{" "}
-                        {rolling12mStats.deviation.up ? "+" : "-"}{rolling12mStats.deviation.pctChange}% ·{" "}
-                        {rolling12mStats.deviation.up ? "+" : "-"}${rolling12mStats.deviation.absChange.toFixed(2)} vs {rolling12mStats.deviation.priorLabel}
-                      </p>
-                    )}
+                    {rolling12mStats.deviation && <DeviationLine deviation={rolling12mStats.deviation} />}
                   </>
                 )}
               </div>

@@ -347,7 +347,7 @@ button { cursor: pointer; }
   border: none;
   background: transparent;
   color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   font-weight: 500;
   cursor: pointer;
   text-decoration: none;
@@ -675,7 +675,7 @@ button { cursor: pointer; }
 }
 
 .home-metric-title {
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   font-weight: 700;
   letter-spacing: 0.05em;
   color: var(--color-text-secondary);
@@ -683,7 +683,7 @@ button { cursor: pointer; }
 }
 
 .home-metric-link {
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   font-weight: 600;
   color: var(--color-accent);
   text-decoration: none;
@@ -694,7 +694,7 @@ button { cursor: pointer; }
 }
 
 .home-metric-amount {
-  font-size: var(--font-size-2xl);
+  font-size: var(--font-size-3xl);
   font-weight: 700;
   color: var(--color-text-primary);
   margin: 0 0 var(--space-1);
@@ -706,13 +706,21 @@ button { cursor: pointer; }
 }
 
 .home-metric-yoy {
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
   margin: 0 0 var(--space-3);
 }
 
+.yoy-up {
+  color: var(--color-error);
+}
+
+.yoy-down {
+  color: var(--color-success);
+}
+
 .home-metric-empty {
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-base);
   color: var(--color-text-placeholder);
   margin: var(--space-2) 0 0;
 }
