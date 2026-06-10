@@ -6,13 +6,13 @@ window.__i18n.en = {
   "meta.keywords": "expense tracker, expense management, Google Sheets, personal finance, family budget, free expense app",
 
   "hero.title": "Track Expenses On The Go",
-  "hero.subtitle": "Simple, fast, and always at your fingertips. Your data, your spreadsheet, your control.",
+  "hero.subtitle": "Log in seconds, see trends instantly. Dashboard, history, search — free and private in your Google Sheets.",
   "hero.cta": "Get Started - It's Free",
   "hero.note": "Sign in with Google \u2022 Start in 2 minutes",
 
   "features.title": "Why Quick Expense?",
-  "features.mobile.title": "Mobile First",
-  "features.mobile.desc": "Designed for on-the-go use. Works perfectly on smartphones, tablets, and desktop. Access anywhere, anytime.",
+  "features.mobile.title": "Spend Dashboard",
+  "features.mobile.desc": "See today's total, month-to-date with a trend chart, year-over-year delta, and rolling 12-month spend — all at a glance.",
   "features.data.title": "You Own Your Data",
   "features.data.desc": "All data lives in your own Google Spreadsheet. Full control, easy export, analyze with your favorite tools.",
   "features.ui.title": "Minimalist UI",

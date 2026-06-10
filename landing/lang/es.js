@@ -1,4 +1,4 @@
-// Spanish language bundle
+﻿// Spanish language bundle
 window.__i18n = window.__i18n || {};
 window.__i18n.es = {
   "meta.title": "Quick Expense - Registra Gastos Sobre la Marcha",
@@ -6,13 +6,13 @@ window.__i18n.es = {
   "meta.keywords": "registro de gastos, gesti\u00f3n de gastos, Google Sheets, finanzas personales, presupuesto familiar, app de gastos gratis",
 
   "hero.title": "Registra Gastos Sobre la Marcha",
-  "hero.subtitle": "Simple, r\u00e1pido y siempre al alcance de tu mano. Tus datos, tu hoja de c\u00e1lculo, tu control.",
+  "hero.subtitle": "Registra en segundos, ve tendencias al instante. Dashboard, historial, b\\u00fasqueda \u2014 gratis y privado en tu Google Sheets.",
   "hero.cta": "Comienza - Es Gratis",
   "hero.note": "Inicia sesi\u00f3n con Google \u2022 Empieza en 2 minutos",
 
   "features.title": "\u00bfPor qu\u00e9 Quick Expense?",
-  "features.mobile.title": "Dise\u00f1o M\u00f3vil",
-  "features.mobile.desc": "Dise\u00f1ado para usar sobre la marcha. Funciona perfectamente en smartphones, tablets y escritorio. Accede desde cualquier lugar, en cualquier momento.",
+  "features.mobile.title": "Panel de Gastos",
+  "features.mobile.desc": "Ve el total de hoy, el mes en curso con gr\u00e1fico de tendencia, la variaci\u00f3n interanual y los \u00faltimos 12 meses \u2014 todo de un vistazo.",
   "features.data.title": "Tus Datos Son Tuyos",
   "features.data.desc": "Todos los datos est\u00e1n en tu propia Hoja de C\u00e1lculo de Google. Control total, f\u00e1cil exportaci\u00f3n, analiza con tus herramientas favoritas.",
   "features.ui.title": "Interfaz Minimalista",
