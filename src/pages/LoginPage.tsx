@@ -28,7 +28,7 @@ export function LoginPage(): JSX.Element {
         />
 
         <h1 className="login-title">Quick Expense</h1>
-        <p className="login-tagline">Track spending in seconds, not minutes.</p>
+        <p className="login-tagline">Log an expense before you forget it.</p>
 
         {callbackError ? <StatusBanner variant="error" message={callbackError} /> : null}
         {auth.error ? <StatusBanner variant="error" message={auth.error} /> : null}
@@ -50,7 +50,7 @@ export function LoginPage(): JSX.Element {
           </div>
           <div className="login-trust-item">
             <Check size={16} className="login-trust-check" aria-hidden />
-            <span>Your data stays in Google Sheets</span>
+            <span>Your data stays in your Google Sheets</span>
           </div>
           <div className="login-trust-item">
             <Check size={16} className="login-trust-check" aria-hidden />
