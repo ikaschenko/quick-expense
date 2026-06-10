@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { FileSpreadsheet, Receipt } from "lucide-react";
 import { FormattedAmount } from "../components/FormattedAmount";
@@ -13,6 +13,7 @@ import {
   getTodayStats,
   getMtdStats,
   getYtdStats,
+  getRolling12mStats,
   getMtdDailyAmounts,
   getMtdWeekBoundaryPositions,
 } from "../utils/dashboardStats";
@@ -74,9 +75,6 @@ export function HomePage(): JSX.Element {
   const firstName = session?.givenName ?? (session?.email ? getFirstName(session.email) : "");
   const today = useMemo(() => getTodayLocalDate(), []);
 
-  const [showYtdComingSoon, setShowYtdComingSoon] = useState(false);
-  const ytdDetailsRef = useRef<HTMLButtonElement>(null);
-
   // Load dataset when config is ready and dataset hasn't been loaded yet
   useEffect(() => {
     if (!config || isConfigLoading) return;
@@ -85,18 +83,6 @@ export function HomePage(): JSX.Element {
     }
   }, [config, isConfigLoading, dataset.status, dataset.loadDataset]);
 
-  // Dismiss YTD coming-soon on outside click
-  useEffect(() => {
-    if (!showYtdComingSoon) return;
-    const handleClick = (e: MouseEvent) => {
-      if (ytdDetailsRef.current && !ytdDetailsRef.current.contains(e.target as Node)) {
-        setShowYtdComingSoon(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [showYtdComingSoon]);
-
   const records = dataset.snapshot?.records ?? [];
 
   const toIso = useMemo(() => buildIsoNormalizer(records), [records]);
@@ -104,6 +90,7 @@ export function HomePage(): JSX.Element {
   const todayStats = useMemo(() => getTodayStats(records, today, toIso), [records, today, toIso]);
   const mtdStats = useMemo(() => getMtdStats(records, today, toIso), [records, today, toIso]);
   const ytdStats = useMemo(() => getYtdStats(records, today, toIso), [records, today, toIso]);
+  const rolling12mStats = useMemo(() => getRolling12mStats(records, today, toIso), [records, today, toIso]);
   const mtdDailyAmounts = useMemo(() => getMtdDailyAmounts(records, today, toIso), [records, today, toIso]);
 
   const [year, month] = today.split("-").map(Number);
@@ -144,7 +131,10 @@ export function HomePage(): JSX.Element {
           <div className="skeleton-list">
             <MetricCardSkeleton />
             <MetricCardSkeleton />
-            <MetricCardSkeleton />
+            <div className="home-metric-row">
+              <MetricCardSkeleton />
+              <MetricCardSkeleton />
+            </div>
             <p className="home-loading-hint">Loading expenses from Google Sheet…</p>
           </div>
         ) : dataset.status === "error" ? (
@@ -213,36 +203,48 @@ export function HomePage(): JSX.Element {
               )}
             </div>
 
-            {/* YTD */}
-            <div className="home-metric-card">
-              <div className="home-metric-header">
-                <span className="home-metric-title">{year} SO FAR</span>
-                <button
-                  ref={ytdDetailsRef}
-                  type="button"
-                  className="home-metric-link"
-                  onClick={() => setShowYtdComingSoon((v) => !v)}
-                >
-                  Details
-                </button>
+            {/* YTD + ROLLING 12M */}
+            <div className="home-metric-row">
+              <div className="home-metric-card">
+                <div className="home-metric-header">
+                  <span className="home-metric-title">{year} SO FAR</span>
+                </div>
+                {ytdStats.count === 0 ? (
+                  <p className="home-metric-empty">No expense entries</p>
+                ) : (
+                  <>
+                    <p className="home-metric-amount"><FormattedAmount prefix="$" value={ytdStats.usdTotal} /></p>
+                    {ytdStats.deviation && (
+                      <p className="home-metric-yoy">
+                        {ytdStats.deviation.up ? "▲" : "▼"}{" "}
+                        {ytdStats.deviation.up ? "+" : "-"}{ytdStats.deviation.pctChange}% ·{" "}
+                        {ytdStats.deviation.up ? "+" : "-"}${ytdStats.deviation.absChange.toFixed(2)} vs {ytdStats.deviation.priorLabel}
+                      </p>
+                    )}
+                  </>
+                )}
               </div>
-              {ytdStats.count === 0 ? (
-                <p className="home-metric-empty">No expense entries</p>
-              ) : (
-                <>
-                  <p className="home-metric-amount"><FormattedAmount prefix="$" value={ytdStats.usdTotal} /></p>
-                  {ytdStats.deviation && (
-                    <p className="home-metric-yoy">
-                      {ytdStats.deviation.up ? "▲" : "▼"}{" "}
-                      {ytdStats.deviation.up ? "+" : "-"}{ytdStats.deviation.pctChange}% ·{" "}
-                      {ytdStats.deviation.up ? "+" : "-"}${ytdStats.deviation.absChange.toFixed(2)} vs {ytdStats.deviation.priorLabel}
-                    </p>
-                  )}
-                </>
-              )}
-              {showYtdComingSoon && (
-                <p className="home-metric-coming-soon">This feature is in development — coming soon.</p>
-              )}
+
+              {/* ROLLING 12M */}
+              <div className="home-metric-card">
+                <div className="home-metric-header">
+                  <span className="home-metric-title">ROLLING 12M</span>
+                </div>
+                {rolling12mStats.count === 0 ? (
+                  <p className="home-metric-empty">No expense entries</p>
+                ) : (
+                  <>
+                    <p className="home-metric-amount"><FormattedAmount prefix="$" value={rolling12mStats.usdTotal} /></p>
+                    {rolling12mStats.deviation && (
+                      <p className="home-metric-yoy">
+                        {rolling12mStats.deviation.up ? "▲" : "▼"}{" "}
+                        {rolling12mStats.deviation.up ? "+" : "-"}{rolling12mStats.deviation.pctChange}% ·{" "}
+                        {rolling12mStats.deviation.up ? "+" : "-"}${rolling12mStats.deviation.absChange.toFixed(2)} vs {rolling12mStats.deviation.priorLabel}
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           </div>
         ) : null}

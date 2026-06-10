@@ -167,6 +167,37 @@ export function getYtdStats(
   };
 }
 
+/** Rolling 12-month card stats. Window: [same calendar date 1 year ago, yesterday]. */
+export function getRolling12mStats(
+  records: ExpenseRecord[],
+  todayStr: string,
+  toIso: IsoNormalizer,
+): PeriodStats {
+  const [year, month, day] = todayStr.split("-").map(Number);
+
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  // windowEnd = yesterday; new Date handles Jan 1 → Dec 31 rollover via day − 1 = 0
+  const windowEnd = fmt(new Date(year, month - 1, day - 1));
+  // windowStart = same calendar date one year back
+  const windowStart = fmt(new Date(year - 1, month - 1, day));
+  // priorEnd = one day before windowStart
+  const priorEnd = fmt(new Date(year - 1, month - 1, day - 1));
+  // priorStart = same calendar date two years back
+  const priorStart = fmt(new Date(year - 2, month - 1, day));
+
+  const current = filterPeriod(records, windowStart, windowEnd, toIso);
+  const usdTotal = sumUsd(current);
+  const prior = filterPeriod(records, priorStart, priorEnd, toIso);
+
+  return {
+    count: current.length,
+    usdTotal,
+    deviation: buildDeviation(usdTotal, sumUsd(prior), prior.length, "prior 12M"),
+  };
+}
+
 /**
  * Per-day USD totals for the current month.
  * Array length = days in month. Future days are NaN; past/today are actual totals (0 if no records).

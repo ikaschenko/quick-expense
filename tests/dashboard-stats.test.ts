@@ -4,6 +4,7 @@ import {
   getTodayStats,
   getMtdStats,
   getYtdStats,
+  getRolling12mStats,
   getMtdDailyAmounts,
   getMtdWeekBoundaryPositions,
   buildIsoNormalizer,
@@ -244,6 +245,118 @@ describe("getMtdWeekBoundaryPositions", () => {
     // Only need to check that day 1 (Monday) is NOT included as a boundary
     const positions = getMtdWeekBoundaryPositions(2026, 6);
     expect(positions).not.toContain(0);
+  });
+});
+
+// ─── getRolling12mStats ───────────────────────────────────────────────────────
+
+// R12M_TODAY = June 10, 2026
+// windowStart = June 10, 2025  windowEnd = June 9, 2026
+// priorStart  = June 10, 2024  priorEnd  = June 9, 2025
+const R12M_TODAY = "2026-06-10";
+
+describe("getRolling12mStats", () => {
+  it("returns count=0 and no deviation when no records exist", () => {
+    const stats = getRolling12mStats([], R12M_TODAY, iso);
+    expect(stats.count).toBe(0);
+    expect(stats.usdTotal).toBe(0);
+    expect(stats.deviation).toBeNull();
+  });
+
+  it("sums records within current window and computes deviation vs prior window", () => {
+    const records = [
+      makeRecord("2025-06-10", "100"), // windowStart — included
+      makeRecord("2026-01-15", "200"), // mid-window — included
+      makeRecord("2026-06-09", "50"),  // windowEnd — included
+      makeRecord("2026-06-10", "999"), // today — excluded from window
+      makeRecord("2024-06-10", "80"),  // priorStart — included in prior
+      makeRecord("2025-06-09", "120"), // priorEnd — included in prior
+    ];
+    const stats = getRolling12mStats(records, R12M_TODAY, iso);
+    expect(stats.count).toBe(3);
+    expect(stats.usdTotal).toBeCloseTo(350);
+    expect(stats.deviation).not.toBeNull();
+    expect(stats.deviation!.priorLabel).toBe("prior 12M");
+    expect(stats.deviation!.absChange).toBeCloseTo(150); // 350 - 200
+    expect(stats.deviation!.up).toBe(true);
+  });
+
+  it("returns null deviation when prior window has no records", () => {
+    const stats = getRolling12mStats([makeRecord("2026-01-01", "100")], R12M_TODAY, iso);
+    expect(stats.count).toBe(1);
+    expect(stats.deviation).toBeNull();
+  });
+
+  it("includes record exactly on windowStart (June 10, 2025)", () => {
+    const stats = getRolling12mStats([makeRecord("2025-06-10", "50")], R12M_TODAY, iso);
+    expect(stats.count).toBe(1);
+  });
+
+  it("includes record exactly on windowEnd (June 9, 2026)", () => {
+    const stats = getRolling12mStats([makeRecord("2026-06-09", "50")], R12M_TODAY, iso);
+    expect(stats.count).toBe(1);
+  });
+
+  it("excludes record on today (June 10, 2026) from the current window", () => {
+    const stats = getRolling12mStats([makeRecord("2026-06-10", "50")], R12M_TODAY, iso);
+    expect(stats.count).toBe(0);
+  });
+
+  it("includes record on priorStart (June 10, 2024) in prior window", () => {
+    const records = [
+      makeRecord("2026-01-01", "100"), // current window
+      makeRecord("2024-06-10", "80"),  // priorStart
+    ];
+    const stats = getRolling12mStats(records, R12M_TODAY, iso);
+    expect(stats.deviation).not.toBeNull();
+  });
+
+  it("includes record on priorEnd (June 9, 2025) in prior window", () => {
+    const records = [
+      makeRecord("2026-01-01", "100"), // current window
+      makeRecord("2025-06-09", "80"),  // priorEnd
+    ];
+    const stats = getRolling12mStats(records, R12M_TODAY, iso);
+    expect(stats.deviation).not.toBeNull();
+  });
+
+  it("excludes record before priorStart (June 9, 2024) from prior window", () => {
+    const records = [
+      makeRecord("2026-01-01", "100"), // current window
+      makeRecord("2024-06-09", "999"), // one day before priorStart — excluded
+    ];
+    const stats = getRolling12mStats(records, R12M_TODAY, iso);
+    expect(stats.deviation).toBeNull();
+  });
+
+  it("handles January 1 as today — windowEnd rolls over to Dec 31 of prior year", () => {
+    // today = 2026-01-01, windowEnd should be 2025-12-31
+    const stats = getRolling12mStats([makeRecord("2025-12-31", "50")], "2026-01-01", iso);
+    expect(stats.count).toBe(1);
+  });
+
+  it("handles today = March 1 after a leap year — windowStart is March 1 prior year", () => {
+    // today = 2024-03-01 (year after 2023, non-leap)
+    // windowStart = new Date(2023, 2, 1) = 2023-03-01
+    // windowEnd   = new Date(2024, 2, 0) = 2024-02-29 (leap day)
+    const records = [
+      makeRecord("2023-03-01", "100"), // windowStart
+      makeRecord("2024-02-29", "50"),  // windowEnd (leap day)
+      makeRecord("2024-03-01", "999"), // today — excluded
+    ];
+    const stats = getRolling12mStats(records, "2024-03-01", iso);
+    expect(stats.count).toBe(2);
+    expect(stats.usdTotal).toBeCloseTo(150);
+  });
+
+  it("shows negative deviation when current window total is lower than prior", () => {
+    const records = [
+      makeRecord("2026-01-01", "50"),  // current window
+      makeRecord("2025-01-01", "200"), // prior window
+    ];
+    const stats = getRolling12mStats(records, R12M_TODAY, iso);
+    expect(stats.deviation!.up).toBe(false);
+    expect(stats.deviation!.absChange).toBeCloseTo(150);
   });
 });
 
