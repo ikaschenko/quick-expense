@@ -735,28 +735,6 @@ button { cursor: pointer; }
   margin-top: var(--space-3);
 }
 
-/* ─── Setup badge on bottom nav ─── */
-.bottom-nav-icon-wrap {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.setup-badge {
-  position: absolute;
-  top: -2px;
-  right: -4px;
-}
-
-.setup-badge--ok {
-  color: var(--color-success);
-}
-
-.setup-badge--error {
-  color: var(--color-error);
-}
-
 /* ─── Config mode badges (SetupPage) ─── */
 .config-mode-badge-row {
   display: flex;

@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { PropsWithChildren, useState, useRef, useEffect } from "react";
-import { ChevronLeft, House, Plus, Clock, Search, LogOut, MessageSquareShare, X, Shield, FileText, Settings, Check, AlertTriangle } from "lucide-react";
+import { ChevronLeft, House, Plus, Clock, Search, LogOut, MessageSquareShare, X, Shield, FileText, Settings } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useConfig } from "../contexts/ConfigContext";
 import { useDataset } from "../contexts/DatasetContext";
@@ -26,14 +26,6 @@ export function Layout({ children, title, onBack }: LayoutProps): JSX.Element {
   const avatarLetter = auth.session?.email?.charAt(0) ?? "?";
   const avatarPicture = auth.session?.picture ?? null;
 
-  const setupBadge: "ok" | "error" | null = config.isConfigLoading
-    ? null
-    : !config.config
-      ? "error"
-      : config.config.configMode === "config-invalid"
-        ? "error"
-        : "ok";
-  
   // Show banner when auth, config, or dataset has an error
   const activeError = auth.error || config.error || dataset.error;
   
@@ -221,15 +213,7 @@ export function Layout({ children, title, onBack }: LayoutProps): JSX.Element {
           className={`bottom-nav-item${location.pathname === "/setup" ? " active" : ""}`}
           aria-label="Setup"
         >
-          <span className="bottom-nav-icon-wrap">
-            <Settings size={22} aria-hidden />
-            {setupBadge === "ok" && (
-              <Check size={16} strokeWidth={3} className="setup-badge setup-badge--ok" aria-hidden />
-            )}
-            {setupBadge === "error" && (
-              <AlertTriangle size={16} strokeWidth={3} className="setup-badge setup-badge--error" aria-hidden />
-            )}
-          </span>
+          <Settings size={22} aria-hidden />
           <span>Setup</span>
         </Link>
       </nav>
