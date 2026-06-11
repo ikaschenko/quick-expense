@@ -57,6 +57,12 @@ export interface SpreadsheetConfig {
   predefinedCategories: string[];
   /** Canonical QE field names hidden from the Add Expense form. */
   hiddenColumns: string[];
+  /** True when this config is sourced from another user's shared setup. */
+  isGuest: boolean;
+  /** Effective access level for the authenticated user. */
+  accessLevel: 'view' | 'edit';
+  /** Email of the owner when isGuest is true, otherwise null. */
+  ownerEmail: string | null;
 }
 
 export interface SetupReport {
@@ -139,10 +145,26 @@ export interface AuthSession {
   picture: string | null;
   lastAuthenticatedAt: number;
   lastActivityAt: number;
+  isGuest: boolean;
+  guestAccessLevel: 'view' | 'edit' | null;
+  ownerEmail: string | null;
+  configStatus: 'ok' | 'shared_config_invalid';
 }
 
 export interface AuthSessionMeta {
   email: string;
   lastAuthenticatedAt: number;
   lastActivityAt: number;
+}
+
+// ─── Sharing ──────────────────────────────────────────────────────────────────
+
+export interface ShareEntry {
+  guestEmail: string;
+  accessLevel: 'view' | 'edit';
+}
+
+export interface AddShareRequest {
+  guestEmail: string;
+  accessLevel: 'view' | 'edit';
 }

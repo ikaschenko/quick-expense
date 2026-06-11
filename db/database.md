@@ -72,7 +72,7 @@ Connect to the database and check that the tables were created:
 psql -U postgres -d quickexpense -c "\dt"
 ```
 
-You should see the tables created by migrations applied so far: `users`, `fx_rate_backups`, `sessions`, `user_currencies`, `user_column_visibility`.
+You should see the tables created by migrations applied so far: `users`, `fx_rate_backups`, `sessions`, `user_currencies`, `user_column_visibility`, `setup_shares`.
 
 ## Supabase (Production)
 
@@ -98,4 +98,6 @@ psql -U postgres -d quickexpense -f db/005_user_custom_columns.sql
 psql -U postgres -d quickexpense -f db/006_drop_column_config_tables.sql
 psql -U postgres -d quickexpense -f db/007_user_column_visibility.sql
 psql -U postgres -d quickexpense -f db/008_rls_user_column_visibility.sql
+psql -U postgres -d quickexpense -f db/009_setup_shares.sql
+psql -U postgres -d quickexpense -f db/010_rls_setup_shares.sql
 ```

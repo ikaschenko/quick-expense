@@ -137,3 +137,25 @@ export async function renameVisibilityEntry(email, spreadsheetId, oldName, newNa
     [normalizedEmail, spreadsheetId, oldName, newName],
   );
 }
+
+// ─── Setup Sharing ────────────────────────────────────────────────────────────
+
+/**
+ * Returns true if the given email has their own independently configured spreadsheet
+ * AND is not already a guest in setup_shares.
+ * Used to block owners from sharing with users who have their own setup.
+ */
+export async function hasOwnIndependentSetup(email) {
+  const normalizedEmail = email.toLowerCase();
+  const { rows } = await pool.query(
+    `SELECT u.spreadsheet_id
+     FROM users u
+     WHERE u.email = $1
+       AND u.spreadsheet_id IS NOT NULL
+       AND NOT EXISTS (
+         SELECT 1 FROM setup_shares s WHERE s.guest_email = $1
+       )`,
+    [normalizedEmail],
+  );
+  return rows.length > 0;
+}

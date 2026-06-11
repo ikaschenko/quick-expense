@@ -1,15 +1,17 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { FileSpreadsheet, Wand2, ChevronDown, ChevronUp, X, Plus, Pencil, Trash2, Check, TableProperties, Eye, EyeOff, Link2Off } from "lucide-react";
+import { FileSpreadsheet, Wand2, ChevronDown, ChevronUp, X, Plus, Pencil, Trash2, Check, TableProperties, Eye, EyeOff, Link2Off, Share2 } from "lucide-react";
 import { Layout } from "../components/Layout";
 import { LoadingBlock } from "../components/LoadingBlock";
 import { StatusBanner } from "../components/StatusBanner";
 import { ColumnMappingEditor } from "../components/ColumnMappingEditor";
 import { SpreadsheetFileInfo } from "../components/SpreadsheetFileInfo";
 import { useConfig } from "../contexts/ConfigContext";
+import { useAuth } from "../contexts/AuthContext";
 import { openSpreadsheetPicker } from "../services/googlePicker";
 import { googleSheetsService } from "../services/googleSheets";
+import { sharingApi } from "../services/sharingApi";
 import { trackEvent } from "../services/analytics";
-import { AppError, ColumnMapping, ConfigMode, CurrencyDictionary, HeaderDetails, SetupReport } from "../types/expense";
+import { AppError, ColumnMapping, ConfigMode, CurrencyDictionary, HeaderDetails, SetupReport, ShareEntry } from "../types/expense";
 import { deriveHeaderRowDetails, validateColumnName } from "../utils/spreadsheet";
 import { REQUIRED_QE_FIELDS } from "../constants/expenses";
 
@@ -95,6 +97,9 @@ type SetupPath = "choose" | "fresh" | "existing" | "configured";
 
 export function SetupPage(): JSX.Element {
   const { config, isConfigLoading, error: configError, saveConfig, clearConfig, updateStructure, toggleColumnVisibility, fileName, isFileNameLoading } = useConfig();
+  const { session } = useAuth();
+  const isGuest = config?.isGuest ?? false;
+
   const [spreadsheetUrl, setSpreadsheetUrl] = useState("");  const [error, setError] = useState<string | null>(null);
   const [headerDetails, setHeaderDetails] = useState<HeaderDetails | null>(null);
   const [showMappingEditor, setShowMappingEditor] = useState(false);
@@ -133,6 +138,16 @@ export function SetupPage(): JSX.Element {
   const [isUnlinking, setIsUnlinking] = useState(false);
   const [unlinkError, setUnlinkError] = useState<string | null>(null);
 
+  // ─── Sharing state (owner only) ───────────────────────────────────────────
+  const [shares, setShares] = useState<ShareEntry[]>([]);
+  const [sharingLoadError, setSharingLoadError] = useState<string | null>(null);
+  const [newShareEmail, setNewShareEmail] = useState("");
+  const [newShareLevel, setNewShareLevel] = useState<'view' | 'edit'>("edit");
+  const [sharingActionBusy, setSharingActionBusy] = useState(false);
+  const [sharingActionError, setSharingActionError] = useState<string | null>(null);
+  const [editingShareEmail, setEditingShareEmail] = useState<string | null>(null);
+  const [editShareLevel, setEditShareLevel] = useState<'view' | 'edit'>("edit");
+
   const handleUnlink = useCallback(async () => {
     setIsUnlinking(true);
     setUnlinkError(null);
@@ -144,6 +159,59 @@ export function SetupPage(): JSX.Element {
       setIsUnlinking(false);
     }
   }, [clearConfig]);
+
+  // Load shares when owner is on configured path
+  useEffect(() => {
+    if (isGuest || setupPath !== "configured") return;
+    setSharingLoadError(null);
+    void sharingApi.listShares()
+      .then(setShares)
+      .catch((err) => setSharingLoadError((err as Error).message));
+  }, [isGuest, setupPath]);
+
+  const handleAddShare = async (e: FormEvent): Promise<void> => {
+    e.preventDefault();
+    setSharingActionError(null);
+    setSharingActionBusy(true);
+    try {
+      const entry = await sharingApi.addShare({ guestEmail: newShareEmail.trim(), accessLevel: newShareLevel });
+      setShares((prev) => [...prev, entry]);
+      setNewShareEmail("");
+      setNewShareLevel("edit");
+    } catch (err) {
+      const message = (err as Error).message;
+      setSharingActionError(message);
+    } finally {
+      setSharingActionBusy(false);
+    }
+  };
+
+  const handleUpdateShare = async (guestEmail: string): Promise<void> => {
+    setSharingActionError(null);
+    setSharingActionBusy(true);
+    try {
+      const updated = await sharingApi.updateShare(guestEmail, editShareLevel);
+      setShares((prev) => prev.map((s) => s.guestEmail === guestEmail ? updated : s));
+      setEditingShareEmail(null);
+    } catch (err) {
+      setSharingActionError((err as Error).message);
+    } finally {
+      setSharingActionBusy(false);
+    }
+  };
+
+  const handleRemoveShare = async (guestEmail: string): Promise<void> => {
+    setSharingActionError(null);
+    setSharingActionBusy(true);
+    try {
+      await sharingApi.removeShare(guestEmail);
+      setShares((prev) => prev.filter((s) => s.guestEmail !== guestEmail));
+    } catch (err) {
+      setSharingActionError((err as Error).message);
+    } finally {
+      setSharingActionBusy(false);
+    }
+  };
 
   // Field-level error for inline forms
   const [fieldError, setFieldError] = useState<string | null>(null);
@@ -739,6 +807,12 @@ export function SetupPage(): JSX.Element {
       {/* ── Path: configured (sheet structure management) ── */}
       {setupPath === "configured" ? (
         <>
+          {isGuest && config?.ownerEmail ? (
+            <div className="sharing-guest-banner" role="status">
+              This setup has been shared with you by <strong>{config.ownerEmail}</strong>. You cannot modify it.
+            </div>
+          ) : null}
+
           {success ? <StatusBanner variant="success" message={success} /> : null}
 
           {setupReport ? (
@@ -788,24 +862,28 @@ export function SetupPage(): JSX.Element {
                 </div>
               </div>
               <div className="home-status-actions">
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => setSetupPath("choose")}
-                >
-                  <Pencil size={14} aria-hidden />
-                  Change
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-danger btn-sm"
-                  onClick={() => void handleUnlink()}
-                  disabled={isUnlinking}
-                  aria-busy={isUnlinking}
-                >
-                  <Link2Off size={14} aria-hidden />
-                  {isUnlinking ? "Unlinking…" : "Unlink"}
-                </button>
+                {!isGuest ? (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setSetupPath("choose")}
+                    >
+                      <Pencil size={14} aria-hidden />
+                      Change
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      onClick={() => void handleUnlink()}
+                      disabled={isUnlinking}
+                      aria-busy={isUnlinking}
+                    >
+                      <Link2Off size={14} aria-hidden />
+                      {isUnlinking ? "Unlinking…" : "Unlink"}
+                    </button>
+                  </>
+                ) : null}
               </div>
             </div>
           ) : null}
@@ -1122,7 +1200,7 @@ export function SetupPage(): JSX.Element {
             </form>
           ) : null}
 
-          {!isAddingCurrency && !isAddingColumn ? (
+          {!isAddingCurrency && !isAddingColumn && !isGuest ? (
             <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-3)" }}>
               <button
                 className="btn btn-secondary"
@@ -1151,6 +1229,132 @@ export function SetupPage(): JSX.Element {
             </div>
           ) : null}
           </div>
+
+          {/* ── Share your setup (owners only) ── */}
+          {!isGuest ? (
+            <div className="card setup-card sharing-section">
+              <div className="setup-card-icon">
+                <Share2 size={24} aria-hidden />
+                <span className="setup-card-title">Share your setup</span>
+              </div>
+
+              <p className="sharing-section-note">
+                Make sure to also share your Google Spreadsheet directly in Google Sheets with each
+                user at the corresponding access level (View or Edit). QuickExpense cannot grant
+                Google Sheets permissions on your behalf.
+              </p>
+
+              {sharingLoadError ? <StatusBanner variant="error" message={sharingLoadError} /> : null}
+              {sharingActionError ? <StatusBanner variant="error" message={sharingActionError} /> : null}
+
+              {shares.length > 0 ? (
+                <table className="sharing-table" aria-label="Shared users">
+                  <thead>
+                    <tr>
+                      <th>Email</th>
+                      <th>Access</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shares.map((share) => (
+                      <tr key={share.guestEmail}>
+                        <td>{share.guestEmail}</td>
+                        <td>
+                          {editingShareEmail === share.guestEmail ? (
+                            <select
+                              className="input"
+                              value={editShareLevel}
+                              onChange={(e) => setEditShareLevel(e.target.value as 'view' | 'edit')}
+                            >
+                              <option value="edit">Edit</option>
+                              <option value="view">View</option>
+                            </select>
+                          ) : (
+                            <span className={`config-mode-badge config-mode-badge--${share.accessLevel === 'edit' ? 'config-driven' : 'default'}`}>
+                              {share.accessLevel === 'edit' ? 'Edit' : 'View'}
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          <div className="sharing-table-actions">
+                            {editingShareEmail === share.guestEmail ? (
+                              <>
+                                <button
+                                  className="btn-icon"
+                                  type="button"
+                                  disabled={sharingActionBusy}
+                                  onClick={() => void handleUpdateShare(share.guestEmail)}
+                                  aria-label="Save"
+                                >
+                                  <Check size={16} />
+                                </button>
+                                <button
+                                  className="btn-icon"
+                                  type="button"
+                                  onClick={() => setEditingShareEmail(null)}
+                                  aria-label="Cancel"
+                                >
+                                  <X size={16} />
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  className="btn-icon"
+                                  type="button"
+                                  disabled={sharingActionBusy}
+                                  onClick={() => { setEditingShareEmail(share.guestEmail); setEditShareLevel(share.accessLevel); }}
+                                  aria-label={`Edit ${share.guestEmail}`}
+                                >
+                                  <Pencil size={16} />
+                                </button>
+                                <button
+                                  className="btn-icon btn-icon-danger"
+                                  type="button"
+                                  disabled={sharingActionBusy}
+                                  onClick={() => void handleRemoveShare(share.guestEmail)}
+                                  aria-label={`Remove ${share.guestEmail}`}
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : null}
+
+              <form onSubmit={(e) => void handleAddShare(e)} className="sharing-add-form">
+                <input
+                  className="input"
+                  type="email"
+                  placeholder="user@gmail.com"
+                  value={newShareEmail}
+                  onChange={(e) => { setNewShareEmail(e.target.value); setSharingActionError(null); }}
+                  required
+                  disabled={sharingActionBusy}
+                  style={{ flex: 1, minWidth: "200px" }}
+                />
+                <select
+                  className="input"
+                  value={newShareLevel}
+                  onChange={(e) => setNewShareLevel(e.target.value as 'view' | 'edit')}
+                  disabled={sharingActionBusy}
+                >
+                  <option value="edit">Edit</option>
+                  <option value="view">View</option>
+                </select>
+                <button className="btn btn-primary" type="submit" disabled={sharingActionBusy}>
+                  <Plus size={16} aria-hidden />
+                  Add user
+                </button>
+              </form>
+            </div>
+          ) : null}
         </>
       ) : null}
 

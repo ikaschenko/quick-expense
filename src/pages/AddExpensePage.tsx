@@ -140,6 +140,7 @@ function buildFxBackupPayload(
 
 export function AddExpensePage(): JSX.Element {
   const auth = useAuth();
+  const isViewOnly = auth.session?.guestAccessLevel === 'view';
   const { config } = useConfig();
   const dataset = useDataset();
   const navigate = useNavigate();
@@ -733,6 +734,19 @@ export function AddExpensePage(): JSX.Element {
             <Check size={20} aria-hidden />
             Saved!
           </div>
+        ) : isViewOnly ? (
+          <button
+            className="btn btn-primary"
+            type="button"
+            aria-disabled="true"
+            onClick={() => {
+              const form = document.querySelector<HTMLFormElement>("form");
+              form?.reportValidity();
+              alert("You don't have permission for this action. Contact the setup owner to request access.");
+            }}
+          >
+            Save Expense
+          </button>
         ) : (
           <button
             className="btn btn-primary"

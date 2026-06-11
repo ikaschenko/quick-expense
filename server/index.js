@@ -51,6 +51,9 @@ import {
   createShutdownGuard,
   destroySession,
   logInfrastructureError,
+  requireEditAccess,
+  requireGuest,
+  requireOwner,
   safelyDestroySession,
 } from "./resilience.js";
 import {
@@ -61,7 +64,16 @@ import {
   getHiddenColumns,
   setColumnVisibility,
   renameVisibilityEntry,
+  hasOwnIndependentSetup,
 } from "./store.js";
+import {
+  addShare,
+  getShareForGuest,
+  listSharesForOwner,
+  removeShare,
+  removeShareAsGuest,
+  updateShareAccessLevel,
+} from "./sharing.js";
 import pool from "./db.js";
 
 const PgSession = connectPgSimple(session);
@@ -182,6 +194,7 @@ function getUserSession(req) {
 const requireAuthenticatedUser = createRequireAuthenticatedUser({
   getUserSession,
   getUserRecord,
+  getShareForGuest,
   destroySessionState: safelyDestroySession,
 });
 
@@ -316,6 +329,20 @@ app.get("/api/auth/session", async (req, res) => {
       return;
     }
 
+    const share = await getShareForGuest(sessionUser.email);
+    let isGuest = false;
+    let guestAccessLevel = null;
+    let ownerEmail = null;
+    let configStatus = "ok";
+
+    if (share) {
+      const ownerRecord = await getUserRecord(share.ownerEmail);
+      isGuest = true;
+      guestAccessLevel = share.accessLevel;
+      ownerEmail = share.ownerEmail;
+      configStatus = ownerRecord && ownerRecord.spreadsheetId ? "ok" : "shared_config_invalid";
+    }
+
     res.json({
       authenticated: true,
       session: {
@@ -324,6 +351,10 @@ app.get("/api/auth/session", async (req, res) => {
         picture: sessionUser.picture,
         lastAuthenticatedAt: userRecord.lastAuthenticatedAt,
         lastActivityAt: userRecord.lastActivityAt,
+        isGuest,
+        guestAccessLevel,
+        ownerEmail,
+        configStatus,
       },
     });
   } catch (error) {
@@ -343,37 +374,40 @@ app.post("/api/auth/logout", async (req, res) => {
 });
 
 app.get("/api/config", requireAuthenticatedUser, async (req, res) => {
-  const { userRecord } = req;
-  if (!userRecord.spreadsheetId || !userRecord.spreadsheetUrl) {
+  const configRecord = req.configRecord;
+  if (!configRecord.spreadsheetId || !configRecord.spreadsheetUrl) {
     res.json({ config: null });
     return;
   }
 
   try {
-    const accessToken = await getAuthorizedAccessToken(userRecord);
+    const accessToken = await getAuthorizedAccessToken(req.userRecord);
     const { mode: configMode, mapping = null, reason: configModeReason, predefinedCategories = [] } =
-      await detectConfigSheet(accessToken, userRecord.spreadsheetId);
+      await detectConfigSheet(accessToken, configRecord.spreadsheetId);
 
-    const report = await validateSpreadsheet(accessToken, userRecord.spreadsheetId, mapping);
+    const report = await validateSpreadsheet(accessToken, configRecord.spreadsheetId, mapping);
 
     let hiddenColumns = [];
     try {
-      hiddenColumns = await getHiddenColumns(userRecord.email, userRecord.spreadsheetId);
+      hiddenColumns = await getHiddenColumns(configRecord.email, configRecord.spreadsheetId);
     } catch {
       // Table may not exist yet before migration — fall back to empty.
     }
 
     res.json({
       config: {
-        email: userRecord.email,
-        spreadsheetId: userRecord.spreadsheetId,
-        spreadsheetUrl: userRecord.spreadsheetUrl,
+        email: configRecord.email,
+        spreadsheetId: configRecord.spreadsheetId,
+        spreadsheetUrl: configRecord.spreadsheetUrl,
         sheetName: "Expenses",
         currencies: report.sheetCurrencies,
         customColumns: report.customColumns,
         configMode,
         predefinedCategories,
         hiddenColumns,
+        isGuest: req.isGuest,
+        accessLevel: req.accessLevel,
+        ownerEmail: req.isGuest ? configRecord.email : null,
         ...(configModeReason ? { configModeReason } : {}),
       },
     });
@@ -382,8 +416,8 @@ app.get("/api/config", requireAuthenticatedUser, async (req, res) => {
   }
 });
 
-app.patch("/api/config/column-visibility", requireAuthenticatedUser, async (req, res) => {
-  if (!req.userRecord.spreadsheetId) {
+app.patch("/api/config/column-visibility", requireAuthenticatedUser, requireOwner, async (req, res) => {
+  if (!req.configRecord.spreadsheetId) {
     res.status(400).json({ message: "Spreadsheet is not configured." });
     return;
   }
@@ -407,15 +441,15 @@ app.patch("/api/config/column-visibility", requireAuthenticatedUser, async (req,
   }
 
   try {
-    await setColumnVisibility(req.userRecord.email, req.userRecord.spreadsheetId, field, hidden);
-    const hiddenColumns = await getHiddenColumns(req.userRecord.email, req.userRecord.spreadsheetId);
+    await setColumnVisibility(req.configRecord.email, req.configRecord.spreadsheetId, field, hidden);
+    const hiddenColumns = await getHiddenColumns(req.configRecord.email, req.configRecord.spreadsheetId);
     res.json({ hiddenColumns });
   } catch (error) {
     res.status(500).json({ message: (error).message });
   }
 });
 
-app.post("/api/config", requireAuthenticatedUser, async (req, res) => {
+app.post("/api/config", requireAuthenticatedUser, requireOwner, async (req, res) => {
   try {
     const spreadsheetUrl = String(req.body?.spreadsheetUrl ?? "").trim();
     const spreadsheetId = parseSpreadsheetUrl(spreadsheetUrl);
@@ -463,7 +497,7 @@ app.post("/api/config", requireAuthenticatedUser, async (req, res) => {
   }
 });
 
-app.post("/api/config/create-spreadsheet", requireAuthenticatedUser, async (req, res) => {
+app.post("/api/config/create-spreadsheet", requireAuthenticatedUser, requireOwner, async (req, res) => {
   try {
     const rawName = String(req.body?.name ?? "").trim();
     const name = rawName.slice(0, 100) || "Quick Expense — My Expenses";
@@ -503,13 +537,13 @@ app.post("/api/config/create-spreadsheet", requireAuthenticatedUser, async (req,
 });
 
 app.get("/api/config/file-info", requireAuthenticatedUser, async (req, res) => {
-  if (!req.userRecord.spreadsheetId) {
+  if (!req.configRecord.spreadsheetId) {
     res.status(400).json({ message: "Spreadsheet is not configured." });
     return;
   }
   try {
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    const { fileName } = await getSpreadsheetFileMeta(accessToken, req.userRecord.spreadsheetId);
+    const { fileName } = await getSpreadsheetFileMeta(accessToken, req.configRecord.spreadsheetId);
     res.json({ fileName });
   } catch (error) {
     res.status(500).json({ message: (error).message });
@@ -517,15 +551,15 @@ app.get("/api/config/file-info", requireAuthenticatedUser, async (req, res) => {
 });
 
 app.get("/api/config/mapping", requireAuthenticatedUser, async (req, res) => {
-  if (!req.userRecord.spreadsheetId) {
+  if (!req.configRecord.spreadsheetId) {
     res.status(400).json({ message: "Spreadsheet is not configured." });
     return;
   }
   try {
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
     const [configResult, detectedColumns] = await Promise.all([
-      detectConfigSheet(accessToken, req.userRecord.spreadsheetId),
-      readExpensesSheetHeader(accessToken, req.userRecord.spreadsheetId),
+      detectConfigSheet(accessToken, req.configRecord.spreadsheetId),
+      readExpensesSheetHeader(accessToken, req.configRecord.spreadsheetId),
     ]);
     res.json({
       mapping: configResult.mode === "config-driven" ? configResult.mapping : null,
@@ -537,8 +571,8 @@ app.get("/api/config/mapping", requireAuthenticatedUser, async (req, res) => {
   }
 });
 
-app.post("/api/config/mapping", requireAuthenticatedUser, async (req, res) => {
-  if (!req.userRecord.spreadsheetId) {
+app.post("/api/config/mapping", requireAuthenticatedUser, requireOwner, async (req, res) => {
+  if (!req.configRecord.spreadsheetId) {
     res.status(400).json({
       message:
         "Spreadsheet is not configured. Submit a valid spreadsheet URL in Setup first — " +
@@ -554,7 +588,7 @@ app.post("/api/config/mapping", requireAuthenticatedUser, async (req, res) => {
   const mapping = req.body.mapping;
   try {
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    await writeConfigSheetMapping(accessToken, req.userRecord.spreadsheetId, mapping);
+    await writeConfigSheetMapping(accessToken, req.configRecord.spreadsheetId, mapping);
     const mode = "config-driven";
     res.json({ mapping, mode });
   } catch (error) {
@@ -572,7 +606,7 @@ app.get("/api/auth/picker-config", requireAuthenticatedUser, async (req, res) =>
   }
 });
 
-app.delete("/api/config", requireAuthenticatedUser, async (req, res) => {
+app.delete("/api/config", requireAuthenticatedUser, requireOwner, async (req, res) => {
   await updateUserRecord(req.userRecord.email, (current) => ({
     ...current,
     spreadsheetUrl: null,
@@ -585,12 +619,12 @@ app.delete("/api/config", requireAuthenticatedUser, async (req, res) => {
 
 app.get("/api/expenses/count", requireAuthenticatedUser, async (req, res) => {
   try {
-    if (!req.userRecord.spreadsheetId) {
+    if (!req.configRecord.spreadsheetId) {
       res.status(400).json({ message: "Spreadsheet is not configured." });
       return;
     }
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    const rowCount = await getExpenseRowCount(accessToken, req.userRecord.spreadsheetId);
+    const rowCount = await getExpenseRowCount(accessToken, req.configRecord.spreadsheetId);
     res.json({ rowCount });
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -599,7 +633,7 @@ app.get("/api/expenses/count", requireAuthenticatedUser, async (req, res) => {
 
 app.get("/api/expenses/history", requireAuthenticatedUser, async (req, res) => {
   try {
-    if (!req.userRecord.spreadsheetId) {
+    if (!req.configRecord.spreadsheetId) {
       res.status(400).json({ message: "Spreadsheet is not configured." });
       return;
     }
@@ -611,10 +645,10 @@ app.get("/api/expenses/history", requireAuthenticatedUser, async (req, res) => {
     }
 
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    const { mode, mapping: configMapping = null, metadata } = await detectConfigSheet(accessToken, req.userRecord.spreadsheetId);
+    const { mode, mapping: configMapping = null, metadata } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
     const mapping = mode === "config-driven" ? configMapping : null;
-    const report = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping, metadata);
-    const snapshot = await loadExpenses(accessToken, req.userRecord.spreadsheetId, mapping, {
+    const report = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping, metadata);
+    const snapshot = await loadExpenses(accessToken, req.configRecord.spreadsheetId, mapping, {
       startRow: 2,
       endRow,
       precomputedReport: report,
@@ -627,17 +661,17 @@ app.get("/api/expenses/history", requireAuthenticatedUser, async (req, res) => {
 
 app.get("/api/expenses", requireAuthenticatedUser, async (req, res) => {
   try {
-    if (!req.userRecord.spreadsheetId) {
+    if (!req.configRecord.spreadsheetId) {
       res.status(400).json({ message: "Spreadsheet is not configured." });
       return;
     }
 
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    const { mode, mapping: configMapping = null, metadata } = await detectConfigSheet(accessToken, req.userRecord.spreadsheetId);
+    const { mode, mapping: configMapping = null, metadata } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
     const mapping = mode === "config-driven" ? configMapping : null;
-    const report = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping, metadata);
-    const { startRow, totalRows, isSplit } = await findExpenseStartRow(accessToken, req.userRecord.spreadsheetId, RECENT_MONTHS);
-    const snapshot = await loadExpenses(accessToken, req.userRecord.spreadsheetId, mapping, {
+    const report = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping, metadata);
+    const { startRow, totalRows, isSplit } = await findExpenseStartRow(accessToken, req.configRecord.spreadsheetId, RECENT_MONTHS);
+    const snapshot = await loadExpenses(accessToken, req.configRecord.spreadsheetId, mapping, {
       startRow: isSplit ? startRow : null,
       precomputedReport: report,
     });
@@ -653,13 +687,13 @@ app.get("/api/expenses", requireAuthenticatedUser, async (req, res) => {
 });
 
 app.get("/api/fx-backup", requireAuthenticatedUser, async (req, res) => {
-  const backup = await getLatestFxRateBackup(req.userRecord.email, req.userRecord.spreadsheetId);
+  const backup = await getLatestFxRateBackup(req.userRecord.email, req.configRecord.spreadsheetId);
   res.json({ backup });
 });
 
-app.post("/api/expenses", requireAuthenticatedUser, async (req, res) => {
+app.post("/api/expenses", requireAuthenticatedUser, requireEditAccess, async (req, res) => {
   try {
-    if (!req.userRecord.spreadsheetId) {
+    if (!req.configRecord.spreadsheetId) {
       res.status(400).json({ message: "Spreadsheet is not configured." });
       return;
     }
@@ -671,20 +705,20 @@ app.post("/api/expenses", requireAuthenticatedUser, async (req, res) => {
     }
 
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    const { mode: expenseMode, mapping: expenseMapping = null } = await detectConfigSheet(accessToken, req.userRecord.spreadsheetId);
+    const { mode: expenseMode, mapping: expenseMapping = null } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
     const mapping = expenseMode === "config-driven" ? expenseMapping : null;
 
-    const report = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping);
+    const report = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
     const usdValidationError = validateUsdMandatory(values, report.sheetCurrencies);
     if (usdValidationError) {
       res.status(400).json({ message: usdValidationError });
       return;
     }
 
-    const { record } = await appendExpenseRow(accessToken, req.userRecord.spreadsheetId, values, mapping);
+    const { record } = await appendExpenseRow(accessToken, req.configRecord.spreadsheetId, values, mapping);
 
     if (req.body?.fxRateBackup && typeof req.body.fxRateBackup === "object") {
-      await saveFxRateBackup(req.userRecord.email, req.userRecord.spreadsheetId, req.body.fxRateBackup);
+      await saveFxRateBackup(req.userRecord.email, req.configRecord.spreadsheetId, req.body.fxRateBackup);
     }
 
     res.status(201).json(record);
@@ -693,9 +727,9 @@ app.post("/api/expenses", requireAuthenticatedUser, async (req, res) => {
   }
 });
 
-app.put("/api/expenses/:rowNumber", requireAuthenticatedUser, async (req, res) => {
+app.put("/api/expenses/:rowNumber", requireAuthenticatedUser, requireEditAccess, async (req, res) => {
   try {
-    if (!req.userRecord.spreadsheetId) {
+    if (!req.configRecord.spreadsheetId) {
       res.status(400).json({ message: "Spreadsheet is not configured." });
       return;
     }
@@ -713,20 +747,20 @@ app.put("/api/expenses/:rowNumber", requireAuthenticatedUser, async (req, res) =
     }
 
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    const { mode: expenseMode, mapping: expenseMapping = null } = await detectConfigSheet(accessToken, req.userRecord.spreadsheetId);
+    const { mode: expenseMode, mapping: expenseMapping = null } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
     const mapping = expenseMode === "config-driven" ? expenseMapping : null;
 
-    const report = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping);
+    const report = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
     const usdValidationError = validateUsdMandatory(values, report.sheetCurrencies);
     if (usdValidationError) {
       res.status(400).json({ message: usdValidationError });
       return;
     }
 
-    const { record } = await updateExpenseRow(accessToken, req.userRecord.spreadsheetId, rowNumber, values, mapping);
+    const { record } = await updateExpenseRow(accessToken, req.configRecord.spreadsheetId, rowNumber, values, mapping);
 
     if (req.body?.fxRateBackup && typeof req.body.fxRateBackup === "object") {
-      await saveFxRateBackup(req.userRecord.email, req.userRecord.spreadsheetId, req.body.fxRateBackup);
+      await saveFxRateBackup(req.userRecord.email, req.configRecord.spreadsheetId, req.body.fxRateBackup);
     }
 
     res.status(200).json(record);
@@ -735,9 +769,9 @@ app.put("/api/expenses/:rowNumber", requireAuthenticatedUser, async (req, res) =
   }
 });
 
-app.delete("/api/expenses/last", requireAuthenticatedUser, async (req, res) => {
+app.delete("/api/expenses/last", requireAuthenticatedUser, requireEditAccess, async (req, res) => {
   try {
-    if (!req.userRecord.spreadsheetId) {
+    if (!req.configRecord.spreadsheetId) {
       res.status(400).json({ message: "Spreadsheet is not configured." });
       return;
     }
@@ -749,7 +783,7 @@ app.delete("/api/expenses/last", requireAuthenticatedUser, async (req, res) => {
     }
 
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    await deleteLastExpenseRow(accessToken, req.userRecord.spreadsheetId, expectedRowCount);
+    await deleteLastExpenseRow(accessToken, req.configRecord.spreadsheetId, expectedRowCount);
     res.status(204).end();
   } catch (error) {
     const status = error.code === "CONFLICT" ? 409 : 400;
@@ -759,9 +793,9 @@ app.delete("/api/expenses/last", requireAuthenticatedUser, async (req, res) => {
 
 // ─── Sheet Structure Management ───────────────────────────────────────────────
 
-app.post("/api/sheet/currency", requireAuthenticatedUser, async (req, res) => {
+app.post("/api/sheet/currency", requireAuthenticatedUser, requireOwner, async (req, res) => {
   try {
-    if (!req.userRecord.spreadsheetId) {
+    if (!req.configRecord.spreadsheetId) {
       res.status(400).json({ message: "Connect a spreadsheet first." });
       return;
     }
@@ -777,16 +811,16 @@ app.post("/api/sheet/currency", requireAuthenticatedUser, async (req, res) => {
     }
 
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    const result = await insertCurrencyColumnInSheet(accessToken, req.userRecord.spreadsheetId, code);
+    const result = await insertCurrencyColumnInSheet(accessToken, req.configRecord.spreadsheetId, code);
     res.status(201).json(result);
   } catch (error) {
     res.status(400).json({ message: (error).message });
   }
 });
 
-app.post("/api/sheet/column", requireAuthenticatedUser, async (req, res) => {
+app.post("/api/sheet/column", requireAuthenticatedUser, requireOwner, async (req, res) => {
   try {
-    if (!req.userRecord.spreadsheetId) {
+    if (!req.configRecord.spreadsheetId) {
       res.status(400).json({ message: "Connect a spreadsheet first." });
       return;
     }
@@ -795,9 +829,9 @@ app.post("/api/sheet/column", requireAuthenticatedUser, async (req, res) => {
 
     // Read current structure to validate against existing names
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    const { mode: configMode, mapping: configMapping = null } = await detectConfigSheet(accessToken, req.userRecord.spreadsheetId);
+    const { mode: configMode, mapping: configMapping = null } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
     const mapping = configMode === "config-driven" ? configMapping : null;
-    const report = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping);
+    const report = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
 
     if (report.customColumns.length >= MAX_CUSTOM_COLUMNS) {
       res.status(400).json({ message: `You can have at most ${MAX_CUSTOM_COLUMNS} custom columns.` });
@@ -810,19 +844,19 @@ app.post("/api/sheet/column", requireAuthenticatedUser, async (req, res) => {
       return;
     }
 
-    await insertCustomColumnInSheet(accessToken, req.userRecord.spreadsheetId, name);
+    await insertCustomColumnInSheet(accessToken, req.configRecord.spreadsheetId, name);
 
     // Re-read to return updated structure
-    const updated = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping);
+    const updated = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
     res.status(201).json({ currencies: updated.sheetCurrencies, customColumns: updated.customColumns });
   } catch (error) {
     res.status(400).json({ message: (error).message });
   }
 });
 
-app.patch("/api/sheet/column/rename", requireAuthenticatedUser, async (req, res) => {
+app.patch("/api/sheet/column/rename", requireAuthenticatedUser, requireOwner, async (req, res) => {
   try {
-    if (!req.userRecord.spreadsheetId) {
+    if (!req.configRecord.spreadsheetId) {
       res.status(400).json({ message: "Spreadsheet is not configured." });
       return;
     }
@@ -837,9 +871,9 @@ app.patch("/api/sheet/column/rename", requireAuthenticatedUser, async (req, res)
 
     // Validate new name
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    const { mode: configMode, mapping: configMapping = null } = await detectConfigSheet(accessToken, req.userRecord.spreadsheetId);
+    const { mode: configMode, mapping: configMapping = null } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
     const mapping = configMode === "config-driven" ? configMapping : null;
-    const report = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping);
+    const report = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
     const allNames = [...report.sheetCurrencies, ...report.customColumns];
     const nameError = validateColumnName(newName, allNames, currentName);
     if (nameError) {
@@ -856,7 +890,7 @@ app.patch("/api/sheet/column/rename", requireAuthenticatedUser, async (req, res)
 
     const colIndex = await findColumnIndex(
       accessToken,
-      req.userRecord.spreadsheetId,
+      req.configRecord.spreadsheetId,
       currentName,
       mapping,
     );
@@ -865,19 +899,19 @@ app.patch("/api/sheet/column/rename", requireAuthenticatedUser, async (req, res)
       return;
     }
 
-    await renameColumnInSheet(accessToken, req.userRecord.spreadsheetId, colIndex, newName);
-    await renameVisibilityEntry(req.userRecord.email, req.userRecord.spreadsheetId, currentName, newName);
+    await renameColumnInSheet(accessToken, req.configRecord.spreadsheetId, colIndex, newName);
+    await renameVisibilityEntry(req.configRecord.email, req.configRecord.spreadsheetId, currentName, newName);
 
-    const updated = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping);
+    const updated = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
     res.json({ currencies: updated.sheetCurrencies, customColumns: updated.customColumns });
   } catch (error) {
     res.status(400).json({ message: (error).message });
   }
 });
 
-app.put("/api/sheet/columns/reorder", requireAuthenticatedUser, async (req, res) => {
+app.put("/api/sheet/columns/reorder", requireAuthenticatedUser, requireOwner, async (req, res) => {
   try {
-    if (!req.userRecord.spreadsheetId) {
+    if (!req.configRecord.spreadsheetId) {
       res.status(400).json({ message: "Spreadsheet is not configured." });
       return;
     }
@@ -889,27 +923,27 @@ app.put("/api/sheet/columns/reorder", requireAuthenticatedUser, async (req, res)
     }
 
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    const { mode: configMode, mapping: configMapping = null } = await detectConfigSheet(accessToken, req.userRecord.spreadsheetId);
+    const { mode: configMode, mapping: configMapping = null } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
     const mapping = configMode === "config-driven" ? configMapping : null;
-    const report = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping);
+    const report = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
 
     if (!hasExactItemSet(report.customColumns, orderedNames)) {
       res.status(400).json({ message: "orderedNames must contain all custom columns exactly once." });
       return;
     }
 
-    await reorderCustomColumnsInSheet(accessToken, req.userRecord.spreadsheetId, orderedNames, mapping);
+    await reorderCustomColumnsInSheet(accessToken, req.configRecord.spreadsheetId, orderedNames, mapping);
 
-    const updated = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping);
+    const updated = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
     res.json({ currencies: updated.sheetCurrencies, customColumns: updated.customColumns });
   } catch (error) {
     res.status(400).json({ message: (error).message });
   }
 });
 
-app.put("/api/sheet/currencies/reorder", requireAuthenticatedUser, async (req, res) => {
+app.put("/api/sheet/currencies/reorder", requireAuthenticatedUser, requireOwner, async (req, res) => {
   try {
-    if (!req.userRecord.spreadsheetId) {
+    if (!req.configRecord.spreadsheetId) {
       res.status(400).json({ message: "Spreadsheet is not configured." });
       return;
     }
@@ -921,27 +955,27 @@ app.put("/api/sheet/currencies/reorder", requireAuthenticatedUser, async (req, r
     }
 
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    const { mode: configMode, mapping: configMapping = null } = await detectConfigSheet(accessToken, req.userRecord.spreadsheetId);
+    const { mode: configMode, mapping: configMapping = null } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
     const mapping = configMode === "config-driven" ? configMapping : null;
-    const report = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping);
+    const report = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
 
     if (!hasExactItemSet(report.sheetCurrencies, orderedCodes)) {
       res.status(400).json({ message: "orderedCodes must contain all currency columns exactly once." });
       return;
     }
 
-    await reorderCurrencyColumnsInSheet(accessToken, req.userRecord.spreadsheetId, orderedCodes, mapping);
+    await reorderCurrencyColumnsInSheet(accessToken, req.configRecord.spreadsheetId, orderedCodes, mapping);
 
-    const updated = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping);
+    const updated = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
     res.json({ currencies: updated.sheetCurrencies, customColumns: updated.customColumns });
   } catch (error) {
     res.status(400).json({ message: (error).message });
   }
 });
 
-app.delete("/api/sheet/column", requireAuthenticatedUser, async (req, res) => {
+app.delete("/api/sheet/column", requireAuthenticatedUser, requireOwner, async (req, res) => {
   try {
-    if (!req.userRecord.spreadsheetId) {
+    if (!req.configRecord.spreadsheetId) {
       res.status(400).json({ message: "Spreadsheet is not configured." });
       return;
     }
@@ -959,15 +993,15 @@ app.delete("/api/sheet/column", requireAuthenticatedUser, async (req, res) => {
     }
 
     const accessToken = await getAuthorizedAccessToken(req.userRecord);
-    const { mode: configMode, mapping: configMapping = null } = await detectConfigSheet(accessToken, req.userRecord.spreadsheetId);
+    const { mode: configMode, mapping: configMapping = null } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
     const mapping = configMode === "config-driven" ? configMapping : null;
-    const colIndex = await findColumnIndex(accessToken, req.userRecord.spreadsheetId, name, mapping);
+    const colIndex = await findColumnIndex(accessToken, req.configRecord.spreadsheetId, name, mapping);
     if (colIndex === null) {
       res.status(404).json({ message: `Column "${name}" not found in sheet.` });
       return;
     }
 
-    const empty = await isCustomColumnEmpty(accessToken, req.userRecord.spreadsheetId, colIndex);
+    const empty = await isCustomColumnEmpty(accessToken, req.configRecord.spreadsheetId, colIndex);
     if (!empty) {
       res.status(409).json({
         message: "This column contains data and cannot be removed from the app. To delete it, remove the data first or delete the column directly in Google Sheets.",
@@ -975,12 +1009,105 @@ app.delete("/api/sheet/column", requireAuthenticatedUser, async (req, res) => {
       return;
     }
 
-    await deleteColumnFromSheet(accessToken, req.userRecord.spreadsheetId, colIndex);
+    await deleteColumnFromSheet(accessToken, req.configRecord.spreadsheetId, colIndex);
 
-    const updated = await validateSpreadsheet(accessToken, req.userRecord.spreadsheetId, mapping);
+    const updated = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
     res.json({ currencies: updated.sheetCurrencies, customColumns: updated.customColumns });
   } catch (error) {
     res.status(400).json({ message: (error).message });
+  }
+});
+
+// ─── Setup Sharing ────────────────────────────────────────────────────────────
+
+app.get("/api/sharing", requireAuthenticatedUser, requireOwner, async (req, res) => {
+  try {
+    const shares = await listSharesForOwner(req.userRecord.email);
+    res.json({ shares });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post("/api/sharing", requireAuthenticatedUser, requireOwner, async (req, res) => {
+  const guestEmail = String(req.body?.guestEmail ?? "").trim().toLowerCase();
+  const accessLevel = String(req.body?.accessLevel ?? "").trim();
+
+  if (!guestEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail)) {
+    res.status(400).json({ message: "A valid Gmail address is required." });
+    return;
+  }
+  if (!["view", "edit"].includes(accessLevel)) {
+    res.status(400).json({ message: "accessLevel must be 'view' or 'edit'." });
+    return;
+  }
+  if (guestEmail === req.userRecord.email) {
+    res.status(400).json({ message: "You cannot share your setup with your own account." });
+    return;
+  }
+
+  try {
+    const alreadyHasSetup = await hasOwnIndependentSetup(guestEmail);
+    if (alreadyHasSetup) {
+      res.status(409).json({
+        message: "This user already has their own setup configured. They need to unlink their sheet first before you can share yours with them.",
+        code: "GUEST_HAS_OWN_SETUP",
+      });
+      return;
+    }
+
+    await addShare(req.userRecord.email, guestEmail, accessLevel);
+
+    // TODO: send email notification to guestEmail (separate task).
+
+    res.status(201).json({ guestEmail, accessLevel });
+  } catch (error) {
+    if (error.code === "23505") {
+      res.status(409).json({ message: "This user is already in your share list." });
+      return;
+    }
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.patch("/api/sharing/:guestEmail", requireAuthenticatedUser, requireOwner, async (req, res) => {
+  const guestEmail = String(req.params.guestEmail ?? "").trim().toLowerCase();
+  const accessLevel = String(req.body?.accessLevel ?? "").trim();
+
+  if (!["view", "edit"].includes(accessLevel)) {
+    res.status(400).json({ message: "accessLevel must be 'view' or 'edit'." });
+    return;
+  }
+
+  try {
+    const updated = await updateShareAccessLevel(req.userRecord.email, guestEmail, accessLevel);
+    if (!updated) {
+      res.status(404).json({ message: "Share not found." });
+      return;
+    }
+    res.json({ guestEmail, accessLevel });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.delete("/api/sharing/:guestEmail", requireAuthenticatedUser, requireOwner, async (req, res) => {
+  const guestEmail = String(req.params.guestEmail ?? "").trim().toLowerCase();
+
+  try {
+    await removeShare(req.userRecord.email, guestEmail);
+    res.status(204).end();
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post("/api/sharing/guest/reset", requireAuthenticatedUser, requireGuest, async (req, res) => {
+  try {
+    await removeShareAsGuest(req.userRecord.email);
+    res.status(204).end();
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 
