@@ -9,6 +9,9 @@ on:
     paths-ignore:
       - 'landing/**'
       - '.github/**'
+      - '**/*.md'
+      - '**/*.docx'
+      - 'docs/**'
 jobs:
   deploy:
     name: Deploy main app
