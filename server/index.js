@@ -74,6 +74,7 @@ import {
   removeShareAsGuest,
   updateShareAccessLevel,
 } from "./sharing.js";
+import { sendShareGrantedEmail, sendShareRevokedEmail } from "./email.js";
 import pool from "./db.js";
 
 const PgSession = connectPgSimple(session);
@@ -304,6 +305,7 @@ app.get("/api/auth/callback", async (req, res) => {
       }
       req.session.userEmail = userInfo.email;
       req.session.userGivenName = userInfo.given_name ?? null;
+      req.session.userFullName  = userInfo.name ?? null;
       req.session.userPicture = userInfo.picture ?? null;
       res.redirect(`${getFrontendBaseUrl()}/home`);
     });
@@ -1058,7 +1060,8 @@ app.post("/api/sharing", requireAuthenticatedUser, requireOwner, async (req, res
 
     await addShare(req.userRecord.email, guestEmail, accessLevel);
 
-    // TODO: send email notification to guestEmail (separate task).
+    const ownerName = req.session.userFullName ?? req.session.userGivenName ?? req.userRecord.email;
+    sendShareGrantedEmail({ ownerEmail: req.userRecord.email, ownerName, guestEmail });
 
     res.status(201).json({ guestEmail, accessLevel });
   } catch (error) {
@@ -1096,6 +1099,7 @@ app.delete("/api/sharing/:guestEmail", requireAuthenticatedUser, requireOwner, a
 
   try {
     await removeShare(req.userRecord.email, guestEmail);
+    sendShareRevokedEmail({ ownerEmail: req.userRecord.email, guestEmail });
     res.status(204).end();
   } catch (error) {
     res.status(500).json({ message: error.message });
