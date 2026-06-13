@@ -95,7 +95,13 @@ quick-expense/
 │   ├── db.js                  ← PostgreSQL connection pool (pg.Pool)
 │   ├── google-client.js       ← Google OAuth helpers (PKCE, token exchange, refresh)
 │   ├── google-sheets.js       ← Google Sheets API operations (validate, load, append)
-│   └── store.js               ← PostgreSQL-backed user record and FX backup persistence
+│   ├── store.js               ← PostgreSQL-backed user record and FX backup persistence
+│   ├── sharing.js             ← sharing CRUD: list/add/update/remove guest access
+│   ├── email.js               ← Resend email sender (fire-and-forget delivery)
+│   ├── email-templates.js     ← HTML + plain-text email templates for share/revoke notifications
+│   ├── resilience.js          ← retry + backoff helpers for external API calls
+│   ├── validation.js          ← server-side expense input validation
+│   └── utils.js               ← shared backend utilities
 │
 ├── src/                       ← React SPA (TypeScript)
 │   ├── main.tsx               ← ReactDOM entry, BrowserRouter
@@ -108,7 +114,8 @@ quick-expense/
 │   │   ├── LoadingBlock.tsx   ← spinner component
 │   │   ├── MtdSpendChart.tsx  ← Chart.js area chart for MTD daily spend (Home dashboard)
 │   │   ├── ProtectedRoute.tsx ← redirect to login if unauthenticated
-│   │   └── StatusBanner.tsx   ← error/success/info banner
+│   │   ├── StatusBanner.tsx   ← error/success/info banner
+│   │   └── SharedConfigInvalidModal.tsx ← blocking modal shown when a guest's shared setup becomes invalid
 │   ├── constants/
 │   │   ├── expenses.ts        ← fixed header names, header builder, limits
 │   │   └── feedback.ts        ← Google Forms feedback URL
@@ -130,7 +137,8 @@ quick-expense/
 │   │   ├── googlePicker.ts    ← Google Picker API integration
 │   │   ├── googleSheets.ts    ← /api/config + /api/expenses calls
 │   │   ├── http.ts            ← fetch wrappers with typed error handling
-│   │   └── localConfig.ts     ← localStorage config cache (per-email key)
+│   │   ├── localConfig.ts     ← localStorage config cache (per-email key)
+│   │   └── sharingApi.ts      ← /api/sharing/* calls (owner share management + guest reset)
 │   ├── types/
 │   │   └── expense.ts         ← all shared types and AppError class
 │   └── utils/                 ← pure utility functions
@@ -171,6 +179,7 @@ quick-expense/
 | Google Picker | Google Picker API | For spreadsheet selection in Setup |
 | Deployment | Fly.io (Docker) | Stateless app container (no persistent volume) |
 | Landing page | Vanilla HTML/CSS/JS + nginx:alpine | Separate Fly.io app |
+| Email | Resend (resend.com) | Transactional email for share/revoke notifications; silently skipped if `RESEND_API_KEY` absent |
 
 ### Runtime Version Baseline
 
@@ -495,6 +504,7 @@ Frontend services in `src/services/` are thin wrappers around `fetch`:
 - **`googlePicker.ts`** — loads Google Picker script, opens file picker dialog.
 - **`currency.ts`** — manual FX rate parsing and USD conversion logic.
 - **`localConfig.ts`** — per-email localStorage cache for spreadsheet config (fallback/optimization).
+- **`sharingApi.ts`** — `/api/sharing/*` calls: list/add/update/remove shared users (owner); guest reset.
 
 ### 8.4 Key Front-End Conventions
 
@@ -546,8 +556,10 @@ In development, Vite proxies all `/api` requests to `http://localhost:3001` (con
 | `SESSION_SECRET` | Secret for express-session cookie signing |
 | `DATABASE_URL` | PostgreSQL connection string (e.g. `postgresql://user:pass@host:5432/db`) |
 | `EXPENSE_RECENT_MONTHS` | *(Optional)* Number of months of recent expense data loaded in Phase 1. Default: `24`. Older records are fetched in the background after the UI is ready. |
+| `RESEND_API_KEY` | *(Optional)* Resend API key for transactional email. If absent, email notifications are silently skipped (app runs normally). |
+| `EMAIL_FROM` | *(Optional)* Sender address for email notifications (e.g. `noreply@send.q-expense.com`). Required when `RESEND_API_KEY` is set. |
 
-The backend validates all required env vars at startup and fails fast if any are missing. `EXPENSE_RECENT_MONTHS` is optional and not validated at startup.
+The backend validates all required env vars at startup and fails fast if any are missing. `EXPENSE_RECENT_MONTHS`, `RESEND_API_KEY`, and `EMAIL_FROM` are optional; missing values generate a startup warning but do not fail the process.
 
 ---
 
@@ -591,3 +603,7 @@ The backend validates all required env vars at startup and fails fast if any are
 17. **Two-phase progressive dataset load** — `GET /api/expenses` performs a date-column binary search (`findExpenseStartRow`) to determine whether the sheet has enough historical rows (≥ 20) to justify splitting. When a split is warranted, only records within the last `EXPENSE_RECENT_MONTHS` months (default: 24) are returned in Phase 1. The client's `DatasetContext` immediately presents this data to the user, then fetches the remainder via `GET /api/expenses/history?endRow=N` in the background. `DatasetSnapshot.loadPhase` (`"recent"` | `"full"`) tracks completion. The `detectConfigSheet` → `validateSpreadsheet` call chain now passes the already-fetched metadata object to eliminate a duplicate `getMetadata` round-trip per load.
 
 16. **USD is mandatory when a non-USD amount is provided** — at submission time, if any non-USD currency amount is entered but USD is empty (and no FX rate is provided to auto-derive it), the Add Expense form shows a single combined error on the FX rate field: "USD amount is required — enter an exchange rate here or fill the USD field directly." The backend enforces the same rule independently via `validateUsdMandatory()` in `server/validation.js` (HTTP 400 on `POST /api/expenses` and `PUT /api/expenses/:rowNumber`).
+
+18. **Setup sharing model** — an owner user can share their full configuration (spreadsheet, currencies, column visibility) with any number of Google users via `POST /api/sharing`. Guests store a DB reference to the owner record — no data is duplicated. Guests with `edit` access have full read/write; `view` guests can use Tail and Search but all write actions are blocked at both API (HTTP 403) and UI levels. Guests cannot modify Setup settings. `requireAuthenticatedUser` resolves the shared reference transparently on every authenticated request. Guests whose owner config becomes invalid (owner deleted, spreadsheet removed) are shown a blocking `SharedConfigInvalidModal` prompting them to reset and set up independently.
+
+19. **Fire-and-forget email delivery** — share and revoke events dispatch a transactional email via Resend after the HTTP response is returned. Delivery failure is logged server-side and never surfaced to the UI. Templates live in `server/email-templates.js` (no external template storage). Sending is silently skipped if `RESEND_API_KEY` is absent, so the feature degrades gracefully in environments without email configuration.

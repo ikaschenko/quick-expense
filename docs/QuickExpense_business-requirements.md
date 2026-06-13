@@ -336,6 +336,31 @@ The Setup item in the global bottom navigation bar shows an overlaid status icon
 
 The badge is visible on all pages (rendered by `Layout`). The "Connected · {sheet name}" card that previously appeared inside the Home content area has been removed.
 
+## 2.8 Share Setup with Another User
+
+### 2.8.1 Story 1 — Manage shared access (owner)
+
+A "Share your setup" sub-section is present on the Setup page, visible only to the setup owner (guests do not see it). The owner may add any Gmail address as a guest with access level **Edit** or **View**. No duplicate emails are allowed. Before adding, the backend checks whether the target email already has an independent setup; if so, the add action is blocked with a message: *"This user already has their own setup configured. They need to unlink their sheet first before you can share yours with them."* The sharing list persists in the database; the owner may update (access level only, email is read-only) or remove guests at any time. There is no limit on the number of guests per owner. An informational message between the section title and the user list reminds the owner to also share the Google Spreadsheet file directly in Google Sheets, as the application cannot grant file-level permissions.
+
+### 2.8.2 Story 2 — Receive shared setup (guest)
+
+When a new user authenticates, the backend checks whether any active owner has added that Google email to their share list and the user has no independent setup. If matched, the user's profile stores a reference to the owner record (no configuration data is copied). The guest lands on Home (or Add) after login — not on Setup. If the guest navigates to Setup, they see the owner's settings in read-only mode with a banner: *"This setup has been shared with you by \<owner email\>. You cannot modify it."* Any future changes the owner makes (currencies, column visibility, etc.) are automatically reflected for all guests.
+
+### 2.8.3 Story 3 — Access level enforcement (guest)
+
+- **Edit access:** full access to Add, Tail, Search, Edit, and Delete.
+- **View access:** Tail and Search are available. All write actions (Add, Edit, Delete) remain visible but are locked. Tapping a locked action shows: *"You don't have permission for this action. Contact the setup owner to request access."*
+- The backend enforces access level independently — write requests from View-only guests are rejected with HTTP 403 regardless of UI state.
+- Setup is read-only for all guests regardless of access level.
+
+### 2.8.4 Story 4 — Broken shared setup recovery (guest)
+
+On every sign-in and authenticated API call, the backend validates that the guest's referenced owner config is intact. If the reference is invalid (owner deleted, spreadsheet removed or inaccessible), the backend flags the guest session as degraded. On the next page load, a blocking modal appears with no other actions available: *"The configuration shared with you is no longer valid. It must be cleared before you can use this application. Would you like to reset and set up from scratch?"* Selecting **No** keeps the modal. Selecting **Yes** clears the guest reference from the database and redirects to Setup for independent configuration.
+
+### 2.8.5 Story 5 — Email notifications for share/revoke events
+
+When a guest is **added**, an email is dispatched fire-and-forget (after the HTTP `201` response) from the configured sender address (`EMAIL_FROM`), to the guest, CC'd to the owner, with Reply-To the owner. Subject: `[QuickExpense] Application setup shared with you`. When a guest is **removed**, a revocation email is dispatched similarly. Subject: `[QuickExpense] Shared setup was revoked from you`. No email is sent when the access level is updated (Edit ↔ View). Email delivery failures are logged server-side only and never surfaced to the UI. Email sending requires `RESEND_API_KEY` and `EMAIL_FROM` env vars; if either is absent at startup, sending is silently skipped and the app runs normally.
+
 # 3\. NON FUNCTIONAL REQUIREMENTS
 
 ## 3.1 Platforms
