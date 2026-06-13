@@ -461,6 +461,17 @@ button { cursor: pointer; }
   flex: 1;
   line-height: 1.4;
 }
+.status-banner--toast {
+  position: fixed;
+  top: var(--space-4);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 500;
+  min-width: 20rem;
+  max-width: calc(100vw - var(--space-8));
+  box-shadow: var(--shadow-lg);
+  margin-bottom: 0;
+}
 
 /* ===== Loading / Spinner ===== */
 @keyframes spin {
@@ -2055,9 +2066,15 @@ button { cursor: pointer; }
   color: var(--color-text-primary);
 }
 
+.sharing-table th:last-child,
+.sharing-table td:last-child {
+  text-align: center;
+}
+
 .sharing-table-actions {
   display: flex;
   gap: var(--space-2);
+  justify-content: center;
 }
 
 .sharing-add-form {

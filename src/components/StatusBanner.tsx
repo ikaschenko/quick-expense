@@ -4,6 +4,7 @@ import { AlertCircle, CheckCircle, Info } from "lucide-react";
 interface StatusBannerProps {
   variant: "error" | "success" | "info";
   message: string;
+  toast?: boolean;
 }
 
 const ICONS = {
@@ -12,20 +13,20 @@ const ICONS = {
   info: <Info size={16} />,
 };
 
-export function StatusBanner({ variant, message }: StatusBannerProps): JSX.Element {
+export function StatusBanner({ variant, message, toast }: StatusBannerProps): JSX.Element {
   const [visible, setVisible] = useState(true);
 
   useEffect(() => {
     setVisible(true);
-    if (variant !== "success") return;
-    const timer = setTimeout(() => setVisible(false), 4000);
+    if (!toast && variant !== "success") return;
+    const timer = setTimeout(() => setVisible(false), toast ? 5000 : 4000);
     return () => clearTimeout(timer);
-  }, [variant, message]);
+  }, [variant, message, toast]);
 
   if (!visible) return <></>;
 
   return (
-    <div className={`status-banner ${variant}`}>
+    <div className={`status-banner ${variant}${toast ? " status-banner--toast" : ""}`}>
       <span className="status-banner-icon">{ICONS[variant]}</span>
       <span className="status-banner-text">{message}</span>
     </div>

@@ -895,7 +895,7 @@ export function SetupPage(): JSX.Element {
               <span className="setup-card-title">Sheet Structure</span>
             </div>
 
-            {actionError ? <StatusBanner variant="error" message={actionError} /> : null}
+            {actionError ? <StatusBanner variant="error" message={actionError} toast /> : null}
             {actionSuccess ? <StatusBanner variant="success" message={actionSuccess} /> : null}
             {actionBusy ? (
               <div className="action-busy-toast" role="status" aria-live="polite">

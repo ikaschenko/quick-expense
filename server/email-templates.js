@@ -22,7 +22,7 @@ function wrapHtml(body) {
  */
 export function shareGrantedEmail({ ownerName }) {
   const safeName = escapeHtml(ownerName);
-  const subject = "[QuickExpense] Application setup shared with you";
+  const subject = "Application setup shared with you";
   const html = wrapHtml(`
     <p>Hello,</p>
     <p>You've been granted access to the QuickExpense application setup by <strong>${safeName}</strong>.</p>
@@ -37,7 +37,7 @@ export function shareGrantedEmail({ ownerName }) {
  * @returns {{ subject: string, html: string, text: string }}
  */
 export function shareRevokedEmail() {
-  const subject = "[QuickExpense] Shared setup was revoked from you";
+  const subject = "Shared setup was revoked from you";
   const html = wrapHtml(`
     <p>Hello,</p>
     <p>The previously shared QuickExpense setup has been revoked. You can always set up your own.</p>
