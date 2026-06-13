@@ -31,6 +31,7 @@ export async function safelyDestroySession(sessionState, context, logger = conso
 export function createRequireAuthenticatedUser({
   getUserSession,
   getUserRecord,
+  getShareForGuest,
   destroySessionState = safelyDestroySession,
   logger = console,
 }) {
@@ -50,12 +51,58 @@ export function createRequireAuthenticatedUser({
       }
 
       req.userRecord = userRecord;
+
+      // Resolve shared setup: check if this user is a guest.
+      const share = await getShareForGuest(sessionUser.email);
+      if (share) {
+        const ownerRecord = await getUserRecord(share.ownerEmail);
+        if (!ownerRecord || !ownerRecord.spreadsheetId) {
+          // Owner config is invalid — signal frontend to show the recovery modal.
+          res.status(403).json({ message: "The configuration shared with you is no longer valid.", code: "SHARED_CONFIG_INVALID" });
+          return;
+        }
+        req.configRecord = ownerRecord;
+        req.accessLevel = share.accessLevel;
+        req.isGuest = true;
+      } else {
+        req.configRecord = userRecord;
+        req.accessLevel = "edit";
+        req.isGuest = false;
+      }
+
       next();
     } catch (error) {
       logInfrastructureError("Failed to verify authenticated session", error, logger);
       res.status(500).json({ message: "Unable to verify your session right now. Please try again." });
     }
   };
+}
+
+/** Blocks access for guests (non-owners). Use on config-mutation routes. */
+export function requireOwner(req, res, next) {
+  if (req.isGuest) {
+    res.status(403).json({ message: "This action is not allowed for shared setup users.", code: "GUEST_CANNOT_MODIFY_CONFIG" });
+    return;
+  }
+  next();
+}
+
+/** Blocks access for owners. Use on guest-only reset route. */
+export function requireGuest(req, res, next) {
+  if (!req.isGuest) {
+    res.status(403).json({ message: "This action is only available for shared setup users." });
+    return;
+  }
+  next();
+}
+
+/** Blocks write operations for view-level guests. */
+export function requireEditAccess(req, res, next) {
+  if (req.accessLevel !== "edit") {
+    res.status(403).json({ message: "You don't have permission for this action. Contact the setup owner to request access.", code: "ACCESS_DENIED" });
+    return;
+  }
+  next();
 }
 
 export async function checkDatabaseHealth(dbPool) {

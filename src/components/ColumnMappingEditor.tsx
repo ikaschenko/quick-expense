@@ -78,7 +78,7 @@ export function ColumnMappingEditor({ detectedColumns, initialMapping, onSaved, 
           <p className="column-mapping-editor-intro">
             Match each QuickExpense field to the column name in your spreadsheet. Columns not listed here remain unchanged.
           </p>
-          {saveError ? <StatusBanner variant="error" message={saveError} /> : null}
+          {saveError ? <StatusBanner variant="error" message={saveError} toast /> : null}
           <table className="column-mapping-table">
             <thead>
               <tr>

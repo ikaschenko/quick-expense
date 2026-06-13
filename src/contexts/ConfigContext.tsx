@@ -98,6 +98,9 @@ export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
         retryBackoffRef.current.reset();
       },
       clearConfig: async () => {
+        if (session?.isGuest) {
+          throw new Error("Guests cannot unlink a shared config. Use the reset flow instead.");
+        }
         await googleSheetsService.clearConfig();
         setConfig(null);
         retryBackoffRef.current.reset();

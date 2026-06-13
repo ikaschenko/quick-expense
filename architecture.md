@@ -261,9 +261,14 @@ All API routes are defined in `server/index.js`.
 | GET | `/api/currencies/available` | Yes | Get the currency dictionary (all supported codes + max limit) |
 | GET | `/api/currencies` | Yes | Get the user's active currency codes |
 | PUT | `/api/currencies` | Yes | Save user's currency selection and update sheet columns |
-| PATCH | `/api/config/column-visibility` | Yes | Toggle visibility of a column on the Add Expense form (`{ field, hidden }`) |
+| PATCH | `/api/config/column-visibility` | Yes (owner) | Toggle visibility of a column on the Add Expense form (`{ field, hidden }`) |
+| GET | `/api/sharing` | Yes (owner) | List all users shared with this owner |
+| POST | `/api/sharing` | Yes (owner) | Add a user to the share list (`{ guestEmail, accessLevel }`) |
+| PATCH | `/api/sharing/:guestEmail` | Yes (owner) | Update access level for a shared user |
+| DELETE | `/api/sharing/:guestEmail` | Yes (owner) | Remove a user from the share list |
+| POST | `/api/sharing/guest/reset` | Yes (guest) | Guest-initiated reset: detach from shared setup and clear to re-run Setup |
 
-"Auth = Yes" means the `requireAuthenticatedUser` middleware is applied: it verifies the session cookie has a `userEmail`, retrieves the user record, and attaches it to `req.userRecord`.
+"Auth = Yes" means the `requireAuthenticatedUser` middleware is applied: it verifies the session cookie has a `userEmail`, retrieves the user record, resolves any shared setup reference (populating `req.configRecord`, `req.isGuest`, `req.accessLevel`), and attaches them to the request. "owner" routes additionally require `requireOwner` (403 for guests). Write expense routes additionally require `requireEditAccess` (403 for view-level guests).
 
 ---
 
@@ -357,6 +362,25 @@ Stores per-user, per-spreadsheet column visibility preferences for the Add Expen
 - Only hideable columns may be toggled: `Date`, `USD`, `Category`, and `Spent By` are never hidden (rejected at the API layer).
 - Tail and Search always show all columns regardless of visibility preferences.
 
+#### f) `setup_shares` Table
+
+Stores sharing relationships between an owner user and their invited guests.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | SERIAL | PRIMARY KEY |
+| `owner_email` | TEXT | NOT NULL, FK → users(email) ON DELETE CASCADE |
+| `guest_email` | TEXT | NOT NULL |
+| `access_level` | VARCHAR(4) | NOT NULL, CHECK IN ('view','edit') |
+| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() |
+| `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() |
+| | | UNIQUE (owner_email, guest_email) |
+
+- `guest_email` has no FK — an invited user may not have signed in yet.
+- `ON DELETE CASCADE` on `owner_email` means all guest references are automatically removed when an owner is deleted.
+- Index on `(guest_email)` for efficient per-request guest resolution.
+- Access levels: `edit` — full read/write; `view` — read-only (Tail, Search allowed; Add/Edit/Delete blocked at API and UI level).
+
 ### 7.2 Expense Data — Google Spreadsheet
 
 **Expense data is NOT stored in the backend.** It lives entirely in a Google Spreadsheet controlled by the user.
@@ -414,6 +438,8 @@ Current migrations:
 | `006_drop_column_config_tables.sql` | Cleanup of superseded config tables |
 | `007_user_column_visibility.sql` | `user_column_visibility` table |
 | `008_rls_user_column_visibility.sql` | RLS policy for `user_column_visibility` |
+| `009_setup_shares.sql` | `setup_shares` table |
+| `010_rls_setup_shares.sql` | RLS policy for `setup_shares` |
 
 ---
 

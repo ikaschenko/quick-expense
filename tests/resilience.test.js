@@ -5,6 +5,9 @@ import {
   createRequireAuthenticatedUser,
   createShutdownGuard,
   destroySession,
+  requireEditAccess,
+  requireGuest,
+  requireOwner,
 } from "../server/resilience.js";
 
 describe("destroySession", () => {
@@ -47,6 +50,7 @@ describe("createRequireAuthenticatedUser", () => {
     const middleware = createRequireAuthenticatedUser({
       getUserSession: () => null,
       getUserRecord: vi.fn(),
+      getShareForGuest: vi.fn().mockResolvedValue(null),
     });
     const res = createResponseRecorder();
     const next = vi.fn();
@@ -58,11 +62,12 @@ describe("createRequireAuthenticatedUser", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it("attaches the user record and calls next when the session is valid", async () => {
+  it("attaches the user record and calls next when the session is valid (no share)", async () => {
     const userRecord = { email: "user@test.com" };
     const middleware = createRequireAuthenticatedUser({
       getUserSession: () => ({ email: "user@test.com" }),
       getUserRecord: vi.fn().mockResolvedValue(userRecord),
+      getShareForGuest: vi.fn().mockResolvedValue(null),
     });
     const req = { session: {} };
     const res = createResponseRecorder();
@@ -71,7 +76,75 @@ describe("createRequireAuthenticatedUser", () => {
     await middleware(req, res, next);
 
     expect(req.userRecord).toEqual(userRecord);
+    expect(req.configRecord).toEqual(userRecord);
+    expect(req.isGuest).toBe(false);
+    expect(req.accessLevel).toBe("edit");
     expect(next).toHaveBeenCalledOnce();
+  });
+
+  it("resolves guest: sets configRecord to owner and accessLevel from share", async () => {
+    const guestRecord = { email: "guest@test.com" };
+    const ownerRecord = { email: "owner@test.com", spreadsheetId: "sheet1" };
+    const getUserRecord = vi.fn()
+      .mockResolvedValueOnce(guestRecord)   // first call: guest
+      .mockResolvedValueOnce(ownerRecord);  // second call: owner
+    const middleware = createRequireAuthenticatedUser({
+      getUserSession: () => ({ email: "guest@test.com" }),
+      getUserRecord,
+      getShareForGuest: vi.fn().mockResolvedValue({ ownerEmail: "owner@test.com", accessLevel: "view" }),
+    });
+    const req = { session: {} };
+    const res = createResponseRecorder();
+    const next = vi.fn();
+
+    await middleware(req, res, next);
+
+    expect(req.userRecord).toEqual(guestRecord);
+    expect(req.configRecord).toEqual(ownerRecord);
+    expect(req.isGuest).toBe(true);
+    expect(req.accessLevel).toBe("view");
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it("returns 403 SHARED_CONFIG_INVALID when owner has no spreadsheetId", async () => {
+    const guestRecord = { email: "guest@test.com" };
+    const ownerRecord = { email: "owner@test.com", spreadsheetId: null };
+    const getUserRecord = vi.fn()
+      .mockResolvedValueOnce(guestRecord)
+      .mockResolvedValueOnce(ownerRecord);
+    const middleware = createRequireAuthenticatedUser({
+      getUserSession: () => ({ email: "guest@test.com" }),
+      getUserRecord,
+      getShareForGuest: vi.fn().mockResolvedValue({ ownerEmail: "owner@test.com", accessLevel: "edit" }),
+    });
+    const res = createResponseRecorder();
+    const next = vi.fn();
+
+    await middleware({ session: {} }, res, next);
+
+    expect(res.statusCode).toBe(403);
+    expect(res.body.code).toBe("SHARED_CONFIG_INVALID");
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 SHARED_CONFIG_INVALID when owner record is missing", async () => {
+    const guestRecord = { email: "guest@test.com" };
+    const getUserRecord = vi.fn()
+      .mockResolvedValueOnce(guestRecord)
+      .mockResolvedValueOnce(null);    // owner deleted
+    const middleware = createRequireAuthenticatedUser({
+      getUserSession: () => ({ email: "guest@test.com" }),
+      getUserRecord,
+      getShareForGuest: vi.fn().mockResolvedValue({ ownerEmail: "owner@test.com", accessLevel: "edit" }),
+    });
+    const res = createResponseRecorder();
+    const next = vi.fn();
+
+    await middleware({ session: {} }, res, next);
+
+    expect(res.statusCode).toBe(403);
+    expect(res.body.code).toBe("SHARED_CONFIG_INVALID");
+    expect(next).not.toHaveBeenCalled();
   });
 
   it("clears the stale session and returns 401 when the stored user record is missing", async () => {
@@ -79,6 +152,7 @@ describe("createRequireAuthenticatedUser", () => {
     const middleware = createRequireAuthenticatedUser({
       getUserSession: () => ({ email: "user@test.com" }),
       getUserRecord: vi.fn().mockResolvedValue(null),
+      getShareForGuest: vi.fn().mockResolvedValue(null),
       destroySessionState,
     });
     const req = { session: { destroy: vi.fn() } };
@@ -98,6 +172,7 @@ describe("createRequireAuthenticatedUser", () => {
     const middleware = createRequireAuthenticatedUser({
       getUserSession: () => ({ email: "user@test.com" }),
       getUserRecord: vi.fn().mockRejectedValue(new Error("db down")),
+      getShareForGuest: vi.fn().mockResolvedValue(null),
       logger,
     });
     const res = createResponseRecorder();
@@ -108,6 +183,78 @@ describe("createRequireAuthenticatedUser", () => {
     expect(res.statusCode).toBe(500);
     expect(res.body).toEqual({ message: "Unable to verify your session right now. Please try again." });
     expect(logger.error).toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe("requireOwner", () => {
+  it("calls next when the user is not a guest", () => {
+    const req = { isGuest: false };
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    const next = vi.fn();
+
+    requireOwner(req, res, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 GUEST_CANNOT_MODIFY_CONFIG when the user is a guest", () => {
+    const req = { isGuest: true };
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    const next = vi.fn();
+
+    requireOwner(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: "GUEST_CANNOT_MODIFY_CONFIG" }));
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe("requireGuest", () => {
+  it("calls next when the user is a guest", () => {
+    const req = { isGuest: true };
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    const next = vi.fn();
+
+    requireGuest(req, res, next);
+
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it("returns 403 when the user is not a guest", () => {
+    const req = { isGuest: false };
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    const next = vi.fn();
+
+    requireGuest(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe("requireEditAccess", () => {
+  it("calls next when accessLevel is edit", () => {
+    const req = { accessLevel: "edit" };
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    const next = vi.fn();
+
+    requireEditAccess(req, res, next);
+
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it("returns 403 ACCESS_DENIED when accessLevel is view", () => {
+    const req = { accessLevel: "view" };
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    const next = vi.fn();
+
+    requireEditAccess(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: "ACCESS_DENIED" }));
     expect(next).not.toHaveBeenCalled();
   });
 });
