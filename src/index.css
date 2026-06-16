@@ -473,6 +473,17 @@ button { cursor: pointer; }
   margin-bottom: 0;
 }
 
+/* ===== Date Order Warning Banner ===== */
+.banner-date-order {
+  background: var(--color-error-light);
+  border-left: 4px solid var(--color-error);
+  color: #991b1b;
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
 /* ===== Loading / Spinner ===== */
 @keyframes spin {
   to { transform: rotate(360deg); }
@@ -883,6 +894,18 @@ button { cursor: pointer; }
 }
 
 /* ===== Add Expense Page ===== */
+.add-insert-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.85);
+  padding: var(--space-6);
+  text-align: center;
+}
+
 .add-amount-field {
   text-align: center;
   margin-bottom: var(--space-5);

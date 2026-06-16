@@ -34,6 +34,7 @@ let getExpenseRowCount;
 let parseDateToMs;
 let buildDateParser;
 let findExpenseStartRow;
+let addExpenseRow;
 
 beforeAll(async () => {
   ({
@@ -46,6 +47,7 @@ beforeAll(async () => {
     parseDateToMs,
     buildDateParser,
     findExpenseStartRow,
+    addExpenseRow,
   } = await import("../server/google-sheets.js"));
 });
 
@@ -1305,7 +1307,7 @@ describe("findExpenseStartRow", () => {
   it("returns isSplit:false for an empty sheet", async () => {
     setupFetchSequence([jsonResponse({ values: [["Date"]] })]);
     const result = await findExpenseStartRow(TOKEN, SHEET_ID, 24);
-    expect(result).toEqual({ startRow: 2, totalRows: 0, isSplit: false });
+    expect(result).toEqual({ startRow: 2, totalRows: 0, isSplit: false, dateOrderIssueRows: [] });
   });
 
   it("returns isSplit:false when all records are within the recent window", async () => {
@@ -1319,6 +1321,7 @@ describe("findExpenseStartRow", () => {
     const result = await findExpenseStartRow(TOKEN, SHEET_ID, 24);
     expect(result.isSplit).toBe(false);
     expect(result.startRow).toBe(2);
+    expect(result.dateOrderIssueRows).toEqual([]);
   });
 
   it("splits correctly when enough historical rows exist", async () => {
@@ -1367,5 +1370,123 @@ describe("findExpenseStartRow", () => {
     setupFetchSequence([colAResponse(badDates)]);
     const result = await findExpenseStartRow(TOKEN, SHEET_ID, 24);
     expect(result.isSplit).toBe(false);
+    expect(result.dateOrderIssueRows).toEqual([]);
+  });
+
+  it("sets dateOrderIssueRows with the out-of-order sheet row numbers", async () => {
+    // dateValues index 2 (2026-01-10) is earlier than index 1 (2026-01-15) → sheet row 4 is out of order
+    const outOfOrderDates = [
+      "2026-01-01", "2026-01-15", "2026-01-10", "2026-01-20",
+    ];
+    setupFetchSequence([colAResponse(outOfOrderDates)]);
+    const result = await findExpenseStartRow(TOKEN, SHEET_ID, 24);
+    expect(result.dateOrderIssueRows).toEqual([4]); // index 2 → sheet row 2+2=4
+  });
+
+  it("reports up to 3 out-of-order rows", async () => {
+    // Indices 1, 3, 5 are each earlier than their predecessor → sheet rows 3, 5, 7
+    const dates = ["2026-01-10", "2026-01-05", "2026-01-20", "2026-01-08", "2026-01-30", "2026-01-01", "2026-02-01"];
+    setupFetchSequence([colAResponse(dates)]);
+    const result = await findExpenseStartRow(TOKEN, SHEET_ID, 24);
+    expect(result.dateOrderIssueRows).toHaveLength(3);
+    expect(result.dateOrderIssueRows).toEqual([3, 5, 7]);
+  });
+
+  it("sets dateOrderIssueRows to empty array when all rows are in ascending order", async () => {
+    const orderedDates = ["2025-01-01", "2025-06-15", "2026-01-01", "2026-06-16"];
+    setupFetchSequence([colAResponse(orderedDates)]);
+    const result = await findExpenseStartRow(TOKEN, SHEET_ID, 24);
+    expect(result.dateOrderIssueRows).toEqual([]);
+  });
+
+  it("sets dateOrderIssueRows to empty array when rows share the same date (ties are allowed)", async () => {
+    const sameDateRows = ["2026-01-01", "2026-01-01", "2026-06-16"];
+    setupFetchSequence([colAResponse(sameDateRows)]);
+    const result = await findExpenseStartRow(TOKEN, SHEET_ID, 24);
+    expect(result.dateOrderIssueRows).toEqual([]);
+  });
+});
+
+describe("addExpenseRow", () => {
+  const TOKEN = "tok";
+  const SHEET_ID = "sid";
+  const CURRENCIES = ["PLN"];
+  const CUSTOM = [];
+  const canonicalValues = ["2026-01-01", "100", "50", "Food", "user@example.com", "Lunch"];
+
+  function sheetMetaResponse(sheetId = 0) {
+    return jsonResponse({
+      sheets: [{ properties: { title: "Expenses", sheetId } }],
+    });
+  }
+
+  function headerResponse(headers) {
+    return jsonResponse({ values: [headers] });
+  }
+
+  function colAResponse(dates) {
+    return jsonResponse({ values: [["Date"], ...dates.map((d) => [d])] });
+  }
+
+  it("uses append mode when submitted date >= last row date", async () => {
+    const headers = ["Date", "PLN", "USD", "Category", "Spent By", "Comment"];
+    // canonicalValues date = 2026-01-01; last row date = 2025-12-31 → submitted >= last → append
+    setupFetchSequence([
+      colAResponse(["2025-06-01", "2025-12-31"]),      // date column read
+      sheetMetaResponse(),                               // validateSpreadsheet – getMetadata
+      headerResponse(headers),                           // validateSpreadsheet – header row
+      headerResponse(headers),                           // appendExpenseRow header alignment read
+      jsonResponse({ updates: { updatedRange: "Expenses!A3:F3" } }), // sheets append
+    ]);
+    const result = await addExpenseRow(TOKEN, SHEET_ID, canonicalValues);
+    expect(result.insertMode).toBe(false);
+    expect(result.record).toBeDefined();
+  });
+
+  it("uses insert mode when submitted date < last row date on ordered sheet", async () => {
+    const headers = ["Date", "PLN", "USD", "Category", "Spent By", "Comment"];
+    const pastValues = ["2025-06-01", "100", "50", "Food", "user@example.com", "Lunch"];
+    setupFetchSequence([
+      colAResponse(["2025-01-01", "2025-06-15", "2026-01-01"]),  // date column read
+      sheetMetaResponse(),                                         // validateSpreadsheet – getMetadata
+      headerResponse(headers),                                     // validateSpreadsheet – header row
+      headerResponse(headers),                                     // insert mode: header alignment read
+      sheetMetaResponse(),                                         // insert mode: getMetadata for sheetId
+      { ok: true, status: 200, json: () => Promise.resolve({}) }, // batchUpdate insertDimension
+      { ok: true, status: 200, json: () => Promise.resolve({}) }, // updateValues write data
+    ]);
+    const result = await addExpenseRow(TOKEN, SHEET_ID, pastValues);
+    expect(result.insertMode).toBe(true);
+    // pastValues date 2025-06-01 falls between row index 1 (2025-06-15 is after it) — 
+    // last date <= 2025-06-01 is at index 0 (2025-01-01). New row goes after data row 1 → sheet row 3.
+    expect(result.record.rowNumber).toBe(3);
+  });
+
+  it("falls back to append mode when sheet has date order issue", async () => {
+    const headers = ["Date", "PLN", "USD", "Category", "Spent By", "Comment"];
+    // Out-of-order: 2025-01-01 appears after 2026-06-01
+    setupFetchSequence([
+      colAResponse(["2026-06-01", "2025-01-01"]),       // date column read (out of order)
+      sheetMetaResponse(),                               // validateSpreadsheet – getMetadata
+      headerResponse(headers),                           // validateSpreadsheet – header row
+      headerResponse(headers),                           // appendExpenseRow header alignment read
+      jsonResponse({ updates: { updatedRange: "Expenses!A4:F4" } }), // sheets append
+    ]);
+    const pastValues = ["2024-12-01", "100", "50", "Food", "user@example.com", "Lunch"];
+    const result = await addExpenseRow(TOKEN, SHEET_ID, pastValues);
+    expect(result.insertMode).toBe(false);
+  });
+
+  it("uses append mode when sheet has no data rows", async () => {
+    const headers = ["Date", "PLN", "USD", "Category", "Spent By", "Comment"];
+    setupFetchSequence([
+      jsonResponse({ values: [["Date"]] }),              // date column read (header only)
+      sheetMetaResponse(),                               // validateSpreadsheet – getMetadata
+      headerResponse(headers),                           // validateSpreadsheet – header row
+      headerResponse(headers),                           // appendExpenseRow header alignment read
+      jsonResponse({ updates: { updatedRange: "Expenses!A2:F2" } }), // sheets append
+    ]);
+    const result = await addExpenseRow(TOKEN, SHEET_ID, canonicalValues);
+    expect(result.insertMode).toBe(false);
   });
 });

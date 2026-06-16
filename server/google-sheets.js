@@ -457,15 +457,39 @@ export function buildDateParser(dateSamples) {
 }
 
 /**
+ * Check whether the given date values array is in non-decreasing chronological order.
+ * Returns an array of 1-based sheet row numbers (up to 3) of rows whose date is
+ * earlier than the preceding non-empty date — i.e. the out-of-order entries.
+ * Returns an empty array when the dates are perfectly ordered.
+ * Skips unparseable values (they do not trigger a violation).
+ * dateValues[i] corresponds to sheet row i + 2 (header is row 1).
+ */
+function detectDateOrderIssue(dateValues, parser) {
+  const violatingRows = [];
+  let prevMs = null;
+  for (let i = 0; i < dateValues.length; i++) {
+    const ms = parseDateToMs(dateValues[i], parser);
+    if (ms === null) continue;
+    if (prevMs !== null && ms < prevMs) {
+      violatingRows.push(i + 2); // i+2: 1-based sheet row (header=1, first data=2)
+      if (violatingRows.length >= 3) break;
+    }
+    prevMs = ms;
+  }
+  return violatingRows;
+}
+
+/**
  * Binary-search the date column of the Expenses sheet to find the first spreadsheet row
  * whose date is >= (today − recentMonths months).
  *
- * Returns { startRow, totalRows, isSplit }:
- *   startRow  — 1-based spreadsheet row of the first "recent" record (≥ 2).
- *   totalRows — total data rows (excluding header).
- *   isSplit   — true when a meaningful split was found (enough historical rows to justify it).
+ * Returns { startRow, totalRows, isSplit, dateOrderIssueRows }:
+ *   startRow            — 1-based spreadsheet row of the first "recent" record (≥ 2).
+ *   totalRows           — total data rows (excluding header).
+ *   isSplit             — true when a meaningful split was found (enough historical rows to justify it).
+ *   dateOrderIssueRows  — 1-based sheet row numbers (up to 3) of out-of-order entries; empty when ordered.
  *
- * Falls back to { startRow: 2, totalRows, isSplit: false } when:
+ * Falls back to { startRow: 2, totalRows, isSplit: false, dateOrderIssueRows: [] } when:
  *   - All data is within the recent window (no historical rows).
  *   - Fewer than MIN_HISTORY_ROWS historical rows (split overhead not worth it).
  *   - Date format is unrecognizable.
@@ -475,11 +499,13 @@ export async function findExpenseStartRow(accessToken, spreadsheetId, recentMont
   const dateRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A:A`);
   const totalRows = Math.max(0, dateRows.length - 1); // exclude header
 
-  if (totalRows === 0) return { startRow: 2, totalRows: 0, isSplit: false };
+  if (totalRows === 0) return { startRow: 2, totalRows: 0, isSplit: false, dateOrderIssueRows: [] };
 
   const dateValues = dateRows.slice(1).map((r) => r[0] ?? "");
   const parser = buildDateParser(dateValues.filter(Boolean).slice(0, 30));
-  if (!parser) return { startRow: 2, totalRows, isSplit: false };
+  if (!parser) return { startRow: 2, totalRows, isSplit: false, dateOrderIssueRows: [] };
+
+  const dateOrderIssueRows = detectDateOrderIssue(dateValues, parser);
 
   const now = new Date();
   // Subtract recentMonths: JS Date handles month underflow correctly
@@ -500,10 +526,10 @@ export async function findExpenseStartRow(accessToken, spreadsheetId, recentMont
   }
 
   const historicalRows = lo;
-  if (historicalRows < MIN_HISTORY_ROWS) return { startRow: 2, totalRows, isSplit: false };
+  if (historicalRows < MIN_HISTORY_ROWS) return { startRow: 2, totalRows, isSplit: false, dateOrderIssueRows };
 
   // startRow: lo is 0-based index in dateValues; spreadsheet row = lo + 2 (header=1, data starts at 2)
-  return { startRow: lo + 2, totalRows, isSplit: true };
+  return { startRow: lo + 2, totalRows, isSplit: true, dateOrderIssueRows };
 }
 
 /**
@@ -1246,27 +1272,8 @@ export async function appendExpenseRow(accessToken, spreadsheetId, values, mappi
   const headerRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!1:1`);
   const actualHeaders = normalizeHeaders(headerRows[0] ?? []);
   const targetHeaders = actualHeaders.length > 0 ? actualHeaders : canonicalHeaders;
-  const endCol = columnLetter(targetHeaders.length);
 
-  const valueByCanonicalHeader = new Map();
-  for (let index = 0; index < canonicalHeaders.length; index += 1) {
-    valueByCanonicalHeader.set(canonicalHeaders[index].toLowerCase(), values[index] ?? "");
-  }
-
-  // When mapping is provided, also index values by the user's actual column names.
-  if (mapping) {
-    for (const [qeField, userCol] of Object.entries(mapping)) {
-      if (!targetHeaders.some((h) => h.toLowerCase() === userCol.toLowerCase())) {
-        throw new Error(`Column '${userCol}' (mapped from '${qeField}') not found in sheet.`);
-      }
-      const val = valueByCanonicalHeader.get(qeField.toLowerCase());
-      if (val !== undefined) {
-        valueByCanonicalHeader.set(userCol.toLowerCase(), val);
-      }
-    }
-  }
-
-  const alignedValues = targetHeaders.map((header) => valueByCanonicalHeader.get(header.toLowerCase()) ?? "");
+  const { alignedValues, endCol } = alignValuesToHeaders(canonicalHeaders, targetHeaders, values, mapping);
 
   const appendResult = await requestJson(
     accessToken,
@@ -1290,20 +1297,16 @@ export async function appendExpenseRow(accessToken, spreadsheetId, values, mappi
   return { record, sheetCurrencies: report.sheetCurrencies, customColumns: report.customColumns };
 }
 
-export async function updateExpenseRow(accessToken, spreadsheetId, rowNumber, values, mapping = null) {
-  const report = await validateSpreadsheet(accessToken, spreadsheetId, mapping);
-  const canonicalHeaders = buildExpenseHeaders(report.sheetCurrencies, report.customColumns);
-
-  const headerRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!1:1`);
-  const actualHeaders = normalizeHeaders(headerRows[0] ?? []);
-  const targetHeaders = actualHeaders.length > 0 ? actualHeaders : canonicalHeaders;
-  const endCol = columnLetter(targetHeaders.length);
-
+/**
+ * Align an array of canonical-order expense values to the actual sheet header order,
+ * applying column mapping when provided.
+ * Returns { alignedValues, endCol }.
+ */
+function alignValuesToHeaders(canonicalHeaders, targetHeaders, values, mapping) {
   const valueByCanonicalHeader = new Map();
   for (let index = 0; index < canonicalHeaders.length; index += 1) {
     valueByCanonicalHeader.set(canonicalHeaders[index].toLowerCase(), values[index] ?? "");
   }
-
   if (mapping) {
     for (const [qeField, userCol] of Object.entries(mapping)) {
       if (!targetHeaders.some((h) => h.toLowerCase() === userCol.toLowerCase())) {
@@ -1315,8 +1318,123 @@ export async function updateExpenseRow(accessToken, spreadsheetId, rowNumber, va
       }
     }
   }
-
   const alignedValues = targetHeaders.map((header) => valueByCanonicalHeader.get(header.toLowerCase()) ?? "");
+  const endCol = columnLetter(targetHeaders.length);
+  return { alignedValues, endCol };
+}
+
+/**
+ * Add a new expense row using append or insert mode depending on the submitted date.
+ *
+ * - If the sheet has no data, the date parser is unavailable, the sheet dates are
+ *   out of order, or the submitted date is >= the last row's date → append (current behaviour).
+ * - Otherwise the submitted date is in the past relative to at least one existing row:
+ *   scan backward to find the last row whose date <= submitted date, then insert a
+ *   new sheet row immediately after it using batchUpdate insertDimension.
+ *
+ * Returns { record, insertMode, sheetCurrencies, customColumns }.
+ */
+export async function addExpenseRow(accessToken, spreadsheetId, values, mapping = null) {
+  // Read date column to decide append vs insert.
+  const dateRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A:A`);
+  const dateValues = dateRows.slice(1).map((r) => r[0] ?? "");
+  const parser = buildDateParser(dateValues.filter(Boolean).slice(0, 30));
+
+  const dateOrderIssueRows = parser ? detectDateOrderIssue(dateValues, parser) : [];
+  const submittedMs = parser ? parseDateToMs(values[0], parser) : null;
+  const lastMs = (parser && dateValues.length > 0)
+    ? parseDateToMs(dateValues[dateValues.length - 1], parser)
+    : null;
+
+  const useInsert =
+    dateOrderIssueRows.length === 0 &&
+    submittedMs !== null &&
+    lastMs !== null &&
+    dateValues.length > 0 &&
+    submittedMs < lastMs;
+
+  if (!useInsert) {
+    const result = await appendExpenseRow(accessToken, spreadsheetId, values, mapping);
+    return { ...result, insertMode: false };
+  }
+
+  // ── Insert mode ────────────────────────────────────────────────────────────
+  const report = await validateSpreadsheet(accessToken, spreadsheetId, mapping);
+  const canonicalHeaders = buildExpenseHeaders(report.sheetCurrencies, report.customColumns);
+
+  const headerRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!1:1`);
+  const actualHeaders = normalizeHeaders(headerRows[0] ?? []);
+  const targetHeaders = actualHeaders.length > 0 ? actualHeaders : canonicalHeaders;
+
+  const { alignedValues, endCol } = alignValuesToHeaders(canonicalHeaders, targetHeaders, values, mapping);
+
+  // Find the last 0-based index in dateValues where date <= submittedMs.
+  let insertAfterDataIndex = -1; // -1 means insert before all data rows (right after header)
+  for (let i = dateValues.length - 1; i >= 0; i--) {
+    const ms = parseDateToMs(dateValues[i], parser);
+    if (ms !== null && ms <= submittedMs) {
+      insertAfterDataIndex = i;
+      break;
+    }
+  }
+
+  // Sheet row numbers: header = 1, first data row = 2.
+  // insertAfterDataIndex is 0-based in dateValues (data rows only).
+  // The new row should be inserted after sheet row (insertAfterDataIndex + 2) when index >= 0,
+  // or after sheet row 1 (the header) when index === -1.
+  const insertAfterSheetRow = insertAfterDataIndex + 2; // e.g. index -1 → after row 1; index 0 → after row 2
+  const newRowNumber = insertAfterSheetRow + 1; // the row number of the newly inserted row
+
+  // Obtain sheet (tab) ID for batchUpdate.
+  const metadata = await getMetadata(accessToken, spreadsheetId);
+  const expenseSheet = metadata.sheets?.find((s) => s.properties?.title === SHEET_NAME);
+  if (!expenseSheet) throw new Error("Expenses sheet not found.");
+  const sheetId = expenseSheet.properties.sheetId;
+
+  // Insert a blank row: 0-based startIndex = insertAfterSheetRow (rows after that shift down by 1).
+  await requestNoContent(
+    accessToken,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+    {
+      method: "POST",
+      headers: createHeaders(accessToken, true),
+      body: JSON.stringify({
+        requests: [{
+          insertDimension: {
+            range: {
+              sheetId,
+              dimension: "ROWS",
+              startIndex: insertAfterSheetRow,
+              endIndex: insertAfterSheetRow + 1,
+            },
+            inheritFromBefore: true,
+          },
+        }],
+      }),
+    },
+  );
+
+  // Write the expense data into the newly inserted blank row.
+  await updateValues(
+    accessToken,
+    spreadsheetId,
+    `${SHEET_NAME}!A${newRowNumber}:${endCol}${newRowNumber}`,
+    [alignedValues],
+  );
+
+  const record = buildRecordFromCanonicalValues(values, newRowNumber, report.sheetCurrencies, report.customColumns);
+  return { record, insertMode: true, sheetCurrencies: report.sheetCurrencies, customColumns: report.customColumns };
+}
+
+export async function updateExpenseRow(accessToken, spreadsheetId, rowNumber, values, mapping = null) {
+  const report = await validateSpreadsheet(accessToken, spreadsheetId, mapping);
+  const canonicalHeaders = buildExpenseHeaders(report.sheetCurrencies, report.customColumns);
+
+  const headerRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!1:1`);
+  const actualHeaders = normalizeHeaders(headerRows[0] ?? []);
+  const targetHeaders = actualHeaders.length > 0 ? actualHeaders : canonicalHeaders;
+
+  const { alignedValues, endCol } = alignValuesToHeaders(canonicalHeaders, targetHeaders, values, mapping);
 
   await updateValues(
     accessToken,

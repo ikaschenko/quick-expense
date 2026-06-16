@@ -50,6 +50,7 @@ export const googleSheetsService = {
     loadPhase: "full" | "recent";
     startRow: number;
     totalRows: number;
+    dateOrderIssueRows?: number[];
   }> {
     return requestJson("/api/expenses");
   },
@@ -66,8 +67,8 @@ export const googleSheetsService = {
     return requestJson<{ rowCount: number }>("/api/expenses/count");
   },
 
-  async appendExpenseRow(values: string[], fxRateBackup?: FxRateBackupPayload): Promise<ExpenseRecord> {
-    return requestJson<ExpenseRecord>("/api/expenses", {
+  async appendExpenseRow(values: string[], fxRateBackup?: FxRateBackupPayload): Promise<{ record: ExpenseRecord; insertMode: boolean }> {
+    return requestJson<{ record: ExpenseRecord; insertMode: boolean }>("/api/expenses", {
       method: "POST",
       body: JSON.stringify({ values, fxRateBackup }),
     });

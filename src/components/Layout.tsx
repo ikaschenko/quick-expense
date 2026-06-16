@@ -139,6 +139,11 @@ export function Layout({ children, title, onBack }: LayoutProps): JSX.Element {
       </header>
 
       <main className="page-content">
+        {dataset.snapshot?.dateOrderIssueRows && dataset.snapshot.dateOrderIssueRows.length > 0 ? (
+          <div className="banner-date-order" role="alert">
+            ⚠ Critical issue: your sheet&apos;s dates are not in chronological order (check rows {dataset.snapshot.dateOrderIssueRows.join(", ")}). Open the sheet and sort all rows by Date (ascending) to fix this.
+          </div>
+        ) : null}
         {showErrorBanner && activeError && (
           <div
             style={{

@@ -261,9 +261,9 @@ All API routes are defined in `server/index.js`.
 | POST | `/api/config/create-spreadsheet` | Yes | Copy template spreadsheet into user's Drive |
 | GET | `/api/config/mapping` | Yes | Get current column mapping, config mode, and detected columns |
 | POST | `/api/config/mapping` | Yes | Save column mapping to Config sheet (requires `confirmed: true`) |
-| GET | `/api/expenses` | Yes | Load recent expense records (Phase 1). Response includes `loadPhase` (`"full"` or `"recent"`), `startRow`, and `totalRows`. When `loadPhase` is `"recent"`, the client fetches the historical remainder via `/api/expenses/history`. |
+| GET | `/api/expenses` | Yes | Load recent expense records (Phase 1). Response includes `loadPhase` (`"full"` or `"recent"`), `startRow`, `totalRows`, and `hasDateOrderIssue` (boolean — true when at least one date row is out of chronological order). When `loadPhase` is `"recent"`, the client fetches the historical remainder via `/api/expenses/history`. |
 | GET | `/api/expenses/history` | Yes | Load historical records older than the recent window. Query param: `endRow` (integer, last sheet row of the historical range). Response includes `loadPhase: "full"`. |
-| POST | `/api/expenses` | Yes | Append a new expense row; returns `201` + the created `ExpenseRecord` (including assigned row number) |
+| POST | `/api/expenses` | Yes | Add a new expense row (append or insert depending on date); returns `201` + `{ record: ExpenseRecord, insertMode: boolean }`. `insertMode: true` means the row was inserted mid-sheet at the correct chronological position. |
 | PUT | `/api/expenses/:rowNumber` | Yes | Overwrite an existing expense row in-place (last-writer-wins); returns `200` + the updated `ExpenseRecord` |
 | DELETE | `/api/expenses/last` | Yes | Delete the last expense row (with row-count conflict check) |
 | GET | `/api/fx-backup` | Yes | Get the latest saved FX rate backup |
@@ -473,10 +473,12 @@ The SPA uses three nested context providers (wrapped in `App.tsx`):
   - `isLoadingHistory` — boolean exposed in context; `true` while the Phase-2 background fetch is in progress. The Search page displays a non-blocking info banner while this is `true`.
   - `invalidateDataset()` — marks the snapshot stale, forcing a full reload on the next Tail/Search/Home visit. Reserved for error-recovery and future external-change detection scenarios.
   - `reloadDataset()` — explicit Reload button action, force-fetches regardless of cache.
-  - `appendToDataset(record)` — called after a successful Add; appends the returned `ExpenseRecord` to the in-memory array and recomputes `distinctValues`. No full reload.
+  - `appendToDataset(record)` — called after a successful Add in append mode; appends the returned `ExpenseRecord` to the in-memory array and recomputes `distinctValues`. No full reload.
+  - After a successful Add in insert mode (`insertMode: true` from the API), a full `reloadDataset()` is triggered instead of a surgical append — row numbers for shifted rows would otherwise be stale.
   - `updateInDataset(record)` — called after a successful Edit; replaces the matching record (by `rowNumber`) and recomputes `distinctValues`. No full reload.
   - `removeLastFromDataset()` — called after a successful Delete (last row); removes the last entry from the in-memory array and recomputes `distinctValues`. No full reload.
   - All three mutation methods are no-ops when the snapshot has not yet been loaded.
+  - `DatasetSnapshot.hasDateOrderIssue` — boolean set on every load by scanning the date column. When `true`, `Layout.tsx` renders a persistent red banner on all screens prompting the user to sort their sheet. The banner disappears automatically on the next clean reload.
   - Shared between Tail and Search pages (they reuse the same in-memory dataset).
   - Holds `searchFilters` state so Search page filter values persist across navigation.
 
@@ -606,4 +608,6 @@ The backend validates all required env vars at startup and fails fast if any are
 
 18. **Setup sharing model** — an owner user can share their full configuration (spreadsheet, currencies, column visibility) with any number of Google users via `POST /api/sharing`. Guests store a DB reference to the owner record — no data is duplicated. Guests with `edit` access have full read/write; `view` guests can use Tail and Search but all write actions are blocked at both API (HTTP 403) and UI levels. Guests cannot modify Setup settings. `requireAuthenticatedUser` resolves the shared reference transparently on every authenticated request. Guests whose owner config becomes invalid (owner deleted, spreadsheet removed) are shown a blocking `SharedConfigInvalidModal` prompting them to reset and set up independently.
 
-19. **Fire-and-forget email delivery** — share and revoke events dispatch a transactional email via Resend after the HTTP response is returned. Delivery failure is logged server-side and never surfaced to the UI. Templates live in `server/email-templates.js` (no external template storage). Sending is silently skipped if `RESEND_API_KEY` is absent, so the feature degrades gracefully in environments without email configuration.
+20. **Append vs. insert mode for new expenses** — `POST /api/expenses` reads the full date column before writing. If the submitted date is ≥ the last row's date (or the sheet has no data, unrecognisable date format, or out-of-order dates), the existing `appendExpenseRow` path is used unchanged. If the submitted date is earlier than the last row's date on a well-ordered sheet, `addExpenseRow` inserts the new row at the correct chronological position using Google Sheets API `batchUpdate insertDimension` followed by `values.update`. The client performs a full dataset reload after an insert-mode write. The shared `alignValuesToHeaders()` helper is used by both append and insert paths to handle legacy column ordering and column mapping.
+
+ — share and revoke events dispatch a transactional email via Resend after the HTTP response is returned. Delivery failure is logged server-side and never surfaced to the UI. Templates live in `server/email-templates.js` (no external template storage). Sending is silently skipped if `RESEND_API_KEY` is absent, so the feature degrades gracefully in environments without email configuration.

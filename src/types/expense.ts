@@ -137,6 +137,7 @@ export interface DatasetSnapshot {
   loadedAt: number;
   payloadBytes: number;
   loadPhase: "full" | "recent";
+  dateOrderIssueRows?: number[];
 }
 
 export interface AuthSession {

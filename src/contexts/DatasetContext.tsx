@@ -122,6 +122,7 @@ export function DatasetProvider({ children }: PropsWithChildren): JSX.Element {
             loadedAt: Date.now(),
             payloadBytes: loaded.payloadBytes,
             loadPhase: loaded.loadPhase,
+            dateOrderIssueRows: loaded.dateOrderIssueRows ?? [],
           };
 
           setSnapshot(nextSnapshot);

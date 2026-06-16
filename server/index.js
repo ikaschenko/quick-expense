@@ -19,6 +19,7 @@ import { validateMappingRequestBody, validateUsdMandatory } from "./validation.j
 import {
   createSpreadsheet,
   appendExpenseRow,
+  addExpenseRow,
   updateExpenseRow,
   deleteLastExpenseRow,
   loadExpenses,
@@ -672,7 +673,7 @@ app.get("/api/expenses", requireAuthenticatedUser, async (req, res) => {
     const { mode, mapping: configMapping = null, metadata } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
     const mapping = mode === "config-driven" ? configMapping : null;
     const report = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping, metadata);
-    const { startRow, totalRows, isSplit } = await findExpenseStartRow(accessToken, req.configRecord.spreadsheetId, RECENT_MONTHS);
+    const { startRow, totalRows, isSplit, dateOrderIssueRows } = await findExpenseStartRow(accessToken, req.configRecord.spreadsheetId, RECENT_MONTHS);
     const snapshot = await loadExpenses(accessToken, req.configRecord.spreadsheetId, mapping, {
       startRow: isSplit ? startRow : null,
       precomputedReport: report,
@@ -682,6 +683,7 @@ app.get("/api/expenses", requireAuthenticatedUser, async (req, res) => {
       totalRows,
       startRow,
       loadPhase: isSplit ? "recent" : "full",
+      dateOrderIssueRows,
     });
   } catch (error) {
     res.status(400).json({ message: (error).message });
@@ -717,13 +719,13 @@ app.post("/api/expenses", requireAuthenticatedUser, requireEditAccess, async (re
       return;
     }
 
-    const { record } = await appendExpenseRow(accessToken, req.configRecord.spreadsheetId, values, mapping);
+    const { record, insertMode } = await addExpenseRow(accessToken, req.configRecord.spreadsheetId, values, mapping);
 
     if (req.body?.fxRateBackup && typeof req.body.fxRateBackup === "object") {
       await saveFxRateBackup(req.userRecord.email, req.configRecord.spreadsheetId, req.body.fxRateBackup);
     }
 
-    res.status(201).json(record);
+    res.status(201).json({ record, insertMode });
   } catch (error) {
     res.status(400).json({ message: (error).message });
   }

@@ -177,6 +177,7 @@ export function AddExpensePage(): JSX.Element {
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isInsertingHistorical, setIsInsertingHistorical] = useState(false);
   const [isLoadingFxBackup, setIsLoadingFxBackup] = useState(false);
   const [manualFxRates, setManualFxRates] = useState<ManualFxRates>(
     createEmptyFxRates(activeCurrencies),
@@ -467,11 +468,27 @@ export function AddExpensePage(): JSX.Element {
         trackEvent("expense_edited", { currency: submittedCurrency ?? "USD" });
         return;
       } else {
-        const addedRecord = await googleSheetsService.appendExpenseRow(
+        // Detect whether the submitted date is earlier than the last record in the sheet.
+        // When the sheet has a date-order issue we skip the overlay (append fallback will be used).
+        const lastRecord = dataset.snapshot?.records.at(-1);
+        const lastDateIso = lastRecord
+          ? (detectedDateFormat?.toIso(lastRecord.Date) ?? lastRecord.Date)
+          : null;
+        const isPastDateEntry =
+          lastDateIso !== null &&
+          normalizedDraft.Date < lastDateIso &&
+          !dataset.snapshot?.dateOrderIssueRows?.length;
+        if (isPastDateEntry) setIsInsertingHistorical(true);
+
+        const { record: addedRecord, insertMode } = await googleSheetsService.appendExpenseRow(
           expenseDraftToRowValues(normalizedDraft, activeCurrencies, customColumns, detectedDateFormat?.toSheet),
           buildFxBackupPayload(normalizedDraft, manualFxRates, activeCurrencies),
         );
-        dataset.appendToDataset(addedRecord);
+        if (insertMode) {
+          await dataset.reloadDataset();
+        } else {
+          dataset.appendToDataset(addedRecord);
+        }
       }
 
       const submittedCurrency = getPreferredCurrency(normalizedDraft, activeCurrencies);
@@ -494,6 +511,7 @@ export function AddExpensePage(): JSX.Element {
     } catch (submitError) {
       setError((submitError as Error).message);
     } finally {
+      setIsInsertingHistorical(false);
       setIsSaving(false);
     }
   };
@@ -515,6 +533,11 @@ export function AddExpensePage(): JSX.Element {
 
   return (
     <Layout title={isEditMode ? "Edit Expense" : "Add Expense"} onBack={isEditMode ? handleEditBack : undefined}>
+      {isInsertingHistorical ? (
+        <div className="add-insert-overlay" role="status" aria-live="polite">
+          <LoadingBlock label="Recording an entry with an earlier date. This may take a moment while the history is being updated…" />
+        </div>
+      ) : null}
       {success ? <StatusBanner variant="success" message={success} /> : null}
       {error ? <StatusBanner variant="error" message={error} /> : null}
 

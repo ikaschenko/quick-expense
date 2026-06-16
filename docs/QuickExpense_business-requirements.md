@@ -208,6 +208,29 @@ After successful Add, where does user go? Answer: After Save - show a success me
 
 On Back - return to a previous screen.
 
+### 2.3.1 Date selection
+
+The date field defaults to today (client local timezone). The user may pick any date — past, today, or future — using a standard date picker. Future dates are allowed to support planned/upcoming expenses.
+
+### 2.3.2 Append vs. insert mode
+
+When a new expense is saved, the backend decides between two write modes based on the submitted date and the existing data:
+
+- **Append mode** (default): the new row is added after the last row in the sheet. Used whenever the submitted date is ≥ the last row's date, the sheet has no data, the date format is unrecognisable, or the sheet has a date-order issue.
+- **Insert mode**: used when the submitted date is earlier than the last row's date **and** the sheet rows are in chronological order. The backend scans backward to find the last row whose date ≤ the submitted date and inserts the new row immediately after it. If multiple rows share the submitted date, the new row is inserted after all of them.
+
+After an insert-mode write, the in-memory dataset is fully reloaded from the sheet (to keep all row numbers consistent). A non-dismissible loading overlay is shown during this operation: *"Recording an entry with an earlier date. This may take a moment while the history is being updated…"*
+
+### 2.3.3 Date order integrity warning
+
+During every dataset load (initial load, Reload, or post-insert reload), the backend checks whether all Date values in the sheet are in non-decreasing chronological order.
+
+If at least one out-of-order date is detected, a persistent red banner is displayed in the header area of **all screens** (Home, Add, Tail, Search):
+
+*"⚠ Critical issue: your sheet's dates are not in chronological order. Open the sheet and sort all rows by Date (ascending) to fix this."*
+
+The banner is not manually dismissible. It disappears automatically the next time the dataset is loaded and no ordering violation is found. When the banner is active, the backend falls back to append mode for all new expense submissions.
+
 ## 2.4 Preload for Home Dashboard, Tail and Search
 
 For the Home dashboard and for Tail and Search operations — upon mounting the relevant screen, the application should check if the dataset is loaded from back-end. Key rules:
