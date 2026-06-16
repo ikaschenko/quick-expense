@@ -511,7 +511,7 @@ export function AddExpensePage(): JSX.Element {
       trackEvent("expense_added", { currency: submittedCurrency ?? "USD" });
       if (pendingSaveMode.current === 'close') {
         trackEvent("expense_added_close", { currency: submittedCurrency ?? "USD" });
-        navigate('/home');
+        navigate('/home', { state: { expenseSaved: true } });
         return;
       }
     } catch (submitError) {

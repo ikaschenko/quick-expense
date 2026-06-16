@@ -1,9 +1,10 @@
-import { useEffect, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { FileSpreadsheet, Receipt } from "lucide-react";
 import { FormattedAmount } from "../components/FormattedAmount";
 import { Layout } from "../components/Layout";
 import { MtdSpendChart } from "../components/MtdSpendChart";
+import { StatusBanner } from "../components/StatusBanner";
 import { useConfig } from "../contexts/ConfigContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useDataset } from "../contexts/DatasetContext";
@@ -90,8 +91,19 @@ export function HomePage(): JSX.Element {
   const { config, isConfigLoading } = useConfig();
   const { session } = useAuth();
   const dataset = useDataset();
+  const location = useLocation();
   const firstName = session?.givenName ?? (session?.email ? getFirstName(session.email) : "");
   const today = useMemo(() => getTodayLocalDate(), []);
+
+  const [showSavedBanner, setShowSavedBanner] = useState(
+    !!(location.state as { expenseSaved?: boolean } | null)?.expenseSaved,
+  );
+
+  useEffect(() => {
+    if (!showSavedBanner) return;
+    const timer = setTimeout(() => setShowSavedBanner(false), 4000);
+    return () => clearTimeout(timer);
+  }, [showSavedBanner]);
 
   // Load dataset when config is ready and dataset hasn't been loaded yet
   useEffect(() => {
@@ -130,6 +142,9 @@ export function HomePage(): JSX.Element {
 
   return (
     <Layout title="Quick Expense">
+      {showSavedBanner ? (
+        <StatusBanner variant="success" message="Expense saved successfully." />
+      ) : null}
       <div className="home-wrapper">
         <p className="home-greeting">
           {getGreeting()}, {firstName} 👋
