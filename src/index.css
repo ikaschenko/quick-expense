@@ -1067,6 +1067,22 @@ button { cursor: pointer; }
   font-size: var(--font-size-lg);
 }
 
+.add-sticky-save-pair {
+  display: flex;
+  gap: var(--space-3);
+  max-width: 480px;
+  margin: 0 auto;
+}
+.add-sticky-save-pair .btn {
+  flex: 1;
+  height: 52px;
+  font-size: var(--font-size-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
 .add-saved-feedback {
   display: flex;
   align-items: center;

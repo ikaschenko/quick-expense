@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams, useLocation } from "react-router-dom";
-import { Check, Calendar } from "lucide-react";
+import { Check, Calendar, RotateCcw, House } from "lucide-react";
 import DatePicker from "react-datepicker";
 import { Layout } from "../components/Layout";
 import { LoadingBlock } from "../components/LoadingBlock";
@@ -189,6 +189,7 @@ export function AddExpensePage(): JSX.Element {
   const [hasManuallySelectedCurrency, setHasManuallySelectedCurrency] = useState(false);
   const [currencyDictionary, setCurrencyDictionary] = useState<CurrencyDictionary | null>(null);
   const amountInputRef = useRef<HTMLInputElement>(null);
+  const pendingSaveMode = useRef<'continue' | 'close'>('continue');
 
   useEffect(() => { amountInputRef.current?.focus(); }, []);
 
@@ -508,6 +509,11 @@ export function AddExpensePage(): JSX.Element {
       setSuccess("Expense saved successfully.");
       amountInputRef.current?.focus();
       trackEvent("expense_added", { currency: submittedCurrency ?? "USD" });
+      if (pendingSaveMode.current === 'close') {
+        trackEvent("expense_added_close", { currency: submittedCurrency ?? "USD" });
+        navigate('/home');
+        return;
+      }
     } catch (submitError) {
       setError((submitError as Error).message);
     } finally {
@@ -770,16 +776,13 @@ export function AddExpensePage(): JSX.Element {
           >
             Save Expense
           </button>
-        ) : (
+        ) : isEditMode ? (
           <button
             className="btn btn-primary"
             disabled={isSaving}
-            type="submit"
-            form=""
-            onClick={(e) => {
-              e.preventDefault();
-              const form = document.querySelector<HTMLFormElement>("form");
-              if (form) form.requestSubmit();
+            type="button"
+            onClick={() => {
+              document.querySelector<HTMLFormElement>("form")?.requestSubmit();
             }}
           >
             {isSaving ? (
@@ -788,9 +791,54 @@ export function AddExpensePage(): JSX.Element {
                 Saving…
               </>
             ) : (
-              isEditMode ? "Save Changes" : "Save Expense"
+              "Save Changes"
             )}
           </button>
+        ) : (
+          <div className="add-sticky-save-pair">
+            <button
+              className="btn btn-primary"
+              disabled={isSaving}
+              type="button"
+              onClick={() => {
+                pendingSaveMode.current = 'continue';
+                document.querySelector<HTMLFormElement>("form")?.requestSubmit();
+              }}
+            >
+              {isSaving && pendingSaveMode.current === 'continue' ? (
+                <>
+                  <span className="spinner spinner-sm spinner-inverse" aria-hidden />
+                  Saving…
+                </>
+              ) : (
+                <>
+                  <RotateCcw size={18} aria-hidden />
+                  Save & Continue
+                </>
+              )}
+            </button>
+            <button
+              className="btn btn-primary"
+              disabled={isSaving}
+              type="button"
+              onClick={() => {
+                pendingSaveMode.current = 'close';
+                document.querySelector<HTMLFormElement>("form")?.requestSubmit();
+              }}
+            >
+              {isSaving && pendingSaveMode.current === 'close' ? (
+                <>
+                  <span className="spinner spinner-sm spinner-inverse" aria-hidden />
+                  Saving…
+                </>
+              ) : (
+                <>
+                  <House size={18} aria-hidden />
+                  Save & Close
+                </>
+              )}
+            </button>
+          </div>
         )}
       </div>
 
