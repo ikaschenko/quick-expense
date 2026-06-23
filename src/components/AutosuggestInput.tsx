@@ -6,7 +6,7 @@ interface AutosuggestInputProps {
   onChange: (value: string) => void;
   /** Pre-sorted, deduplicated suggestion list. Filtering is done inside the component. */
   allSuggestions: string[];
-  /** Minimum number of typed characters before the dropdown appears. Default: 3. */
+  /** Minimum number of typed characters before the dropdown appears. Default: 2. */
   minChars?: number;
   placeholder?: string;
   className?: string;
@@ -17,7 +17,7 @@ export function AutosuggestInput({
   value,
   onChange,
   allSuggestions,
-  minChars = 3,
+  minChars = 2,
   placeholder,
   className = "input",
 }: AutosuggestInputProps): JSX.Element {

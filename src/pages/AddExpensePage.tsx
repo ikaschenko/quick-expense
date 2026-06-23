@@ -727,7 +727,7 @@ export function AddExpensePage(): JSX.Element {
             value={draft.Comment}
             onChange={(value) => updateDraft("Comment", value)}
             allSuggestions={commentSuggestions}
-            minChars={3}
+            minChars={2}
             placeholder="Add a note…"
           />
         </div>
