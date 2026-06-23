@@ -21,6 +21,7 @@ import {
   appendExpenseRow,
   addExpenseRow,
   updateExpenseRow,
+  moveExpenseRow,
   deleteLastExpenseRow,
   loadExpenses,
   getExpenseRowCount,
@@ -761,13 +762,13 @@ app.put("/api/expenses/:rowNumber", requireAuthenticatedUser, requireEditAccess,
       return;
     }
 
-    const { record } = await updateExpenseRow(accessToken, req.configRecord.spreadsheetId, rowNumber, values, mapping);
+    const { record, moveMode } = await moveExpenseRow(accessToken, req.configRecord.spreadsheetId, rowNumber, values, mapping);
 
     if (req.body?.fxRateBackup && typeof req.body.fxRateBackup === "object") {
       await saveFxRateBackup(req.userRecord.email, req.configRecord.spreadsheetId, req.body.fxRateBackup);
     }
 
-    res.status(200).json(record);
+    res.status(200).json({ record, moveMode });
   } catch (error) {
     res.status(400).json({ message: error.message });
   }

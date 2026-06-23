@@ -35,6 +35,7 @@ let parseDateToMs;
 let buildDateParser;
 let findExpenseStartRow;
 let addExpenseRow;
+let moveExpenseRow;
 
 beforeAll(async () => {
   ({
@@ -48,6 +49,7 @@ beforeAll(async () => {
     buildDateParser,
     findExpenseStartRow,
     addExpenseRow,
+    moveExpenseRow,
   } = await import("../server/google-sheets.js"));
 });
 
@@ -1488,5 +1490,149 @@ describe("addExpenseRow", () => {
     ]);
     const result = await addExpenseRow(TOKEN, SHEET_ID, canonicalValues);
     expect(result.insertMode).toBe(false);
+  });
+});
+
+describe("moveExpenseRow", () => {
+  const TOKEN = "tok";
+  const SHEET_ID = "sid";
+  const headers = ["Date", "PLN", "USD", "Category", "Spent By", "Comment"];
+
+  function sheetMetaResponse(sheetId = 0) {
+    return jsonResponse({ sheets: [{ properties: { title: "Expenses", sheetId } }] });
+  }
+
+  function headerResponse(h) {
+    return jsonResponse({ values: [h] });
+  }
+
+  function colAResponse(dates) {
+    return jsonResponse({ values: [["Date"], ...dates.map((d) => [d])] });
+  }
+
+  function updateValuesResponse() {
+    return { ok: true, status: 200, json: () => Promise.resolve({}) };
+  }
+
+  function batchUpdateResponse() {
+    return jsonResponse({ replies: [{}] });
+  }
+
+  const VALUES_JAN = ["2026-01-15", "100", "50", "Food", "user@example.com", "Lunch"];
+
+  it("returns moveMode: false when date stays between neighbors (no move needed)", async () => {
+    // Sheet: row2=2026-01-01, row3=2026-01-15 (original), row4=2026-02-01
+    // New date 2026-01-20 stays between neighbors → in-place update
+    const newValues = ["2026-01-20", "100", "50", "Food", "user@example.com", "Lunch"];
+    setupFetchSequence([
+      colAResponse(["2026-01-01", "2026-01-15", "2026-02-01"]),
+      sheetMetaResponse(),
+      headerResponse(headers),
+      headerResponse(headers),
+      updateValuesResponse(),
+    ]);
+    const result = await moveExpenseRow(TOKEN, SHEET_ID, 3, newValues);
+    expect(result.moveMode).toBe(false);
+    expect(result.record.rowNumber).toBe(3);
+    expect(result.record.Date).toBe("2026-01-20");
+  });
+
+  it("returns moveMode: false when only non-date fields changed", async () => {
+    setupFetchSequence([
+      colAResponse(["2026-01-01", "2026-01-15", "2026-02-01"]),
+      sheetMetaResponse(),
+      headerResponse(headers),
+      headerResponse(headers),
+      updateValuesResponse(),
+    ]);
+    const result = await moveExpenseRow(TOKEN, SHEET_ID, 3, VALUES_JAN);
+    expect(result.moveMode).toBe(false);
+    expect(result.record.rowNumber).toBe(3);
+  });
+
+  it("moves row to earlier position: new row inserted before original (original shifts +1 before delete)", async () => {
+    // Sheet: row2=2026-01-01, row3=2026-02-01 (original), row4=2026-03-01
+    // New date 2025-12-01 < row2 → insert before all rows at row 2; original shifts to row 4
+    const newValues = ["2025-12-01", "100", "50", "Food", "user@example.com", "Lunch"];
+    setupFetchSequence([
+      colAResponse(["2026-01-01", "2026-02-01", "2026-03-01"]),  // moveExpenseRow date read
+      colAResponse(["2026-01-01", "2026-02-01", "2026-03-01"]),  // addExpenseRow inner date read
+      sheetMetaResponse(),                                         // validateSpreadsheet getMetadata
+      headerResponse(headers),                                     // validateSpreadsheet header
+      headerResponse(headers),                                     // header alignment read
+      sheetMetaResponse(),                                         // addExpenseRow getMetadata for sheetId
+      batchUpdateResponse(),                                       // insertDimension (new row at 2)
+      updateValuesResponse(),                                      // write data
+      sheetMetaResponse(),                                         // deleteSheetRowByIndex getMetadata
+      batchUpdateResponse(),                                       // deleteDimension
+    ]);
+    const result = await moveExpenseRow(TOKEN, SHEET_ID, 3, newValues);
+    expect(result.moveMode).toBe(true);
+    expect(result.record.rowNumber).toBe(2);
+    // Original was at row 3; new row inserted at row 2 (before it) → original shifted to row 4 (0-based index 3)
+    const deleteBody = JSON.parse(mockFetch.mock.calls[9][1].body);
+    expect(deleteBody.requests[0].deleteDimension.range.startIndex).toBe(3);
+  });
+
+  it("moves row to later position: new row inserted after original (original stays, no shift)", async () => {
+    // Sheet: row2=2026-01-01, row3=2026-01-15 (original), row4=2026-02-01, row5=2026-03-01
+    // New date 2026-02-15 > row4 neighbor → insert between row4 and row5; original row3 unchanged
+    const newValues = ["2026-02-15", "100", "50", "Food", "user@example.com", "Lunch"];
+    setupFetchSequence([
+      colAResponse(["2026-01-01", "2026-01-15", "2026-02-01", "2026-03-01"]),
+      colAResponse(["2026-01-01", "2026-01-15", "2026-02-01", "2026-03-01"]),
+      sheetMetaResponse(),
+      headerResponse(headers),
+      headerResponse(headers),
+      sheetMetaResponse(),
+      batchUpdateResponse(),   // insertDimension (new row at 5)
+      updateValuesResponse(),
+      sheetMetaResponse(),
+      batchUpdateResponse(),   // deleteDimension
+    ]);
+    const result = await moveExpenseRow(TOKEN, SHEET_ID, 3, newValues);
+    expect(result.moveMode).toBe(true);
+    expect(result.record.rowNumber).toBe(5);
+    // Original at row 3; new row inserted at row 5 (after) → original stays at row 3 (0-based index 2)
+    const deleteBody = JSON.parse(mockFetch.mock.calls[9][1].body);
+    expect(deleteBody.requests[0].deleteDimension.range.startIndex).toBe(2);
+  });
+
+  it("falls back to in-place update when sheet has a date order issue", async () => {
+    // Out-of-order: 2026-02-01 before 2026-01-01
+    setupFetchSequence([
+      colAResponse(["2026-02-01", "2026-01-01"]),
+      sheetMetaResponse(),
+      headerResponse(headers),
+      headerResponse(headers),
+      updateValuesResponse(),
+    ]);
+    const result = await moveExpenseRow(TOKEN, SHEET_ID, 3, ["2025-06-01", "100", "50", "Food", "u@e.com", ""]);
+    expect(result.moveMode).toBe(false);
+  });
+
+  it("falls back to in-place update when the row is the only row (no neighbors)", async () => {
+    setupFetchSequence([
+      colAResponse(["2026-01-15"]),
+      sheetMetaResponse(),
+      headerResponse(headers),
+      headerResponse(headers),
+      updateValuesResponse(),
+    ]);
+    const result = await moveExpenseRow(TOKEN, SHEET_ID, 2, VALUES_JAN);
+    expect(result.moveMode).toBe(false);
+    expect(result.record.rowNumber).toBe(2);
+  });
+
+  it("falls back to in-place update when date parser is unavailable (no data rows)", async () => {
+    setupFetchSequence([
+      jsonResponse({ values: [["Date"]] }),  // header only
+      sheetMetaResponse(),
+      headerResponse(headers),
+      headerResponse(headers),
+      updateValuesResponse(),
+    ]);
+    const result = await moveExpenseRow(TOKEN, SHEET_ID, 2, VALUES_JAN);
+    expect(result.moveMode).toBe(false);
   });
 });

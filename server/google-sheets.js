@@ -1447,6 +1447,78 @@ export async function updateExpenseRow(accessToken, spreadsheetId, rowNumber, va
   return { record, sheetCurrencies: report.sheetCurrencies, customColumns: report.customColumns };
 }
 
+/** Delete one sheet row by its 0-based row index (header = index 0). */
+async function deleteSheetRowByIndex(accessToken, spreadsheetId, rowIdx0) {
+  const metadata = await getMetadata(accessToken, spreadsheetId);
+  const expenseSheet = metadata.sheets?.find((s) => s.properties?.title === SHEET_NAME);
+  if (!expenseSheet) throw new Error("Expenses sheet not found.");
+  const sheetId = expenseSheet.properties.sheetId;
+  await requestNoContent(
+    accessToken,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+    {
+      method: "POST",
+      headers: createHeaders(accessToken, true),
+      body: JSON.stringify({
+        requests: [{
+          deleteDimension: {
+            range: { sheetId, dimension: "ROWS", startIndex: rowIdx0, endIndex: rowIdx0 + 1 },
+          },
+        }],
+      }),
+    },
+  );
+}
+
+/**
+ * Save an edited expense, repositioning the sheet row when the date change breaks
+ * chronological order relative to the row's immediate neighbors.
+ *
+ * - Falls back to in-place update when: the date parser is unavailable, the sheet has a
+ *   date-order issue, or the new date keeps the row between its neighbors.
+ * - Move path (insert-before-delete): calls addExpenseRow (reuses all existing
+ *   insert/append decision logic), then deletes the original row.
+ *   If the new row was inserted before the original, the original's row number is
+ *   adjusted by +1 before deletion.
+ *
+ * Returns { record, moveMode }.
+ */
+export async function moveExpenseRow(accessToken, spreadsheetId, originalRowNumber, values, mapping = null) {
+  const dateRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A:A`);
+  const dateValues = dateRows.slice(1).map((r) => r[0] ?? "");
+  const parser = buildDateParser(dateValues.filter(Boolean).slice(0, 30));
+
+  if (!parser || detectDateOrderIssue(dateValues, parser).length > 0) {
+    const { record } = await updateExpenseRow(accessToken, spreadsheetId, originalRowNumber, values, mapping);
+    return { record, moveMode: false };
+  }
+
+  const rowIndex = originalRowNumber - 2; // 0-based into dateValues
+  const submittedMs = parseDateToMs(values[0], parser);
+  const prevMs = rowIndex > 0 ? parseDateToMs(dateValues[rowIndex - 1], parser) : null;
+  const nextMs = rowIndex < dateValues.length - 1 ? parseDateToMs(dateValues[rowIndex + 1], parser) : null;
+
+  const needsMove =
+    submittedMs !== null &&
+    ((prevMs !== null && submittedMs < prevMs) || (nextMs !== null && submittedMs > nextMs));
+
+  if (!needsMove) {
+    const { record } = await updateExpenseRow(accessToken, spreadsheetId, originalRowNumber, values, mapping);
+    return { record, moveMode: false };
+  }
+
+  // ── Move path: insert first (safe), then delete original ───────────────────
+  const result = await addExpenseRow(accessToken, spreadsheetId, values, mapping);
+
+  // If the new row landed before (or at) the original position, the original shifted by +1.
+  const adjustedOriginalRow =
+    result.record.rowNumber <= originalRowNumber ? originalRowNumber + 1 : originalRowNumber;
+
+  await deleteSheetRowByIndex(accessToken, spreadsheetId, adjustedOriginalRow - 1);
+
+  return { record: result.record, moveMode: true };
+}
+
 /**
  * Build an ExpenseRecord from canonical-order values (the order produced by buildExpenseHeaders).
  * Used to construct the return payload for write operations without a second sheet read.

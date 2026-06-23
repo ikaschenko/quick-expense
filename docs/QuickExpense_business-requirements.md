@@ -221,6 +221,8 @@ When a new expense is saved, the backend decides between two write modes based o
 
 After an insert-mode write, the in-memory dataset is fully reloaded from the sheet (to keep all row numbers consistent). A non-dismissible loading overlay is shown during this operation: *"Recording an entry with an earlier date. This may take a moment while the history is being updated…"*
 
+See §2.3.4 for the equivalent behaviour when editing an existing expense's date.
+
 ### 2.3.3 Date order integrity warning
 
 During every dataset load (initial load, Reload, or post-insert reload), the backend checks whether all Date values in the sheet are in non-decreasing chronological order.
@@ -230,6 +232,17 @@ If at least one out-of-order date is detected, a persistent red banner is displa
 *"⚠ Critical issue: your sheet's dates are not in chronological order. Open the sheet and sort all rows by Date (ascending) to fix this."*
 
 The banner is not manually dismissible. It disappears automatically the next time the dataset is loaded and no ordering violation is found. When the banner is active, the backend falls back to append mode for all new expense submissions.
+
+### 2.3.4 Edit with date change — row repositioning
+
+When an existing expense is saved with a changed date that would place it out of chronological order relative to its immediate sheet neighbors (the row above or below), the backend **repositions** the row:
+
+1. The expense is written at the chronologically correct position using the same insert/append decision logic as §2.3.2 (backend function `addExpenseRow`).
+2. After the new row is confirmed written, the original row is deleted. Insert-before-delete ensures no data loss on partial failure — at worst a duplicate row exists, which is recoverable.
+3. If the new date still falls between the row's immediate neighbors, an in-place cell update is performed (no row move, no dataset reload).
+4. If the sheet already has a date-order issue (§2.3.3), the editor falls back to in-place update to avoid worsening the situation.
+
+A repositioning write triggers the same non-dismissible loading overlay and full dataset reload as an insert-mode add (§2.3.2). The edit card closes only after the reload completes.
 
 ## 2.4 Preload for Home Dashboard, Tail and Search
 

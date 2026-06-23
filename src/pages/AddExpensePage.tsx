@@ -455,15 +455,20 @@ export function AddExpensePage(): JSX.Element {
       }
 
       if (isEditMode && editRowNumber !== null) {
-        const updatedRecord = await googleSheetsService.updateExpenseRow(
+        const { record, moveMode } = await googleSheetsService.updateExpenseRow(
           editRowNumber,
           expenseDraftToRowValues(normalizedDraft, activeCurrencies, customColumns, detectedDateFormat?.toSheet),
           buildFxBackupPayload(normalizedDraft, manualFxRates, activeCurrencies),
         );
         const submittedCurrency = getPreferredCurrency(normalizedDraft, activeCurrencies);
-        dataset.updateInDataset(updatedRecord);
+        if (moveMode) {
+          setIsInsertingHistorical(true);
+          await dataset.reloadDataset();
+        } else {
+          dataset.updateInDataset(record);
+        }
         navigate(editOrigin, {
-          state: { editResult: { rowNumber: editRowNumber, saved: true } },
+          state: { editResult: { rowNumber: record.rowNumber, saved: true } },
           replace: true,
         });
         trackEvent("expense_edited", { currency: submittedCurrency ?? "USD" });
