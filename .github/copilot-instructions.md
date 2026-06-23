@@ -58,6 +58,14 @@ Run `npm run build` after TypeScript changes and `npm test` after any logic chan
 
 ## Behavioral Guidelines
 
+### Questions Before Output
+
+**Resolve all open questions before generating any content.**
+
+- While planning any deliverable (implementation plan, user story, feature spec, code), if open questions arise — **stop and ask them all before writing any output**. Do not generate content against unresolved assumptions.
+- Repeat the question loop as many times as needed until every open question is resolved, then proceed.
+- Reason: avoids wasting tokens and human review time on content that may need to be discarded.
+
 ### Think Before Coding
 
 **Don't assume. Don't hide confusion. Surface tradeoffs. Be concise.**
