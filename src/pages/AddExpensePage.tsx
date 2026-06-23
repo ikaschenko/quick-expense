@@ -729,6 +729,7 @@ export function AddExpensePage(): JSX.Element {
             allSuggestions={commentSuggestions}
             minChars={2}
             placeholder="Add a note…"
+            multiLine
           />
         </div>
         ) : null}

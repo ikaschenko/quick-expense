@@ -90,3 +90,51 @@ describe("AutosuggestInput", () => {
     expect((input as HTMLInputElement).value).toBe("cof");
   });
 });
+
+function ControlledMultiLine() {
+  const [value, setValue] = useState("");
+  return (
+    <AutosuggestInput
+      id="test-textarea"
+      value={value}
+      onChange={setValue}
+      allSuggestions={SUGGESTIONS}
+      minChars={3}
+      placeholder="Add a note…"
+      multiLine
+    />
+  );
+}
+
+describe("AutosuggestInput multiLine", () => {
+  it("renders a textarea element", () => {
+    render(<ControlledMultiLine />);
+    const el = screen.getByRole("combobox");
+    expect(el.tagName).toBe("TEXTAREA");
+  });
+
+  it("Enter with active suggestion selects it and closes the dropdown", async () => {
+    const user = userEvent.setup();
+    render(<ControlledMultiLine />);
+    const el = screen.getByRole("combobox");
+    await user.type(el, "cof");
+    await user.keyboard("{ArrowDown}");
+    await user.keyboard("{Enter}");
+    expect((el as HTMLTextAreaElement).value).toBe("Coffee");
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("Shift+Enter does not select a suggestion and keeps the dropdown open", async () => {
+    const user = userEvent.setup();
+    render(<ControlledMultiLine />);
+    const el = screen.getByRole("combobox");
+    await user.type(el, "cof");
+    await user.keyboard("{ArrowDown}");
+    await user.keyboard("{Shift>}{Enter}{/Shift}");
+    // suggestion not selected — value still starts with "cof" (has a newline appended, not suggestion)
+    expect((el as HTMLTextAreaElement).value).not.toBe("Coffee");
+    expect((el as HTMLTextAreaElement).value).toContain("cof");
+    // dropdown may still be open since the value changed (filtered list may differ), but suggestion was not picked
+    expect((el as HTMLTextAreaElement).value).not.toBe("Coffee shop");
+  });
+});

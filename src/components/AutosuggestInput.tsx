@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
 interface AutosuggestInputProps {
   id?: string;
@@ -10,6 +10,8 @@ interface AutosuggestInputProps {
   minChars?: number;
   placeholder?: string;
   className?: string;
+  /** When true, renders a auto-growing textarea instead of a single-line input. */
+  multiLine?: boolean;
 }
 
 export function AutosuggestInput({
@@ -20,6 +22,7 @@ export function AutosuggestInput({
   minChars = 2,
   placeholder,
   className = "input",
+  multiLine = false,
 }: AutosuggestInputProps): JSX.Element {
   const uid = useId();
   const instanceId = id ?? uid;
@@ -28,6 +31,18 @@ export function AutosuggestInput({
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const adjustHeight = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, []);
+
+  useEffect(() => {
+    if (multiLine) adjustHeight();
+  }, [multiLine, value, adjustHeight]);
 
   const filteredSuggestions = useMemo(() => {
     if (value.length < minChars) return [];
@@ -60,7 +75,7 @@ export function AutosuggestInput({
     setActiveIndex(-1);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLElement>): void => {
     if (!shouldShow) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -68,7 +83,7 @@ export function AutosuggestInput({
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setActiveIndex((i) => Math.max(i - 1, 0));
-    } else if (e.key === "Enter" && activeIndex >= 0) {
+    } else if (e.key === "Enter" && !e.shiftKey && activeIndex >= 0) {
       e.preventDefault();
       select(filteredSuggestions[activeIndex]);
     } else if (e.key === "Escape") {
@@ -77,30 +92,42 @@ export function AutosuggestInput({
     }
   };
 
+  const sharedProps = {
+    id: instanceId,
+    value,
+    placeholder,
+    role: "combobox" as const,
+    "aria-expanded": shouldShow,
+    "aria-haspopup": "listbox" as const,
+    "aria-controls": listboxId,
+    "aria-activedescendant":
+      activeIndex >= 0 ? `autosuggest-opt-${instanceId}-${activeIndex}` : undefined,
+    autoComplete: "off" as const,
+    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      onChange(e.target.value);
+      setIsOpen(true);
+    },
+    onFocus: () => {
+      if (value.length >= minChars) setIsOpen(true);
+    },
+    onKeyDown: handleKeyDown,
+  };
+
   return (
     <div className="autosuggest-wrapper" ref={wrapperRef}>
-      <input
-        id={instanceId}
-        className={className}
-        value={value}
-        onChange={(e) => {
-          onChange(e.target.value);
-          setIsOpen(true);
-        }}
-        onFocus={() => {
-          if (value.length >= minChars) setIsOpen(true);
-        }}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholder}
-        role="combobox"
-        aria-expanded={shouldShow}
-        aria-haspopup="listbox"
-        aria-controls={listboxId}
-        aria-activedescendant={
-          activeIndex >= 0 ? `autosuggest-opt-${instanceId}-${activeIndex}` : undefined
-        }
-        autoComplete="off"
-      />
+      {multiLine ? (
+        <textarea
+          ref={textareaRef}
+          className={`${className} autosuggest-textarea`}
+          {...sharedProps}
+          rows={1}
+        />
+      ) : (
+        <input
+          className={className}
+          {...sharedProps}
+        />
+      )}
       {shouldShow ? (
         <ul className="autosuggest-dropdown" role="listbox" id={listboxId}>
           {filteredSuggestions.map((suggestion, i) => (

@@ -2009,12 +2009,26 @@ button { cursor: pointer; }
   cursor: pointer;
   font-size: var(--font-size-xs);
   color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .autosuggest-option:hover,
 .autosuggest-option--active {
   background: var(--color-accent-light);
   color: var(--color-accent);
+}
+
+.autosuggest-textarea {
+  resize: none;
+  overflow-y: auto;
+  max-height: 8rem;
+}
+
+.expense-comment-text {
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* === Shared Config Invalid Modal === */

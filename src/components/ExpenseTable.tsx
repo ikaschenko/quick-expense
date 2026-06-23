@@ -91,9 +91,10 @@ function formatGroupDate(dateStr: string): string {
 function getCommentPreview(record: ExpenseRecord): string {
   const base = record.Comment;
   if (!base) return "";
-  return base.length > COMMENT_PREVIEW_LENGTH
-    ? `${base.slice(0, COMMENT_PREVIEW_LENGTH)}...`
-    : base;
+  const flat = base.replace(/\n/g, " ");
+  return flat.length > COMMENT_PREVIEW_LENGTH
+    ? `${flat.slice(0, COMMENT_PREVIEW_LENGTH)}...`
+    : flat;
 }
 
 
@@ -150,7 +151,7 @@ function ExpenseCard({ record, sheetCurrencies, customColumns, isLastRecord, onD
             {record.Comment.trim() ? (
               <div className="expense-card-expanded-row">
                 <span className="expense-card-expanded-label">Comment:</span>
-                <span>{record.Comment}</span>
+                <span className="expense-comment-text">{record.Comment}</span>
               </div>
             ) : null}
             {customColumns.map((col) => {
