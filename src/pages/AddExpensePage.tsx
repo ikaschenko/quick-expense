@@ -141,7 +141,7 @@ function buildFxBackupPayload(
 export function AddExpensePage(): JSX.Element {
   const auth = useAuth();
   const isViewOnly = auth.session?.guestAccessLevel === 'view';
-  const { config } = useConfig();
+  const { config, isConfigLoading } = useConfig();
   const dataset = useDataset();
   const navigate = useNavigate();
   const { rowNumber: rowNumberParam } = useParams<{ rowNumber?: string }>();
@@ -320,7 +320,7 @@ export function AddExpensePage(): JSX.Element {
     [dataset.snapshot],
   );
 
-  if (!config) {
+  if (!config && !isConfigLoading) {
     return <Navigate to="/setup" replace />;
   }
 

@@ -12,7 +12,7 @@ import { trackEvent } from "../services/analytics";
 import { ExpenseRecord } from "../types/expense";
 
 export function SearchPage(): JSX.Element {
-  const { config } = useConfig();
+  const { config, isConfigLoading } = useConfig();
   const dataset = useDataset();
   const navigate = useNavigate();
   const location = useLocation();
@@ -40,15 +40,15 @@ export function SearchPage(): JSX.Element {
   useEffect(() => { searchInputRef.current?.focus(); }, []);
 
   useEffect(() => {
-    if (!config) {
+    if (!config && !isConfigLoading) {
       navigate("/setup", { replace: true });
       return;
     }
 
-    if (!dataset.snapshot && dataset.status !== "loading") {
+    if (config && !dataset.snapshot && dataset.status !== "loading") {
       void dataset.loadDataset().catch(() => undefined);
     }
-  }, [config, dataset.snapshot, dataset.status, dataset.loadDataset, navigate]);
+  }, [config, isConfigLoading, dataset.snapshot, dataset.status, dataset.loadDataset, navigate]);
 
   const outcome = useMemo(() => {
     if (!dataset.snapshot) {

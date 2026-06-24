@@ -32,15 +32,25 @@ const ConfigContext = createContext<ConfigContextValue | null>(null);
 export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
   const { session } = useAuth();
   const [config, setConfig] = useState<SpreadsheetConfig | null>(null);
-  const [isConfigLoading, setIsConfigLoading] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
+  // Tracks the session email for which the last config fetch completed.
+  // null means no fetch has completed yet (initial state or after logout).
+  const [fetchedForEmail, setFetchedForEmail] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Derived synchronously during render — true when a fetch is in progress OR when
+  // the current session's config has not yet been fetched. Computing this in the render
+  // phase (not an effect) prevents the effect-ordering race where a child page's
+  // useEffect fires before ConfigContext's useEffect sets the loading flag.
+  const isConfigLoading = isFetching || (!!session && session.email !== fetchedForEmail);
   const [fileName, setFileName] = useState<string | null>(null);
   const [isFileNameLoading, setIsFileNameLoading] = useState(false);
   const retryBackoffRef = useRef(new RetryBackoff());
 
   useEffect(() => {
     if (!session) {
-      setIsConfigLoading(false);
+      setIsFetching(false);
+      setFetchedForEmail(null);
       setConfig(null);
       setError(null);
       retryBackoffRef.current.reset();
@@ -49,11 +59,13 @@ export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
 
     // Only load if retry backoff allows it
     if (!retryBackoffRef.current.canRetryNow()) {
-      setIsConfigLoading(false);
+      setIsFetching(false);
+      setFetchedForEmail(session.email); // settle so isConfigLoading stays false
       return;
     }
 
-    setIsConfigLoading(true);
+    const email = session.email;
+    setIsFetching(true);
     setError(null);
     void googleSheetsService
       .getConfig()
@@ -68,7 +80,10 @@ export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
         setError(message);
         console.error("[ConfigContext] getConfig failed:", message);
       })
-      .finally(() => setIsConfigLoading(false));
+      .finally(() => {
+        setIsFetching(false);
+        setFetchedForEmail(email);
+      });
   }, [session]);
 
   // Fetch the live file display name from Drive whenever the spreadsheet changes.
@@ -112,14 +127,16 @@ export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
       },
       refreshConfig: () => {
         if (!session) {
-          setIsConfigLoading(false);
+          setIsFetching(false);
+          setFetchedForEmail(null);
           setConfig(null);
           setError(null);
           return;
         }
 
+        const email = session.email;
         retryBackoffRef.current.reset(); // Reset backoff on manual refresh
-        setIsConfigLoading(true);
+        setIsFetching(true);
         setError(null);
         void googleSheetsService
           .getConfig()
@@ -132,7 +149,10 @@ export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
             setError(message);
             console.error("[ConfigContext] refreshConfig failed:", message);
           })
-          .finally(() => setIsConfigLoading(false));
+          .finally(() => {
+            setIsFetching(false);
+            setFetchedForEmail(email);
+          });
       },
       updateStructure: (currencies, customColumns) => {
         setConfig((prev) =>
@@ -164,7 +184,7 @@ export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
         }
       },
     };
-  }, [config, isConfigLoading, error, fileName, isFileNameLoading, session]);
+  }, [config, isFetching, fetchedForEmail, error, fileName, isFileNameLoading, session]);
 
   return <ConfigContext.Provider value={value}>{children}</ConfigContext.Provider>;
 }
