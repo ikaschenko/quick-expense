@@ -20,8 +20,8 @@ import {
   Check,
 } from "lucide-react";
 import { ExpenseRecord } from "../types/expense";
-import { COMMENT_PREVIEW_LENGTH, getCustomColumnLabel, getDisplayAmount, hasDetails } from "../utils/expenseTable";
-
+import { COMMENT_PREVIEW_LENGTH, getCustomColumnLabel, hasDetails } from "../utils/expenseTable";
+import { FormattedAmount } from "./FormattedAmount";
 import { LucideProps } from "lucide-react";
 
 interface ExpenseTableProps {
@@ -97,6 +97,31 @@ function getCommentPreview(record: ExpenseRecord): string {
     : flat;
 }
 
+function parseAmountValue(raw: string | undefined): number | null {
+  if (!raw?.trim()) return null;
+  const num = parseFloat(raw.trim().replace(/^\$/, ""));
+  return isNaN(num) ? null : num;
+}
+
+function renderCardAmount(record: ExpenseRecord, sheetCurrencies: string[]): React.ReactNode {
+  for (const code of sheetCurrencies) {
+    const val = record.currencyAmounts?.[code];
+    if (val?.trim()) {
+      const localNum = parseAmountValue(val);
+      const usdNum = parseAmountValue(record.USD);
+      const localPart = localNum !== null
+        ? <FormattedAmount prefix={`${code} `} value={localNum} />
+        : `${code} ${val.trim()}`;
+      if (usdNum !== null) {
+        return <>{localPart}{" / "}<FormattedAmount prefix="$" value={usdNum} /></>;
+      }
+      return localPart;
+    }
+  }
+  const usdNum = parseAmountValue(record.USD);
+  if (usdNum !== null) return <FormattedAmount prefix="$" value={usdNum} />;
+  return "\u2014";
+}
 
 interface ExpenseCardProps {
   record: ExpenseRecord;
@@ -139,7 +164,7 @@ function ExpenseCard({ record, sheetCurrencies, customColumns, isLastRecord, onD
               <span className="expense-card-who">{record.spentBy}</span>
             ) : null}
           </span>
-          <span className="expense-card-amount">{getDisplayAmount(record, sheetCurrencies)}</span>
+          <span className="expense-card-amount">{renderCardAmount(record, sheetCurrencies)}</span>
         </div>
         {!isOpen && preview ? (
           <div className="expense-card-bottom">

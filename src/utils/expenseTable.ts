@@ -32,3 +32,16 @@ export function getDisplayAmount(record: ExpenseRecord, sheetCurrencies: string[
   if (record.USD?.trim()) return `$${stripDecimals(record.USD)}`;
   return "\u2014";
 }
+
+export function getDisplayAmountFull(record: ExpenseRecord, sheetCurrencies: string[] = []): string {
+  const clean = (s: string) => s.trim().replace(/^\$/, "");
+  for (const code of sheetCurrencies) {
+    const val = record.currencyAmounts?.[code];
+    if (val?.trim()) {
+      const local = `${code} ${clean(val)}`;
+      return record.USD?.trim() ? `${local} / $${clean(record.USD)}` : local;
+    }
+  }
+  if (record.USD?.trim()) return `$${clean(record.USD)}`;
+  return "\u2014";
+}

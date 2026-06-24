@@ -9,7 +9,7 @@ import { StatusBanner } from "../components/StatusBanner";
 import { useConfig } from "../contexts/ConfigContext";
 import { useDataset } from "../contexts/DatasetContext";
 import { googleSheetsService } from "../services/googleSheets";
-import { getDisplayAmount } from "../utils/expenseTable";
+import { getDisplayAmountFull } from "../utils/expenseTable";
 import { ExpenseRecord } from "../types/expense";
 
 export function TailPage(): JSX.Element {
@@ -130,7 +130,7 @@ export function TailPage(): JSX.Element {
               </div>
               <div className="confirm-preview-row">
                 <span className="confirm-preview-label">Amount</span>
-                <span>{getDisplayAmount(confirmRecord, config?.currencies ?? [])}</span>
+                <span>{getDisplayAmountFull(confirmRecord, config?.currencies ?? [])}</span>
               </div>
               <div className="confirm-preview-row">
                 <span className="confirm-preview-label">Category</span>

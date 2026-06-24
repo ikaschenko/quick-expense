@@ -1,4 +1,4 @@
-import { getCustomColumnLabel, getDisplayAmount, hasDetails } from "../src/utils/expenseTable";
+import { getCustomColumnLabel, getDisplayAmount, getDisplayAmountFull, hasDetails } from "../src/utils/expenseTable";
 import { ExpenseRecord } from "../src/types/expense";
 
 function makeRecord(overrides: Partial<ExpenseRecord> = {}): ExpenseRecord {
@@ -83,5 +83,37 @@ describe("getDisplayAmount", () => {
   it("strips leading $ already present in raw USD value", () => {
     const record = makeRecord({ USD: "$19.00", currencyAmounts: { PLN: "70" } });
     expect(getDisplayAmount(record, ["PLN"])).toBe("PLN 70 / $19");
+  });
+});
+
+describe("getDisplayAmountFull", () => {
+  it("returns USD with decimals preserved", () => {
+    const record = makeRecord({ USD: "50.07", currencyAmounts: {} });
+    expect(getDisplayAmountFull(record, [])).toBe("$50.07");
+  });
+
+  it("returns local currency with decimals when USD is empty", () => {
+    const record = makeRecord({ USD: "", currencyAmounts: { PLN: "200.50" } });
+    expect(getDisplayAmountFull(record, ["PLN"])).toBe("PLN 200.50");
+  });
+
+  it("returns both amounts with decimals preserved", () => {
+    const record = makeRecord({ USD: "50.07", currencyAmounts: { PLN: "200.50" } });
+    expect(getDisplayAmountFull(record, ["PLN"])).toBe("PLN 200.50 / $50.07");
+  });
+
+  it("returns em dash when no amounts present", () => {
+    const record = makeRecord({ USD: "", currencyAmounts: {} });
+    expect(getDisplayAmountFull(record, [])).toBe("\u2014");
+  });
+
+  it("skips empty currency amounts and falls back to USD", () => {
+    const record = makeRecord({ USD: "10.99", currencyAmounts: { PLN: "  " } });
+    expect(getDisplayAmountFull(record, ["PLN"])).toBe("$10.99");
+  });
+
+  it("strips leading $ already present in raw USD value", () => {
+    const record = makeRecord({ USD: "$19.00", currencyAmounts: { PLN: "70.25" } });
+    expect(getDisplayAmountFull(record, ["PLN"])).toBe("PLN 70.25 / $19.00");
   });
 });

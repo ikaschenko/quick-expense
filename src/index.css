@@ -727,6 +727,10 @@ button { cursor: pointer; }
   color: var(--color-text-secondary);
 }
 
+.expense-card-amount .amount-fraction {
+  font-size: 0.65em;
+}
+
 .home-metric-yoy {
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
