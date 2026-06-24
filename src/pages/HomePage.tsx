@@ -288,6 +288,8 @@ export function HomePage(): JSX.Element {
                   <MtdSpendChart
                     dailyAmounts={displayMtdDailyAmounts}
                     weekBoundaryPositions={displayWeekBoundaryPositions}
+                    year={year}
+                    month={month}
                   />
                 </>
               )}

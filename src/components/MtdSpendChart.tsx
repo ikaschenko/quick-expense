@@ -17,9 +17,11 @@ Chart.register(CategoryScale, LinearScale, LineController, PointElement, LineEle
 interface MtdSpendChartProps {
   dailyAmounts: number[];
   weekBoundaryPositions: number[];
+  year: number;
+  month: number;
 }
 
-export function MtdSpendChart({ dailyAmounts, weekBoundaryPositions }: MtdSpendChartProps): JSX.Element {
+export function MtdSpendChart({ dailyAmounts, weekBoundaryPositions, year, month }: MtdSpendChartProps): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<Chart | null>(null);
 
@@ -53,10 +55,14 @@ export function MtdSpendChart({ dailyAmounts, weekBoundaryPositions }: MtdSpendC
       },
     };
 
-    const labels = dailyAmounts.map((_, i) => String(i + 1));
+    // Trim to the last day with actual data (today); future days carry NaN.
+    const lastValidIdx = dailyAmounts.reduce((last, v, i) => (isNaN(v) ? last : i), -1);
+    const activeDays = lastValidIdx + 1;
+
+    const labels = Array.from({ length: activeDays }, (_, i) => String(i + 1));
 
     let running = 0;
-    const cumulativeAmounts = dailyAmounts.map((v) => (isNaN(v) ? NaN : (running += v)));
+    const cumulativeAmounts = dailyAmounts.slice(0, activeDays).map((v) => (running += v));
 
     const config: ChartConfiguration = {
       type: "line",
@@ -86,11 +92,23 @@ export function MtdSpendChart({ dailyAmounts, weekBoundaryPositions }: MtdSpendC
             callbacks: {
               title: (items) => {
                 const idx = items[0].dataIndex;
-                return `Day ${idx + 1}`;
+                return new Date(year, month - 1, idx + 1)
+                  .toLocaleDateString(undefined, { month: "short", day: "numeric" });
               },
-              label: (item) => `$${(item.raw as number).toFixed(2)}`,
+              label: (item) => {
+                const idx = item.dataIndex;
+                const daily = dailyAmounts[idx];
+                return [
+                  `Daily:  $${daily.toFixed(2)}`,
+                  `Total:  $${(item.raw as number).toFixed(2)}`,
+                ];
+              },
             },
           },
+        },
+        interaction: {
+          mode: "index" as const,
+          intersect: false,
         },
         scales: {
           x: {
@@ -124,7 +142,7 @@ export function MtdSpendChart({ dailyAmounts, weekBoundaryPositions }: MtdSpendC
       chartRef.current?.destroy();
       chartRef.current = null;
     };
-  }, [dailyAmounts, weekBoundaryPositions]);
+  }, [dailyAmounts, weekBoundaryPositions, year, month]);
 
   return (
     <div className="home-chart-container">
