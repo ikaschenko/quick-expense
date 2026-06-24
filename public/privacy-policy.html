@@ -65,7 +65,7 @@
 <body>
     <h1>Privacy Policy</h1>
     
-    <p class="effective-date">Last Updated: March 20, 2026</p>
+    <p class="effective-date">Last Updated: June 24, 2026</p>
     
     <p>Welcome to Quick Expense ("we," "our," or "us"). This Privacy Policy explains how we collect, use, disclose, and protect your information when you use our web application available at <a href="https://app.q-expense.com">https://app.q-expense.com</a> and our website at <a href="https://q-expense.com">https://q-expense.com</a> (collectively, the "Service").</p>
     
@@ -88,6 +88,7 @@
     <ul>
         <li><strong>OAuth Access Tokens:</strong> We store OAuth access tokens server-side to facilitate communication with Google Sheets API on your behalf. These tokens are never sent to or stored in your browser.</li>
         <li><strong>Session Data:</strong> We maintain server-side session information to keep you logged in and to associate your configuration (spreadsheet link) with your account.</li>
+        <li><strong>Home Screen Metrics Cache:</strong> To speed up the Home screen dashboard, aggregated spending metrics (monetary totals, counts, and chart data for TODAY, month-to-date, year-to-date, and rolling 12-month periods) are stored in your browser's <code>localStorage</code> under the key <code>qe_metrics_{your_email}</code>. This data is computed from your own expense records, is never transmitted to our servers, and is automatically cleared at midnight each day, on sign-out, or when you disconnect your spreadsheet.</li>
         <li><strong>Log Data:</strong> Our servers may automatically log standard information such as IP addresses, browser types, access times, and pages viewed for security and operational purposes.</li>
     </ul>
     
@@ -113,6 +114,7 @@
     <ul>
         <li><strong>Your Expense Data:</strong> All your expense records are stored exclusively in your own Google Spreadsheet. We do not store or maintain copies of your expense data on our servers.</li>
         <li><strong>Configuration Data:</strong> Your spreadsheet link and associated configuration are stored in our backend server located in Frankfurt, Germany.</li>
+        <li><strong>Home Screen Metrics Cache:</strong> Aggregated dashboard metrics (spending totals and chart data) are cached locally in your browser's <code>localStorage</code>. This data does not leave your device and is automatically cleared at midnight, on sign-out, or when you disconnect your spreadsheet.</li>
         <li><strong>Access Tokens:</strong> OAuth access tokens are stored server-side in encrypted session storage and are never exposed to the browser.</li>
         <li><strong>Session Data:</strong> Session information is maintained during your active usage (maximum 30 days) and is automatically cleared afterward.</li>
     </ul>

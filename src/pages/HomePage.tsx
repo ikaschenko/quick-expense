@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { FileSpreadsheet, Receipt } from "lucide-react";
 import { FormattedAmount } from "../components/FormattedAmount";
@@ -18,6 +18,8 @@ import {
   getMtdDailyAmounts,
   getMtdWeekBoundaryPositions,
 } from "../utils/dashboardStats";
+import { metricsCache, type MetricsCacheEntry } from "../services/metricsCache";
+import { googleSheetsService } from "../services/googleSheets";
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -95,6 +97,10 @@ export function HomePage(): JSX.Element {
   const firstName = session?.givenName ?? (session?.email ? getFirstName(session.email) : "");
   const today = useMemo(() => getTodayLocalDate(), []);
 
+  const [cachedEntry, setCachedEntry] = useState<MetricsCacheEntry | null>(null);
+  const [cacheChecking, setCacheChecking] = useState(false);
+  const driveModifiedTimeRef = useRef<string | null>(null);
+
   const [showSavedBanner, setShowSavedBanner] = useState(
     !!(location.state as { expenseSaved?: boolean } | null)?.expenseSaved,
   );
@@ -105,13 +111,43 @@ export function HomePage(): JSX.Element {
     return () => clearTimeout(timer);
   }, [showSavedBanner]);
 
-  // Load dataset when config is ready and dataset hasn't been loaded yet
+  // Unified: read cache → validate with Drive → or load from API if stale/absent.
+  // Single effect prevents the race where a separate load-trigger effect fires before
+  // the drive-check effect's setState calls take effect, causing a spurious full reload
+  // on cache-hit page refreshes.
   useEffect(() => {
-    if (!config || isConfigLoading) return;
-    if (dataset.status === "idle") {
+    if (!session?.email || !config?.spreadsheetId || isConfigLoading) return;
+    if (dataset.status !== "idle") return; // already loaded this session — nothing to do
+
+    const entry = metricsCache.load(session.email);
+
+    if (!entry) {
+      // No valid same-day cache — load from the API immediately.
       dataset.loadDataset().catch(() => {/* error surfaced via dataset.error */});
+      return;
     }
-  }, [config, isConfigLoading, dataset.status, dataset.loadDataset]);
+
+    // Cache hit — render it instantly and validate freshness with Drive in the background.
+    setCachedEntry(entry);
+    setCacheChecking(true);
+    googleSheetsService.getSheetModifiedTime()
+      .then(({ modifiedTime }) => {
+        driveModifiedTimeRef.current = modifiedTime;
+        const isStale =
+          modifiedTime === null ||
+          entry.sheetLastModifiedTime === null ||
+          modifiedTime > entry.sheetLastModifiedTime;
+        if (isStale) {
+          setCachedEntry(null);
+          dataset.loadDataset().catch(() => {/* error surfaced via dataset.error */});
+        }
+      })
+      .catch(() => {
+        setCachedEntry(null);
+        dataset.loadDataset().catch(() => {/* error surfaced via dataset.error */});
+      })
+      .finally(() => setCacheChecking(false));
+  }, [session?.email, config?.spreadsheetId, isConfigLoading, dataset.status, dataset.loadDataset]);
 
   const records = dataset.snapshot?.records ?? [];
 
@@ -129,6 +165,22 @@ export function HomePage(): JSX.Element {
     [year, month],
   );
 
+  // Write metrics to localStorage whenever live data is ready or mutated.
+  useEffect(() => {
+    if (!session?.email || dataset.status !== "ready") return;
+    metricsCache.save(session.email, {
+      cacheDate: today,
+      sheetLastModifiedTime: driveModifiedTimeRef.current ?? new Date().toISOString(),
+      todayStats,
+      mtdStats,
+      ytdStats,
+      rolling12mStats,
+      mtdDailyAmounts,
+      weekBoundaryPositions,
+    });
+    driveModifiedTimeRef.current = null;
+  }, [dataset.status, todayStats, mtdStats, ytdStats, rolling12mStats]);
+
   const monthName = new Date(year, month - 1, 1).toLocaleString("en", { month: "long" }).toUpperCase();
   const dayLabel = new Date(year, month - 1, parseInt(today.split("-")[2], 10))
     .toLocaleString("en", { month: "short", day: "numeric" });
@@ -136,14 +188,25 @@ export function HomePage(): JSX.Element {
   const isDatasetLoading = dataset.status === "idle" || dataset.status === "loading";
   const isLoading = isConfigLoading || isDatasetLoading;
   const showEmptySheet = !isConfigLoading && !config;
-  const showEmptyData = !isLoading && config && dataset.status === "ready" && records.length === 0;
-  const showDashboard = !isLoading && config && dataset.status === "ready" && records.length > 0;
-  const showDashboardSkeleton = !isConfigLoading && config && isDatasetLoading;
+  const showEmptyData = !cachedEntry && !isLoading && config && dataset.status === "ready" && records.length === 0;
+  const showDashboard = cachedEntry !== null || (!isLoading && config && dataset.status === "ready" && records.length > 0);
+  const showDashboardSkeleton = !cachedEntry && !isConfigLoading && config && isDatasetLoading;
+
+  // Prefer live computed values; fall back to cache when dataset is still idle.
+  const displayTodayStats = cachedEntry?.todayStats ?? todayStats;
+  const displayMtdStats = cachedEntry?.mtdStats ?? mtdStats;
+  const displayYtdStats = cachedEntry?.ytdStats ?? ytdStats;
+  const displayRolling12mStats = cachedEntry?.rolling12mStats ?? rolling12mStats;
+  const displayMtdDailyAmounts = cachedEntry?.mtdDailyAmounts ?? mtdDailyAmounts;
+  const displayWeekBoundaryPositions = cachedEntry?.weekBoundaryPositions ?? weekBoundaryPositions;
 
   return (
     <Layout title="Quick Expense">
       {showSavedBanner ? (
         <StatusBanner variant="success" message="Expense saved successfully." />
+      ) : null}
+      {cacheChecking ? (
+        <StatusBanner variant="info" message="Refreshing…" />
       ) : null}
       <div className="home-wrapper">
         <p className="home-greeting">
@@ -188,21 +251,21 @@ export function HomePage(): JSX.Element {
               <div className="home-metric-header">
                 <span className="home-metric-title">TODAY · {dayLabel}</span>
                 <Link to="/tail" className="home-metric-link">
-                  {todayStats.count} {todayStats.count === 1 ? "entry" : "entries"} →
+                  {displayTodayStats.count} {displayTodayStats.count === 1 ? "entry" : "entries"} →
                 </Link>
               </div>
-              {todayStats.count === 0 ? (
+              {displayTodayStats.count === 0 ? (
                 <p className="home-metric-empty">No expense entries</p>
               ) : (
                 <p className="home-metric-amount">
-                  {todayStats.dualCurrency ? (
+                  {displayTodayStats.dualCurrency ? (
                     <>
-                      <FormattedAmount prefix={`${todayStats.dualCurrency.code} `} value={todayStats.dualCurrency.amount} />
+                      <FormattedAmount prefix={`${displayTodayStats.dualCurrency.code} `} value={displayTodayStats.dualCurrency.amount} />
                       {" / "}
-                      <FormattedAmount prefix="$" value={todayStats.usdTotal} />
+                      <FormattedAmount prefix="$" value={displayTodayStats.usdTotal} />
                     </>
                   ) : (
-                    <FormattedAmount prefix="$" value={todayStats.usdTotal} />
+                    <FormattedAmount prefix="$" value={displayTodayStats.usdTotal} />
                   )}
                 </p>
               )}
@@ -213,18 +276,18 @@ export function HomePage(): JSX.Element {
               <div className="home-metric-header">
                 <span className="home-metric-title">{monthName} SO FAR</span>
                 <Link to="/tail" className="home-metric-link">
-                  {mtdStats.count} {mtdStats.count === 1 ? "entry" : "entries"} →
+                  {displayMtdStats.count} {displayMtdStats.count === 1 ? "entry" : "entries"} →
                 </Link>
               </div>
-              {mtdStats.count === 0 ? (
+              {displayMtdStats.count === 0 ? (
                 <p className="home-metric-empty">No expense entries</p>
               ) : (
                 <>
-                  <p className="home-metric-amount"><FormattedAmount prefix="$" value={mtdStats.usdTotal} /></p>
-                  {mtdStats.deviation && <DeviationLine deviation={mtdStats.deviation} />}
+                  <p className="home-metric-amount"><FormattedAmount prefix="$" value={displayMtdStats.usdTotal} /></p>
+                  {displayMtdStats.deviation && <DeviationLine deviation={displayMtdStats.deviation} />}
                   <MtdSpendChart
-                    dailyAmounts={mtdDailyAmounts}
-                    weekBoundaryPositions={weekBoundaryPositions}
+                    dailyAmounts={displayMtdDailyAmounts}
+                    weekBoundaryPositions={displayWeekBoundaryPositions}
                   />
                 </>
               )}
@@ -236,12 +299,12 @@ export function HomePage(): JSX.Element {
                 <div className="home-metric-header">
                   <span className="home-metric-title">{year} SO FAR</span>
                 </div>
-                {ytdStats.count === 0 ? (
+                {displayYtdStats.count === 0 ? (
                   <p className="home-metric-empty">No expense entries</p>
                 ) : (
                   <>
-                    <p className="home-metric-amount"><FormattedAmount prefix="$" value={ytdStats.usdTotal} /></p>
-                    {ytdStats.deviation && <DeviationLine deviation={ytdStats.deviation} />}
+                    <p className="home-metric-amount"><FormattedAmount prefix="$" value={displayYtdStats.usdTotal} /></p>
+                    {displayYtdStats.deviation && <DeviationLine deviation={displayYtdStats.deviation} />}
                   </>
                 )}
               </div>
@@ -251,12 +314,12 @@ export function HomePage(): JSX.Element {
                 <div className="home-metric-header">
                   <span className="home-metric-title">ROLLING 12M EXPENSES</span>
                 </div>
-                {rolling12mStats.count === 0 ? (
+                {displayRolling12mStats.count === 0 ? (
                   <p className="home-metric-empty">No expense entries</p>
                 ) : (
                   <>
-                    <p className="home-metric-amount"><FormattedAmount prefix="$" value={rolling12mStats.usdTotal} /></p>
-                    {rolling12mStats.deviation && <DeviationLine deviation={rolling12mStats.deviation} />}
+                    <p className="home-metric-amount"><FormattedAmount prefix="$" value={displayRolling12mStats.usdTotal} /></p>
+                    {displayRolling12mStats.deviation && <DeviationLine deviation={displayRolling12mStats.deviation} />}
                   </>
                 )}
               </div>

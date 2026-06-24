@@ -8,6 +8,7 @@ import {
 } from "react";
 import { authApi } from "../services/authApi";
 import { identifyUser, resetUser, trackEvent } from "../services/analytics";
+import { metricsCache } from "../services/metricsCache";
 import { AuthSession } from "../types/expense";
 
 type AuthStatus = "initializing" | "signed_out" | "signed_in";
@@ -56,6 +57,9 @@ export function AuthProvider({ children }: PropsWithChildren): JSX.Element {
   };
 
   const signOut = (): void => {
+    if (session?.email) {
+      metricsCache.clear(session.email);
+    }
     void authApi.logout().finally(() => {
       setSession(null);
       setStatus("signed_out");

@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { googleSheetsService } from "../services/googleSheets";
+import { metricsCache } from "../services/metricsCache";
 import { RetryBackoff } from "../services/retryBackoff";
 import { SpreadsheetConfig } from "../types/expense";
 import { useAuth } from "./AuthContext";
@@ -102,6 +103,7 @@ export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
           throw new Error("Guests cannot unlink a shared config. Use the reset flow instead.");
         }
         await googleSheetsService.clearConfig();
+        if (session?.email) metricsCache.clear(session.email);
         setConfig(null);
         retryBackoffRef.current.reset();
       },

@@ -138,6 +138,7 @@ quick-expense/
 │   │   ├── googleSheets.ts    ← /api/config + /api/expenses calls
 │   │   ├── http.ts            ← fetch wrappers with typed error handling
 │   │   ├── localConfig.ts     ← localStorage config cache (per-email key)
+│   │   ├── metricsCache.ts    ← localStorage metrics cache for Home dashboard (key: qe_metrics_{email})
 │   │   └── sharingApi.ts      ← /api/sharing/* calls (owner share management + guest reset)
 │   ├── types/
 │   │   └── expense.ts         ← all shared types and AppError class
@@ -152,6 +153,7 @@ quick-expense/
 │
 └── tests/                     ← Vitest test files
     ├── dashboard-stats.test.ts
+    ├── metricsCache.test.ts
     ├── search.test.ts
     ├── server-validation.test.js
     ├── spreadsheet.test.ts
@@ -261,6 +263,7 @@ All API routes are defined in `server/index.js`.
 | POST | `/api/config/create-spreadsheet` | Yes | Copy template spreadsheet into user's Drive |
 | GET | `/api/config/mapping` | Yes | Get current column mapping, config mode, and detected columns |
 | POST | `/api/config/mapping` | Yes | Save column mapping to Config sheet (requires `confirmed: true`) |
+| GET | `/api/sheet/modifiedtime` | Yes | Fetch the Drive `modifiedTime` timestamp of the configured spreadsheet. Returns `{ modifiedTime: string \| null }` — `null` when the file is not accessible via `drive.file` scope (e.g. shared-setup guests). Used by `HomePage` to validate the `localStorage` metrics cache. |
 | GET | `/api/expenses` | Yes | Load recent expense records (Phase 1). Response includes `loadPhase` (`"full"` or `"recent"`), `startRow`, `totalRows`, and `hasDateOrderIssue` (boolean — true when at least one date row is out of chronological order). When `loadPhase` is `"recent"`, the client fetches the historical remainder via `/api/expenses/history`. |
 | GET | `/api/expenses/history` | Yes | Load historical records older than the recent window. Query param: `endRow` (integer, last sheet row of the historical range). Response includes `loadPhase: "full"`. |
 | POST | `/api/expenses` | Yes | Add a new expense row (append or insert depending on date); returns `201` + `{ record: ExpenseRecord, insertMode: boolean }`. `insertMode: true` means the row was inserted mid-sheet at the correct chronological position. |
@@ -478,6 +481,7 @@ The SPA uses three nested context providers (wrapped in `App.tsx`):
   - `updateInDataset(record)` — called after a successful Edit; replaces the matching record (by `rowNumber`) and recomputes `distinctValues`. No full reload.
   - `removeLastFromDataset()` — called after a successful Delete (last row); removes the last entry from the in-memory array and recomputes `distinctValues`. No full reload.
   - All three mutation methods are no-ops when the snapshot has not yet been loaded.
+  - After any surgical mutation, `HomePage.tsx` recomputes all dashboard metrics via its `useMemo` hooks and rewrites the `localStorage` metrics cache (`qe_metrics_{email}`) immediately — no reload, no "Refreshing…" indicator.
   - `DatasetSnapshot.hasDateOrderIssue` — boolean set on every load by scanning the date column. When `true`, `Layout.tsx` renders a persistent red banner on all screens prompting the user to sort their sheet. The banner disappears automatically on the next clean reload.
   - Shared between Tail and Search pages (they reuse the same in-memory dataset).
   - Holds `searchFilters` state so Search page filter values persist across navigation.
@@ -506,6 +510,7 @@ Frontend services in `src/services/` are thin wrappers around `fetch`:
 - **`googlePicker.ts`** — loads Google Picker script, opens file picker dialog.
 - **`currency.ts`** — manual FX rate parsing and USD conversion logic.
 - **`localConfig.ts`** — per-email localStorage cache for spreadsheet config (fallback/optimization).
+- **`metricsCache.ts`** — `localStorage` cache for Home dashboard metrics (`qe_metrics_{email}`). Stores pre-computed `TodayStats`, `PeriodStats` (MTD/YTD/Rolling12M), chart daily amounts, and `sheetLastModifiedTime`. Automatically expires at midnight (date rollover on `load()`), cleared on sign-out and config clear.
 - **`sharingApi.ts`** — `/api/sharing/*` calls: list/add/update/remove shared users (owner); guest reset.
 
 ### 8.4 Key Front-End Conventions
@@ -611,5 +616,7 @@ The backend validates all required env vars at startup and fails fast if any are
 20. **Append vs. insert mode for new expenses** — `POST /api/expenses` reads the full date column before writing. If the submitted date is ≥ the last row's date (or the sheet has no data, unrecognisable date format, or out-of-order dates), the existing `appendExpenseRow` path is used unchanged. If the submitted date is earlier than the last row's date on a well-ordered sheet, `addExpenseRow` inserts the new row at the correct chronological position using Google Sheets API `batchUpdate insertDimension` followed by `values.update`. The client performs a full dataset reload after an insert-mode write. The shared `alignValuesToHeaders()` helper is used by both append and insert paths to handle legacy column ordering and column mapping.
 
 21. **Row repositioning on edit** — `PUT /api/expenses/:rowNumber` delegates to `moveExpenseRow` in `server/google-sheets.js`. The function reads the date column, checks if the new date keeps the row between its immediate neighbors, and falls back to `updateExpenseRow` (in-place) if so. When repositioning is required, `addExpenseRow` is called (reusing 100% of the insert/append decision logic), then the original row is deleted via `deleteDimension`. Insert-before-delete guarantees no data loss on partial failure. The client triggers the same `isInsertingHistorical` overlay and `reloadDataset()` call as the add insert-mode flow when `moveMode: true` is returned.
+
+22. **Home screen metrics cache (`localStorage`)** — Pre-computed dashboard metrics (TODAY/MTD/YTD/Rolling12M totals, chart data) are persisted in `localStorage` under `qe_metrics_{email}` to enable instant Home screen rendering on repeated visits. Freshness is validated on each explicit page load via a lightweight `GET /api/sheet/modifiedtime` Drive API call (within the existing `drive.file` scope, no scope change). Cache is invalidated at midnight, on sign-out, on config clear, and when the Drive `modifiedTime` exceeds the stored timestamp. After CRUD operations that use surgical in-memory mutations, the cache is rewritten immediately with an optimistic `sheetLastModifiedTime` (`Date.now()` ISO string), ensuring instant Home display after Add/Edit/Delete. Shared-setup guests and users with URL-pasted spreadsheets (not opened via Picker) receive `modifiedTime: null` from the Drive check and fall back to a full reload on every Home visit — no caching benefit for those users. Cache is written after Phase 1 of the two-phase load; Phase 2 completion may rewrite the cache a second time with updated YoY stats (acceptable).
 
  — share and revoke events dispatch a transactional email via Resend after the HTTP response is returned. Delivery failure is logged server-side and never surfaced to the UI. Templates live in `server/email-templates.js` (no external template storage). Sending is silently skipped if `RESEND_API_KEY` is absent, so the feature degrades gracefully in environments without email configuration.

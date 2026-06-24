@@ -661,6 +661,27 @@ export async function getSpreadsheetFileMeta(accessToken, spreadsheetId) {
 }
 
 /**
+ * Fetch the Drive last-modified timestamp for a spreadsheet file.
+ * Returns { modifiedTime: string } (ISO 8601) on success.
+ * Returns { modifiedTime: null } when the file is not accessible via drive.file scope
+ * (e.g. shared-setup guests, or files not opened via Google Picker).
+ * Throws on unexpected API errors.
+ */
+export async function getSpreadsheetModifiedTime(accessToken, spreadsheetId) {
+  try {
+    const data = await requestJson(
+      accessToken,
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(spreadsheetId)}?fields=modifiedTime`,
+      { headers: createHeaders(accessToken) },
+    );
+    return { modifiedTime: data.modifiedTime ?? null };
+  } catch (err) {
+    if (err.status === 404) return { modifiedTime: null };
+    throw err;
+  }
+}
+
+/**
  * Count data rows in the Expenses sheet (excluding the header row).
  * Returns 0 if the sheet has no rows, no header, or does not exist yet.
  */

@@ -27,6 +27,7 @@ import {
   getExpenseRowCount,
   parseSpreadsheetUrl,
   getSpreadsheetFileMeta,
+  getSpreadsheetModifiedTime,
   validateSpreadsheet,
   hasExactItemSet,
   insertCurrencyColumnInSheet,
@@ -551,6 +552,19 @@ app.get("/api/config/file-info", requireAuthenticatedUser, async (req, res) => {
     res.json({ fileName });
   } catch (error) {
     res.status(500).json({ message: (error).message });
+  }
+});
+
+app.get("/api/sheet/modifiedtime", requireAuthenticatedUser, async (req, res) => {
+  if (!req.configRecord.spreadsheetId) {
+    return res.status(400).json({ error: "No spreadsheet configured." });
+  }
+  try {
+    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const result = await getSpreadsheetModifiedTime(accessToken, req.configRecord.spreadsheetId);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 

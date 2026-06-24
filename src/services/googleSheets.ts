@@ -165,4 +165,8 @@ export const googleSheetsService = {
       body: JSON.stringify({ field, hidden }),
     });
   },
+
+  async getSheetModifiedTime(): Promise<{ modifiedTime: string | null }> {
+    return requestJson<{ modifiedTime: string | null }>("/api/sheet/modifiedtime");
+  },
 };
