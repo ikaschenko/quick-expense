@@ -726,50 +726,51 @@ export function AddExpensePage(): JSX.Element {
           {errors.Category ? <div className="field-error">{errors.Category}</div> : null}
         </div>
 
-        {/* Date */}
-        <div className="input-group">
-          <label className="input-label" htmlFor="expense-date-field">
-            Date <span className="add-date-label-muted">({exactDateLabel})</span>
-          </label>
-          <div className="add-date-picker-row">
-            <Calendar size={16} aria-hidden />
-            <DatePicker
-              id="expense-date-field"
-              className="input add-date-picker-input"
-              selected={selectedExpenseDate}
-              onChange={(date: Date | null) => {
-                if (!date) {
-                  return;
-                }
-                updateDraft("Date", formatLocalDate(date));
-              }}
-              dateFormat="yyyy-MM-dd"
-              popperPlacement="bottom-start"
-              showPopperArrow={false}
-              required
-              aria-label="Expense date"
-            />
+        {/* Date + SpentBy inline row */}
+        <div className="add-fields-row">
+          <div className="input-group">
+            <label className="input-label" htmlFor="expense-date-field">
+              Date <span className="add-date-label-muted">({exactDateLabel})</span>
+            </label>
+            <div className="add-date-picker-row">
+              <Calendar size={16} aria-hidden />
+              <DatePicker
+                id="expense-date-field"
+                className="input add-date-picker-input"
+                selected={selectedExpenseDate}
+                onChange={(date: Date | null) => {
+                  if (!date) {
+                    return;
+                  }
+                  updateDraft("Date", formatLocalDate(date));
+                }}
+                dateFormat="yyyy-MM-dd"
+                popperPlacement="bottom-start"
+                showPopperArrow={false}
+                required
+                aria-label="Expense date"
+              />
+            </div>
+            {errors.Date ? <div className="field-error">{errors.Date}</div> : null}
           </div>
-          {errors.Date ? <div className="field-error">{errors.Date}</div> : null}
-        </div>
 
-        {/* SpentBy */}
-        <div className="input-group">
-          <label className="input-label" htmlFor="spent-by-field">Spent By</label>
-          <input
-            id="spent-by-field"
-            className="input"
-            list="spent-by-options"
-            value={draft.spentBy}
-            onChange={(event) => updateDraft("spentBy", event.target.value)}
-            required
-          />
-          <datalist id="spent-by-options">
-            {(suggestionLists.spentBy ?? []).map((value) => (
-              <option key={value} value={value} />
-            ))}
-          </datalist>
-          {errors.spentBy ? <div className="field-error">{errors.spentBy}</div> : null}
+          <div className="input-group">
+            <label className="input-label" htmlFor="spent-by-field">Spent By</label>
+            <input
+              id="spent-by-field"
+              className="input"
+              list="spent-by-options"
+              value={draft.spentBy}
+              onChange={(event) => updateDraft("spentBy", event.target.value)}
+              required
+            />
+            <datalist id="spent-by-options">
+              {(suggestionLists.spentBy ?? []).map((value) => (
+                <option key={value} value={value} />
+              ))}
+            </datalist>
+            {errors.spentBy ? <div className="field-error">{errors.spentBy}</div> : null}
+          </div>
         </div>
 
         {/* Comment */}

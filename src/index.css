@@ -1029,8 +1029,12 @@ button { cursor: pointer; }
 
 .add-fields-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(9rem, 1fr) 1fr;
   gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+.add-fields-row > .input-group {
+  margin-bottom: 0;
 }
 
 .add-fx-card {
