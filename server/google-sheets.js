@@ -8,7 +8,7 @@ const __dirname = dirname(__filename);
 const currencyDictionary = JSON.parse(
   readFileSync(join(__dirname, "..", "config", "currencies.json"), "utf-8"),
 );
-const VALID_CURRENCY_CODES = new Set(currencyDictionary.currencies.map((c) => c.code));
+export const VALID_CURRENCY_CODES = new Set(currencyDictionary.currencies.map((c) => c.code));
 
 const SHEET_NAME = "Expenses";
 const TEMPLATE_SPREADSHEET_ID = "1uE3OmvxHg03aETXg0msInAVniWZfoadwdpxf1gR2ENg";

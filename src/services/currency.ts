@@ -1,5 +1,6 @@
 import { AppError, ManualFxRates } from "../types/expense";
 import { parsePositiveDecimal } from "../utils/validation";
+import { requestJson } from "./http";
 
 function roundUsd(value: number): number {
   return Math.round(value * 100) / 100;
@@ -54,5 +55,16 @@ export const currencyService = {
     }
 
     return roundUsd(usdTotal);
+  },
+
+  async fetchLiveRates(currencies: string[]): Promise<Partial<Record<string, number>>> {
+    if (currencies.length === 0) return {};
+    try {
+      const params = currencies.join(",");
+      const data = await requestJson<{ rates: Record<string, number> }>(`/api/fx/rates?currencies=${encodeURIComponent(params)}`);
+      return data.rates ?? {};
+    } catch {
+      return {};
+    }
   },
 };

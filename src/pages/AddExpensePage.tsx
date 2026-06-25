@@ -183,6 +183,8 @@ export function AddExpensePage(): JSX.Element {
     createEmptyFxRates(activeCurrencies),
   );
   const [fxErrors, setFxErrors] = useState<Partial<Record<string, string>>>({});
+  const [liveFxRates, setLiveFxRates] = useState<Partial<Record<string, number>>>({});
+  const [isFetchingLiveRates, setIsFetchingLiveRates] = useState(false);
   const [activeNonUsdCurrency, setActiveNonUsdCurrency] = useState<string | null>(
     visibleCurrencies[0] ?? null,
   );
@@ -190,6 +192,7 @@ export function AddExpensePage(): JSX.Element {
   const [currencyDictionary, setCurrencyDictionary] = useState<CurrencyDictionary | null>(null);
   const amountInputRef = useRef<HTMLInputElement>(null);
   const pendingSaveMode = useRef<'continue' | 'close'>('continue');
+  const hasFetchedLiveRates = useRef(false);
 
   useEffect(() => { amountInputRef.current?.focus(); }, []);
 
@@ -281,7 +284,27 @@ export function AddExpensePage(): JSX.Element {
     };
   }, [isEditMode, config?.spreadsheetId, activeCurrencies]);
 
-  // Auto-convert non-USD → USD
+  // Fetch live FX rates from the market when the form opens for today's date.
+  // Uses visibleCurrencies (not activeCurrencies) so hidden/archived currencies
+  // (e.g. legacy codes not present in VALID_CURRENCY_CODES) are excluded from the request.
+  // Deps include visibleCurrencies.length so the effect re-fires once config loads
+  // (config is often not ready on the first render, so visibleCurrencies is []).
+  // The ref ensures the fetch happens only once regardless of subsequent re-renders.
+  useEffect(() => {
+    if (hasFetchedLiveRates.current || visibleCurrencies.length === 0 || draft.Date !== getTodayLocalDate()) return;
+
+    hasFetchedLiveRates.current = true;
+    let isActive = true;
+    setIsFetchingLiveRates(true);
+
+    void currencyService
+      .fetchLiveRates(visibleCurrencies)
+      .then((rates) => { if (isActive) setLiveFxRates(rates); })
+      .finally(() => { if (isActive) setIsFetchingLiveRates(false); });
+
+    return () => { isActive = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleCurrencies.length]); // re-run when currencies become available; ref guards against re-fetch
   const draftCurrencyDeps = activeCurrencies.map((c) => draft.currencyAmounts[c]).join("|");
   useEffect(() => {
     if (activeCurrencies.length === 0) return;
@@ -612,35 +635,61 @@ export function AddExpensePage(): JSX.Element {
           </div>
         ) : null}
 
-        {/* FX Rate row — for active non-USD currency */}
-        {activeNonUsdCurrency && (manualFxRates[activeNonUsdCurrency] || draft.currencyAmounts[activeNonUsdCurrency]) ? (
-          <div className="add-fx-row">
-            <span className="add-fx-label">Rate</span>
-            <input
-              className="input add-fx-input"
-              inputMode="decimal"
-              value={manualFxRates[activeNonUsdCurrency] ?? ""}
-              onChange={(event) => updateFxRate(activeNonUsdCurrency, event.target.value)}
-              placeholder={`USD rate for ${activeNonUsdCurrency}`}
-            />
+        {/* FX Conversion Card — for active non-USD currency */}
+        {activeNonUsdCurrency && (
+          manualFxRates[activeNonUsdCurrency] ||
+          draft.currencyAmounts[activeNonUsdCurrency] ||
+          liveFxRates[activeNonUsdCurrency] !== undefined ||
+          isFetchingLiveRates
+        ) ? (
+          <div className="add-fx-card">
+            <div className="add-fx-card-body">
+              <div className="add-fx-card-col">
+                <span className="add-fx-col-label">{activeNonUsdCurrency}/USD</span>
+                <input
+                  className="add-fx-card-rate-input"
+                  inputMode="decimal"
+                  value={manualFxRates[activeNonUsdCurrency] ?? ""}
+                  onChange={(event) => updateFxRate(activeNonUsdCurrency, event.target.value)}
+                  placeholder="0.00"
+                  aria-label={`Exchange rate: ${activeNonUsdCurrency} per 1 USD`}
+                />
+              </div>
+              <div className="add-fx-card-col--live">
+                {draft.Date === getTodayLocalDate() ? (
+                  isFetchingLiveRates ? (
+                    <button type="button" className="add-fx-card-live-btn" disabled>
+                      <span className="add-fx-card-live-btn-tag">Live rate</span>
+                      <span className="add-fx-card-live-btn-val">…</span>
+                    </button>
+                  ) : liveFxRates[activeNonUsdCurrency] !== undefined ? (
+                    <button
+                      type="button"
+                      className="add-fx-card-live-btn"
+                      onClick={() => updateFxRate(activeNonUsdCurrency, liveFxRates[activeNonUsdCurrency]!.toFixed(2))}
+                    >
+                      <span className="add-fx-card-live-btn-tag">Live rate</span>
+                      <span className="add-fx-card-live-btn-val">{liveFxRates[activeNonUsdCurrency]!.toFixed(2)}</span>
+                    </button>
+                  ) : null
+                ) : null}
+              </div>
+              <div className="add-fx-card-col">
+                <span className="add-fx-col-label">USD</span>
+                <div className="add-fx-card-result-value">{draft.USD || "0.00"}</div>
+              </div>
+            </div>
+            {fxErrors[activeNonUsdCurrency] ? (
+              <div className="field-error" style={{ padding: "0 var(--space-4) var(--space-3)" }}>
+                {fxErrors[activeNonUsdCurrency]}
+              </div>
+            ) : null}
+            {errors.USD ? (
+              <div className="field-error" style={{ padding: "0 var(--space-4) var(--space-3)" }}>
+                {errors.USD}
+              </div>
+            ) : null}
           </div>
-        ) : null}
-        {activeNonUsdCurrency && (manualFxRates[activeNonUsdCurrency] || draft.currencyAmounts[activeNonUsdCurrency]) ? (
-          <div className="input-group">
-            <label className="input-label" htmlFor="usd-amount">USD</label>
-            <input
-              id="usd-amount"
-              className="input"
-              inputMode="decimal"
-              value={draft.USD}
-              onChange={(event) => updateDraft("USD", event.target.value)}
-              placeholder="0.00"
-            />
-            {errors.USD ? <div className="field-error">{errors.USD}</div> : null}
-          </div>
-        ) : null}
-        {activeNonUsdCurrency && fxErrors[activeNonUsdCurrency] ? (
-          <div className="field-error mb-4">{fxErrors[activeNonUsdCurrency]}</div>
         ) : null}
 
         {/* Category */}

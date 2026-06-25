@@ -181,7 +181,7 @@ Currency conversion: Here are key cases:
 For the conversion of currency, here are key guidelines:
 
 * Currency conversion rates are entered manually by the user in the Add flow.
-* No external exchange-rate API integration is required in v1.
+* When adding an expense dated **today**, the form fetches the current market rate from a free key-less exchange-rate API and displays it as a tappable hint next to the rate input: *"Market: X.XX"*. Tapping the hint copies the rate into the input field. If the fetch fails for any reason, the hint is not shown and the form falls back to fully manual entry. The hint is not shown when editing historical expenses.
 * Converted USD value must be rounded to 2 decimal places.
 * Missing or invalid manual rate input must block Save when a non-USD amount is entered and USD is not entered directly.
 * The last-used FX rate for each currency is backed up in the database and pre-filled on the next Add.

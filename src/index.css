@@ -1033,24 +1033,105 @@ button { cursor: pointer; }
   gap: var(--space-3);
 }
 
-.add-fx-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  background: var(--color-surface-raised);
-  border-radius: var(--radius-md);
+.add-fx-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
   margin-bottom: var(--space-4);
+  overflow: hidden;
 }
 
-.add-fx-label {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  white-space: nowrap;
+.add-fx-card-body {
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
 }
 
-.add-fx-input {
+.add-fx-card-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
   flex: 1;
+  min-width: 0;
+}
+
+.add-fx-card-col--live {
+  flex: 0 0 64px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.add-fx-col-label {
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-text-secondary);
+}
+
+.add-fx-card-rate-input {
+  width: 100%;
+  padding: 8px var(--space-2);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  font-family: inherit;
+  color: var(--color-text-primary);
+  background: var(--color-surface);
+  outline: none;
+}
+
+.add-fx-card-rate-input:focus {
+  border-color: var(--color-accent);
+}
+
+.add-fx-card-live-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  padding: 8px var(--space-1);
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--color-text-inverse);
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+
+.add-fx-card-live-btn:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}
+
+.add-fx-card-live-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.add-fx-card-live-btn-tag {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.8;
+}
+
+.add-fx-card-live-btn-val {
+  font-size: var(--font-size-base);
+  font-weight: 700;
+}
+
+.add-fx-card-result-value {
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  color: var(--color-success);
+  padding: 8px 0;
 }
 
 .add-sticky-save {

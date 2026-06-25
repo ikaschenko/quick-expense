@@ -46,6 +46,7 @@ import {
   MAX_CUSTOM_COLUMNS,
   MAX_OPTIONAL_CURRENCIES,
   validateColumnName,
+  VALID_CURRENCY_CODES,
 } from "./google-sheets.js";
 import {
   checkDatabaseHealth,
@@ -708,6 +709,52 @@ app.get("/api/expenses", requireAuthenticatedUser, async (req, res) => {
 app.get("/api/fx-backup", requireAuthenticatedUser, async (req, res) => {
   const backup = await getLatestFxRateBackup(req.userRecord.email, req.configRecord.spreadsheetId);
   res.json({ backup });
+});
+
+const FX_API_URL = "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json";
+const FX_API_TIMEOUT_MS = 5_000;
+
+app.get("/api/fx/rates", requireAuthenticatedUser, async (req, res) => {
+  const raw = String(req.query.currencies ?? "").trim();
+  if (!raw) {
+    res.status(400).json({ message: "currencies query parameter is required." });
+    return;
+  }
+
+  const requested = raw.split(",").map((c) => c.trim().toUpperCase()).filter(Boolean);
+  if (requested.length === 0 || requested.length > 10) {
+    res.status(400).json({ message: "Provide between 1 and 10 currency codes." });
+    return;
+  }
+  const invalid = requested.filter((c) => !VALID_CURRENCY_CODES.has(c));
+  if (invalid.length > 0) {
+    res.status(400).json({ message: `Unknown currency codes: ${invalid.join(", ")}.` });
+    return;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), FX_API_TIMEOUT_MS);
+    let data;
+    try {
+      const response = await fetch(FX_API_URL, { signal: controller.signal });
+      if (!response.ok) throw new Error(`FX API responded with ${response.status}`);
+      data = await response.json();
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    const usdRates = data?.usd ?? {};
+    const rates = {};
+    for (const code of requested) {
+      const value = usdRates[code.toLowerCase()];
+      if (typeof value === "number") rates[code] = value;
+    }
+
+    res.json({ rates, date: data?.date ?? null });
+  } catch {
+    res.status(503).json({ message: "Exchange rate service is temporarily unavailable." });
+  }
 });
 
 app.post("/api/expenses", requireAuthenticatedUser, requireEditAccess, async (req, res) => {

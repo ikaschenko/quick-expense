@@ -270,6 +270,7 @@ All API routes are defined in `server/index.js`.
 | PUT | `/api/expenses/:rowNumber` | Yes | Save an edited expense row. If the date change would break chronological order, the row is repositioned (insert at correct position then delete original); returns `200` + `{ record: ExpenseRecord, moveMode: boolean }`. `moveMode: true` means the row was moved — client performs a full dataset reload. |
 | DELETE | `/api/expenses/last` | Yes | Delete the last expense row (with row-count conflict check) |
 | GET | `/api/fx-backup` | Yes | Get the latest saved FX rate backup |
+| GET | `/api/fx/rates` | Yes | Fetch live market exchange rates for one or more non-USD currency codes (`?currencies=PLN,EUR`). Proxies `fawazahmed0/currency-api` via jsDelivr CDN (free, key-less, daily ECB rates). Returns `{ rates: { PLN: 4.03 }, date: "2026-06-25" }`. On upstream failure returns 503. |
 | GET | `/api/currencies/available` | Yes | Get the currency dictionary (all supported codes + max limit) |
 | GET | `/api/currencies` | Yes | Get the user's active currency codes |
 | PUT | `/api/currencies` | Yes | Save user's currency selection and update sheet columns |
@@ -597,7 +598,7 @@ The backend validates all required env vars at startup and fails fast if any are
 3. **Client-side search** — the full dataset is loaded into the browser. Capped at 10 MB JSON payload.
 4. **Edit of existing records** — supported via `PUT /api/expenses/:rowNumber`. Returns `{ record, moveMode }`. When the date change keeps the row in chronological order, an in-place cell update is performed (`moveMode: false`). When the date change would break order, `moveExpenseRow` calls the existing `addExpenseRow` (insert/append decision fully reused), then deletes the original row (`moveMode: true`). The client performs a full dataset reload on `moveMode: true`, identical to the add insert-mode flow. Delete is scoped to the **last row only**, available from Tail view. Protected by a row-count conflict check: the client passes the expected row count; the backend rejects with HTTP 409 if the sheet was updated concurrently.
 5. **No duplicate detection** — each Save appends a new row unconditionally.
-6. **Currency:** Users configure up to 3 non-USD currencies from a dictionary of 25 (stored in `config/currencies.json` and `user_currencies` DB table). At most one non-USD currency at a time per expense, optionally alongside USD. Manual FX rate conversion (no external API). Archived currency columns remain in the sheet.
+6. **Currency:** Users configure up to 3 non-USD currencies from a dictionary of 25 (stored in `config/currencies.json` and `user_currencies` DB table). At most one non-USD currency at a time per expense, optionally alongside USD. Manual FX rate entry is primary; when the form date is today, a live market rate hint is fetched via `GET /api/fx/rates` (proxied from `fawazahmed0/currency-api` — free, key-less, daily rates) and displayed as a tappable *"Market: X.XX"* hint. Silent fallback to fully manual entry on any upstream failure. Archived currency columns remain in the sheet.
 7. **No pagination** — search results capped at 100.
 8. **Single sheet named "Expenses"** — no multi-sheet support.
 9. **Concurrency** — relies on Google Sheets API atomic append; no manual row indexing.
