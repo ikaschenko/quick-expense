@@ -386,7 +386,7 @@ app.get("/api/config", requireAuthenticatedUser, async (req, res) => {
   }
 
   try {
-    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const accessToken = await getAuthorizedAccessToken(req.configRecord);
     const { mode: configMode, mapping = null, reason: configModeReason, predefinedCategories = [] } =
       await detectConfigSheet(accessToken, configRecord.spreadsheetId);
 
@@ -463,7 +463,7 @@ app.post("/api/config", requireAuthenticatedUser, requireOwner, async (req, res)
       return;
     }
 
-    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const accessToken = await getAuthorizedAccessToken(req.configRecord);
 
     // Persist the spreadsheetId before validation so that POST /api/config/mapping
     // can work even when validation fails due to column mismatches.
@@ -507,7 +507,7 @@ app.post("/api/config/create-spreadsheet", requireAuthenticatedUser, requireOwne
     const rawName = String(req.body?.name ?? "").trim();
     const name = rawName.slice(0, 100) || "Quick Expense — My Expenses";
 
-    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const accessToken = await getAuthorizedAccessToken(req.configRecord);
     const { spreadsheetId, spreadsheetUrl } = await createSpreadsheet(accessToken, name);
 
     const setupReport = await validateSpreadsheet(accessToken, spreadsheetId);
@@ -547,7 +547,7 @@ app.get("/api/config/file-info", requireAuthenticatedUser, async (req, res) => {
     return;
   }
   try {
-    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const accessToken = await getAuthorizedAccessToken(req.configRecord);
     const { fileName } = await getSpreadsheetFileMeta(accessToken, req.configRecord.spreadsheetId);
     res.json({ fileName });
   } catch (error) {
@@ -560,7 +560,7 @@ app.get("/api/sheet/modifiedtime", requireAuthenticatedUser, async (req, res) =>
     return res.status(400).json({ error: "No spreadsheet configured." });
   }
   try {
-    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const accessToken = await getAuthorizedAccessToken(req.configRecord);
     const result = await getSpreadsheetModifiedTime(accessToken, req.configRecord.spreadsheetId);
     res.json(result);
   } catch (error) {
@@ -574,7 +574,7 @@ app.get("/api/config/mapping", requireAuthenticatedUser, async (req, res) => {
     return;
   }
   try {
-    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const accessToken = await getAuthorizedAccessToken(req.configRecord);
     const [configResult, detectedColumns] = await Promise.all([
       detectConfigSheet(accessToken, req.configRecord.spreadsheetId),
       readExpensesSheetHeader(accessToken, req.configRecord.spreadsheetId),
@@ -605,7 +605,7 @@ app.post("/api/config/mapping", requireAuthenticatedUser, requireOwner, async (r
   }
   const mapping = req.body.mapping;
   try {
-    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const accessToken = await getAuthorizedAccessToken(req.configRecord);
     await writeConfigSheetMapping(accessToken, req.configRecord.spreadsheetId, mapping);
     const mode = "config-driven";
     res.json({ mapping, mode });
@@ -641,7 +641,7 @@ app.get("/api/expenses/count", requireAuthenticatedUser, async (req, res) => {
       res.status(400).json({ message: "Spreadsheet is not configured." });
       return;
     }
-    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const accessToken = await getAuthorizedAccessToken(req.configRecord);
     const rowCount = await getExpenseRowCount(accessToken, req.configRecord.spreadsheetId);
     res.json({ rowCount });
   } catch (error) {
@@ -662,7 +662,7 @@ app.get("/api/expenses/history", requireAuthenticatedUser, async (req, res) => {
       return;
     }
 
-    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const accessToken = await getAuthorizedAccessToken(req.configRecord);
     const { mode, mapping: configMapping = null, metadata } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
     const mapping = mode === "config-driven" ? configMapping : null;
     const report = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping, metadata);
@@ -684,7 +684,7 @@ app.get("/api/expenses", requireAuthenticatedUser, async (req, res) => {
       return;
     }
 
-    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const accessToken = await getAuthorizedAccessToken(req.configRecord);
     const { mode, mapping: configMapping = null, metadata } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
     const mapping = mode === "config-driven" ? configMapping : null;
     const report = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping, metadata);
@@ -723,7 +723,7 @@ app.post("/api/expenses", requireAuthenticatedUser, requireEditAccess, async (re
       return;
     }
 
-    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const accessToken = await getAuthorizedAccessToken(req.configRecord);
     const { mode: expenseMode, mapping: expenseMapping = null } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
     const mapping = expenseMode === "config-driven" ? expenseMapping : null;
 
@@ -765,7 +765,7 @@ app.put("/api/expenses/:rowNumber", requireAuthenticatedUser, requireEditAccess,
       return;
     }
 
-    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const accessToken = await getAuthorizedAccessToken(req.configRecord);
     const { mode: expenseMode, mapping: expenseMapping = null } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
     const mapping = expenseMode === "config-driven" ? expenseMapping : null;
 
@@ -801,7 +801,7 @@ app.delete("/api/expenses/last", requireAuthenticatedUser, requireEditAccess, as
       return;
     }
 
-    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const accessToken = await getAuthorizedAccessToken(req.configRecord);
     await deleteLastExpenseRow(accessToken, req.configRecord.spreadsheetId, expectedRowCount);
     res.status(204).end();
   } catch (error) {
@@ -829,7 +829,7 @@ app.post("/api/sheet/currency", requireAuthenticatedUser, requireOwner, async (r
       return;
     }
 
-    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const accessToken = await getAuthorizedAccessToken(req.configRecord);
     const result = await insertCurrencyColumnInSheet(accessToken, req.configRecord.spreadsheetId, code);
     res.status(201).json(result);
   } catch (error) {
@@ -847,7 +847,7 @@ app.post("/api/sheet/column", requireAuthenticatedUser, requireOwner, async (req
     const name = String(req.body?.name ?? "").trim();
 
     // Read current structure to validate against existing names
-    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const accessToken = await getAuthorizedAccessToken(req.configRecord);
     const { mode: configMode, mapping: configMapping = null } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
     const mapping = configMode === "config-driven" ? configMapping : null;
     const report = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
@@ -889,7 +889,7 @@ app.patch("/api/sheet/column/rename", requireAuthenticatedUser, requireOwner, as
     }
 
     // Validate new name
-    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const accessToken = await getAuthorizedAccessToken(req.configRecord);
     const { mode: configMode, mapping: configMapping = null } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
     const mapping = configMode === "config-driven" ? configMapping : null;
     const report = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
@@ -941,7 +941,7 @@ app.put("/api/sheet/columns/reorder", requireAuthenticatedUser, requireOwner, as
       return;
     }
 
-    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const accessToken = await getAuthorizedAccessToken(req.configRecord);
     const { mode: configMode, mapping: configMapping = null } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
     const mapping = configMode === "config-driven" ? configMapping : null;
     const report = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
@@ -973,7 +973,7 @@ app.put("/api/sheet/currencies/reorder", requireAuthenticatedUser, requireOwner,
       return;
     }
 
-    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const accessToken = await getAuthorizedAccessToken(req.configRecord);
     const { mode: configMode, mapping: configMapping = null } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
     const mapping = configMode === "config-driven" ? configMapping : null;
     const report = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
@@ -1011,7 +1011,7 @@ app.delete("/api/sheet/column", requireAuthenticatedUser, requireOwner, async (r
       return;
     }
 
-    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    const accessToken = await getAuthorizedAccessToken(req.configRecord);
     const { mode: configMode, mapping: configMapping = null } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
     const mapping = configMode === "config-driven" ? configMapping : null;
     const colIndex = await findColumnIndex(accessToken, req.configRecord.spreadsheetId, name, mapping);
