@@ -46,3 +46,4 @@ For every major change, verify against the OWASP-aligned rules in `copilot-instr
 - ASCII diagrams when helpful.
 - Open questions prefixed with **⚠️ QUESTION:**
 - When proposing doc updates mid-discussion, show the intended change as a clear diff (section, before/after) and wait for explicit human approval before writing to disk.
+- **Implementation plan summary:** At the end of every implementation plan, output a compact version formatted for a GitHub issue comment — concise, structured, no explanations. Use a `## Implementation Plan` heading with numbered steps, each step a single line. No prose, no rationale, no alternatives.
