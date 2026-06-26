@@ -343,6 +343,10 @@ export function AddExpensePage(): JSX.Element {
     [dataset.snapshot],
   );
 
+  if (isViewOnly) {
+    return <Navigate to="/home" replace />;
+  }
+
   if (!config && !isConfigLoading) {
     return <Navigate to="/setup" replace />;
   }

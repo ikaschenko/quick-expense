@@ -5,6 +5,7 @@ import { ExpenseTable } from "../components/ExpenseTable";
 import { Layout } from "../components/Layout";
 import { LoadingBlock } from "../components/LoadingBlock";
 import { StatusBanner } from "../components/StatusBanner";
+import { useAuth } from "../contexts/AuthContext";
 import { useConfig } from "../contexts/ConfigContext";
 import { useDataset } from "../contexts/DatasetContext";
 import { filterExpenses } from "../utils/search";
@@ -14,6 +15,8 @@ import { ExpenseRecord } from "../types/expense";
 export function SearchPage(): JSX.Element {
   const { config, isConfigLoading } = useConfig();
   const dataset = useDataset();
+  const { session } = useAuth();
+  const isViewOnly = session?.guestAccessLevel === 'view';
   const navigate = useNavigate();
   const location = useLocation();
   const [hasSearched, setHasSearched] = useState(false);
@@ -187,6 +190,7 @@ export function SearchPage(): JSX.Element {
                 onEditRequest={handleEditRequest}
                 highlightedRowNumber={highlightedRowNumber}
                 savedRowNumber={savedRowNumber}
+                isViewOnly={isViewOnly}
               />
             </>
           )}

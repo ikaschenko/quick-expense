@@ -392,6 +392,30 @@ button { cursor: pointer; }
 }
 .bottom-nav-add:hover { background: var(--color-accent-hover); }
 .bottom-nav-add:active { transform: scale(0.95); }
+.bottom-nav-add--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  position: relative;
+}
+.bottom-nav-add--disabled:hover { background: var(--color-accent); transform: none; }
+.bottom-nav-add--disabled:active { transform: none; }
+.bottom-nav-add-lock {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  background: var(--color-surface-raised);
+  border: 2px solid var(--color-surface);
+  border-radius: var(--radius-full);
+  padding: 4px;
+  color: var(--color-text-secondary);
+  pointer-events: none;
+}
+.btn--locked {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn--locked:hover { background: inherit; transform: none; }
+.btn--locked:active { transform: none; }
 
 /* ===== Page Content Area ===== */
 .page-content {

@@ -6,6 +6,7 @@ import { ExpenseTable } from "../components/ExpenseTable";
 import { Layout } from "../components/Layout";
 import { LoadingBlock } from "../components/LoadingBlock";
 import { StatusBanner } from "../components/StatusBanner";
+import { useAuth } from "../contexts/AuthContext";
 import { useConfig } from "../contexts/ConfigContext";
 import { useDataset } from "../contexts/DatasetContext";
 import { googleSheetsService } from "../services/googleSheets";
@@ -15,6 +16,8 @@ import { ExpenseRecord } from "../types/expense";
 export function TailPage(): JSX.Element {
   const { config, isConfigLoading, error: configError } = useConfig();
   const dataset = useDataset();
+  const { session } = useAuth();
+  const isViewOnly = session?.guestAccessLevel === 'view';
   const navigate = useNavigate();
 
   const [confirmRecord, setConfirmRecord] = useState<ExpenseRecord | null>(null);
@@ -116,6 +119,7 @@ export function TailPage(): JSX.Element {
           onEditRequest={handleEditRequest}
           highlightedRowNumber={highlightedRowNumber}
           savedRowNumber={savedRowNumber}
+          isViewOnly={isViewOnly}
         />
       ) : null}
 

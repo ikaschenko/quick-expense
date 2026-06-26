@@ -18,6 +18,7 @@ import {
   Trash2,
   Pencil,
   Check,
+  Lock,
 } from "lucide-react";
 import { ExpenseRecord } from "../types/expense";
 import { COMMENT_PREVIEW_LENGTH, getCustomColumnLabel, hasDetails } from "../utils/expenseTable";
@@ -43,6 +44,8 @@ interface ExpenseTableProps {
   highlightedRowNumber?: number | null;
   /** Row number of a record that was just successfully saved (shows badge). */
   savedRowNumber?: number | null;
+  /** When true, Edit and Delete controls are locked for View-only guests. */
+  isViewOnly?: boolean;
 }
 
 type LucideIcon = React.ForwardRefExoticComponent<Omit<LucideProps, "ref"> & React.RefAttributes<SVGSVGElement>>;
@@ -132,9 +135,10 @@ interface ExpenseCardProps {
   onEditRequest?: (record: ExpenseRecord) => void;
   isHighlighted?: boolean;
   isSaved?: boolean;
+  isViewOnly?: boolean;
 }
 
-function ExpenseCard({ record, sheetCurrencies, customColumns, isLastRecord, onDeleteRequest, onEditRequest, isHighlighted, isSaved }: ExpenseCardProps): JSX.Element {
+function ExpenseCard({ record, sheetCurrencies, customColumns, isLastRecord, onDeleteRequest, onEditRequest, isHighlighted, isSaved, isViewOnly }: ExpenseCardProps): JSX.Element {
   const [isOpen, setIsOpen] = useState(isHighlighted ?? false);
   const cardRef = useRef<HTMLDivElement>(null);
   const Icon = getCategoryIcon(record.Category);
@@ -198,26 +202,52 @@ function ExpenseCard({ record, sheetCurrencies, customColumns, isLastRecord, onD
                   </span>
                 ) : null}
                 {onEditRequest ? (
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    type="button"
-                    aria-label="Edit this expense"
-                    onClick={(e) => { e.stopPropagation(); onEditRequest(record); }}
-                  >
-                    <Pencil size={14} aria-hidden />
-                    Edit
-                  </button>
+                  isViewOnly ? (
+                    <button
+                      className="btn btn-secondary btn-sm btn--locked"
+                      type="button"
+                      aria-label="Edit this expense"
+                      aria-disabled="true"
+                      onClick={(e) => { e.stopPropagation(); alert("You don't have permission for this action. Contact the setup owner to request access."); }}
+                    >
+                      <Lock size={14} aria-hidden />
+                      Edit
+                    </button>
+                  ) : (
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      type="button"
+                      aria-label="Edit this expense"
+                      onClick={(e) => { e.stopPropagation(); onEditRequest(record); }}
+                    >
+                      <Pencil size={14} aria-hidden />
+                      Edit
+                    </button>
+                  )
                 ) : null}
                 {isLastRecord && onDeleteRequest ? (
-                  <button
-                    className="btn btn-danger btn-sm"
-                    type="button"
-                    aria-label="Delete this expense"
-                    onClick={(e) => { e.stopPropagation(); onDeleteRequest(record); }}
-                  >
-                    <Trash2 size={14} aria-hidden />
-                    Delete
-                  </button>
+                  isViewOnly ? (
+                    <button
+                      className="btn btn-danger btn-sm btn--locked"
+                      type="button"
+                      aria-label="Delete this expense"
+                      aria-disabled="true"
+                      onClick={(e) => { e.stopPropagation(); alert("You don't have permission for this action. Contact the setup owner to request access."); }}
+                    >
+                      <Lock size={14} aria-hidden />
+                      Delete
+                    </button>
+                  ) : (
+                    <button
+                      className="btn btn-danger btn-sm"
+                      type="button"
+                      aria-label="Delete this expense"
+                      onClick={(e) => { e.stopPropagation(); onDeleteRequest(record); }}
+                    >
+                      <Trash2 size={14} aria-hidden />
+                      Delete
+                    </button>
+                  )
                 ) : null}
               </div>
             ) : null}
@@ -260,6 +290,7 @@ export function ExpenseTable({
   onEditRequest,
   highlightedRowNumber,
   savedRowNumber,
+  isViewOnly,
 }: ExpenseTableProps): JSX.Element {
   const groups = useMemo(() => groupByDate(records), [records]);
 
@@ -288,6 +319,7 @@ export function ExpenseTable({
               onEditRequest={onEditRequest}
               isHighlighted={record.rowNumber === highlightedRowNumber}
               isSaved={record.rowNumber === savedRowNumber}
+              isViewOnly={isViewOnly}
             />
           ))}
         </div>

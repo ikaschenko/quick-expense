@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { PropsWithChildren, useState, useRef, useEffect } from "react";
-import { ChevronLeft, House, Plus, Clock, Search, LogOut, MessageSquareShare, X, Shield, FileText, Settings } from "lucide-react";
+import { ChevronLeft, House, Plus, Clock, Search, LogOut, MessageSquareShare, X, Shield, FileText, Settings, Lock } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useConfig } from "../contexts/ConfigContext";
 import { useDataset } from "../contexts/DatasetContext";
@@ -23,6 +23,7 @@ export function Layout({ children, title, onBack }: LayoutProps): JSX.Element {
   const avatarRef = useRef<HTMLDivElement>(null);
 
   const isHome = location.pathname === "/home";
+  const isViewOnly = auth.session?.guestAccessLevel === 'view';
   const avatarLetter = auth.session?.email?.charAt(0) ?? "?";
   const avatarPicture = auth.session?.picture ?? null;
 
@@ -202,9 +203,21 @@ export function Layout({ children, title, onBack }: LayoutProps): JSX.Element {
           <Clock size={22} />
           <span>History</span>
         </Link>
-        <Link to="/add" className="bottom-nav-add" aria-label="Add expense">
-          <Plus size={24} />
-        </Link>
+        {isViewOnly ? (
+          <button
+            className="bottom-nav-add bottom-nav-add--disabled"
+            type="button"
+            aria-label="Add expense (view only)"
+            onClick={() => alert("You don't have permission for this action. Contact the setup owner to request access.")}
+          >
+            <Plus size={24} />
+            <Lock size={28} className="bottom-nav-add-lock" aria-hidden />
+          </button>
+        ) : (
+          <Link to="/add" className="bottom-nav-add" aria-label="Add expense">
+            <Plus size={24} />
+          </Link>
+        )}
         <Link
           to="/search"
           className={`bottom-nav-item${location.pathname === "/search" ? " active" : ""}`}
