@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { FileSpreadsheet, Wand2, ChevronDown, ChevronUp, X, Plus, Pencil, Trash2, Check, TableProperties, Eye, EyeOff, Link2Off, Share2 } from "lucide-react";
 import { Layout } from "../components/Layout";
 import { LoadingBlock } from "../components/LoadingBlock";
@@ -97,7 +98,8 @@ type SetupPath = "choose" | "fresh" | "existing" | "configured";
 
 export function SetupPage(): JSX.Element {
   const { config, isConfigLoading, error: configError, saveConfig, clearConfig, updateStructure, toggleColumnVisibility, fileName, isFileNameLoading } = useConfig();
-  const { session } = useAuth();
+  const { session, refreshSession } = useAuth();
+  const navigate = useNavigate();
   const isGuest = config?.isGuest ?? false;
 
   const [spreadsheetUrl, setSpreadsheetUrl] = useState("");  const [error, setError] = useState<string | null>(null);
@@ -138,6 +140,11 @@ export function SetupPage(): JSX.Element {
   const [isUnlinking, setIsUnlinking] = useState(false);
   const [unlinkError, setUnlinkError] = useState<string | null>(null);
 
+  // Guest unlink state
+  const [isGuestUnlinkOpen, setIsGuestUnlinkOpen] = useState(false);
+  const [isGuestUnlinking, setIsGuestUnlinking] = useState(false);
+  const [guestUnlinkError, setGuestUnlinkError] = useState<string | null>(null);
+
   // ─── Sharing state (owner only) ───────────────────────────────────────────
   const [shares, setShares] = useState<ShareEntry[]>([]);
   const [sharingLoadError, setSharingLoadError] = useState<string | null>(null);
@@ -159,6 +166,19 @@ export function SetupPage(): JSX.Element {
       setIsUnlinking(false);
     }
   }, [clearConfig]);
+
+  async function handleGuestUnlink(): Promise<void> {
+    setIsGuestUnlinking(true);
+    setGuestUnlinkError(null);
+    try {
+      await sharingApi.resetGuestConfig();
+      await refreshSession();
+      navigate("/setup");
+    } catch (err) {
+      setGuestUnlinkError((err as Error).message);
+      setIsGuestUnlinking(false);
+    }
+  }
 
   // Load shares when owner is on configured path
   useEffect(() => {
@@ -809,7 +829,31 @@ export function SetupPage(): JSX.Element {
         <>
           {isGuest && config?.ownerEmail ? (
             <div className="sharing-guest-banner" role="status">
-              This setup has been shared with you by <strong>{config.ownerEmail}</strong>. You cannot modify it.
+              <span>This setup has been shared with you by <strong>{config.ownerEmail}</strong>. You cannot modify it.</span>
+              <button className="btn btn-danger btn-sm" onClick={() => setIsGuestUnlinkOpen(true)}>
+                <Link2Off size={14} aria-hidden /> Unlink
+              </button>
+            </div>
+          ) : null}
+
+          {isGuestUnlinkOpen ? (
+            <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="guest-unlink-title">
+              <div className="confirm-dialog">
+                <h2 id="guest-unlink-title" className="confirm-title">Unlink from shared setup?</h2>
+                <p className="confirm-warning">
+                  Are you sure you want to unlink from <strong>{config?.ownerEmail}</strong>'s setup?
+                  You will need to configure your own setup after this.
+                </p>
+                {guestUnlinkError ? <p className="error-message">{guestUnlinkError}</p> : null}
+                <div className="confirm-actions">
+                  <button className="btn btn-secondary" onClick={() => setIsGuestUnlinkOpen(false)} disabled={isGuestUnlinking}>
+                    Cancel
+                  </button>
+                  <button className="btn btn-danger" onClick={() => void handleGuestUnlink()} disabled={isGuestUnlinking}>
+                    {isGuestUnlinking ? "Unlinking…" : "Yes, unlink"}
+                  </button>
+                </div>
+              </div>
             </div>
           ) : null}
 
