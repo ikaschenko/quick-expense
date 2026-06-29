@@ -17,6 +17,7 @@ export interface PeriodStats {
     pctChange: number;
     absChange: number;
     priorLabel: string;
+    priorTotal: number;
   } | null;
 }
 
@@ -122,22 +123,24 @@ export function getMtdStats(
 ): PeriodStats {
   const [year, month, day] = todayStr.split("-").map(Number);
   const monthPad = String(month).padStart(2, "0");
-  const dayPad = String(day).padStart(2, "0");
   const monthStart = `${year}-${monthPad}-01`;
-  const monthLabel = new Date(year, month - 1, 1).toLocaleString("en", { month: "short" });
 
   const current = filterPeriod(records, monthStart, todayStr, toIso);
   const usdTotal = sumUsd(current);
 
-  const priorYear = year - 1;
-  const priorStart = `${priorYear}-${monthPad}-01`;
-  const priorEnd = `${priorYear}-${monthPad}-${dayPad}`;
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear = month === 1 ? year - 1 : year;
+  const prevMonthPad = String(prevMonth).padStart(2, "0");
+  const clampedDay = Math.min(day, daysInMonth(prevYear, prevMonth));
+  const priorStart = `${prevYear}-${prevMonthPad}-01`;
+  const priorEnd = `${prevYear}-${prevMonthPad}-${String(clampedDay).padStart(2, "0")}`;
+  const prevMonthLabel = new Date(prevYear, prevMonth - 1, 1).toLocaleString("en", { month: "short" });
   const prior = filterPeriod(records, priorStart, priorEnd, toIso);
 
   return {
     count: current.length,
     usdTotal,
-    deviation: buildDeviation(usdTotal, sumUsd(prior), prior.length, `${monthLabel} '${String(priorYear).slice(2)}`),
+    deviation: buildDeviation(usdTotal, sumUsd(prior), prior.length, `${prevMonthLabel} '${String(prevYear).slice(2)}`),
   };
 }
 
@@ -264,5 +267,5 @@ function buildDeviation(
   if (priorCount === 0) return null;
   const absChange = current - prior;
   const pctChange = prior !== 0 ? Math.round(Math.abs(absChange / prior) * 100) : 0;
-  return { up: absChange >= 0, pctChange, absChange: Math.abs(absChange), priorLabel };
+  return { up: absChange >= 0, pctChange, absChange: Math.abs(absChange), priorLabel, priorTotal: prior };
 }

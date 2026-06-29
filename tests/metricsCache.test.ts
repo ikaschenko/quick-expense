@@ -9,6 +9,7 @@ vi.mock("../src/utils/date", () => ({
 
 function makeEntry(overrides: Partial<MetricsCacheEntry> = {}): MetricsCacheEntry {
   return {
+    schemaVersion: 3,
     cacheDate: TODAY,
     sheetLastModifiedTime: "2026-06-24T10:00:00.000Z",
     todayStats: { count: 1, usdTotal: 50, dualCurrency: null },
@@ -45,6 +46,12 @@ describe("metricsCache.save / load", () => {
 
   it("returns null when cacheDate is not today (midnight rollover)", () => {
     metricsCache.save(EMAIL, makeEntry({ cacheDate: "2026-06-23" }));
+    expect(metricsCache.load(EMAIL)).toBeNull();
+  });
+
+  it("returns null when schemaVersion is missing or outdated", () => {
+    // Simulate stale entry written by old app code (before schema version bump)
+    localStorage.setItem(`qe_metrics_${EMAIL}`, JSON.stringify({ ...makeEntry(), schemaVersion: 1 }));
     expect(metricsCache.load(EMAIL)).toBeNull();
   });
 

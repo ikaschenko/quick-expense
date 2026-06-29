@@ -72,10 +72,11 @@ function MetricCardSkeleton(): JSX.Element {
 }
 
 interface DeviationProps {
-  deviation: { up: boolean; pctChange: number; absChange: number; priorLabel: string };
+  deviation: { up: boolean; pctChange: number; absChange: number; priorLabel: string; priorTotal: number };
 }
 
 function DeviationLine({ deviation }: DeviationProps): JSX.Element {
+  const [showTooltip, setShowTooltip] = useState(false);
   const isGrowing = deviation.up && deviation.absChange > 0;
   const sign = deviation.up ? "+" : "-";
   const arrow = deviation.up ? "▲" : "▼";
@@ -84,7 +85,19 @@ function DeviationLine({ deviation }: DeviationProps): JSX.Element {
       <span className={isGrowing ? "yoy-up" : "yoy-down"}>
         {arrow} {sign}{deviation.pctChange}% ({sign}${Math.round(deviation.absChange)})
       </span>{" "}
-      vs {deviation.priorLabel}
+      <button
+        type="button"
+        className="prior-period-label"
+        onClick={() => setShowTooltip((v) => !v)}
+        aria-label={`Show ${deviation.priorLabel} total`}
+      >
+        vs {deviation.priorLabel}
+      </button>
+      {showTooltip && (
+        <span className="prior-tooltip" role="tooltip">
+          <FormattedAmount prefix="$" value={deviation.priorTotal} />
+        </span>
+      )}
     </p>
   );
 }

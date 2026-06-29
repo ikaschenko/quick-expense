@@ -116,53 +116,79 @@ describe("getMtdStats", () => {
     expect(stats.usdTotal).toBeCloseTo(30);
   });
 
-  it("returns null deviation when no prior-year data exists", () => {
+  it("returns null deviation when no prior-month data exists", () => {
     const stats = getMtdStats([makeRecord(TODAY, "100")], TODAY, iso);
     expect(stats.deviation).toBeNull();
   });
 
-  it("computes positive deviation vs prior year", () => {
+  it("computes positive deviation vs previous month", () => {
     const records = [
       makeRecord(TODAY, "200"),         // 2026 June MTD
-      makeRecord("2025-06-01", "50"),   // 2025 June (prior year comparison period)
-      makeRecord("2025-06-09", "50"),
+      makeRecord("2026-05-01", "50"),   // May (previous month comparison period)
+      makeRecord("2026-05-09", "50"),
     ];
     const stats = getMtdStats(records, TODAY, iso);
     expect(stats.deviation).not.toBeNull();
     expect(stats.deviation!.up).toBe(true);
-    expect(stats.deviation!.priorLabel).toBe("Jun '25");
+    expect(stats.deviation!.priorLabel).toBe("May '26");
+    expect(stats.deviation!.priorTotal).toBeCloseTo(100);
   });
 
-  it("computes negative deviation vs prior year", () => {
+  it("computes negative deviation vs previous month", () => {
     const records = [
       makeRecord(TODAY, "50"),          // 2026 June MTD
-      makeRecord("2025-06-05", "200"),  // 2025 June was higher
+      makeRecord("2026-05-05", "200"),  // May was higher
     ];
     const stats = getMtdStats(records, TODAY, iso);
     expect(stats.deviation!.up).toBe(false);
     expect(stats.deviation!.absChange).toBeCloseTo(150);
   });
 
-  it("correctly totals prior-year records with $-prefixed USD values", () => {
+  it("correctly totals prior-month records with $-prefixed USD values", () => {
     const records = [
       makeRecord(TODAY, "200"),
-      makeRecord("2025-06-01", "$100"),
-      makeRecord("2025-06-09", "$50"),
+      makeRecord("2026-05-01", "$100"),
+      makeRecord("2026-05-09", "$50"),
     ];
     const stats = getMtdStats(records, TODAY, iso);
     expect(stats.deviation).not.toBeNull();
     expect(stats.deviation!.absChange).toBeCloseTo(50); // 200 - 150
   });
 
-  it("correctly totals prior-year records with thousands-formatted values like $2,698.19", () => {
+  it("correctly totals prior-month records with thousands-formatted values like $2,698.19", () => {
     const records = [
       makeRecord(TODAY, "3000"),
-      makeRecord("2025-06-01", "$1,500.00"),
-      makeRecord("2025-06-09", "$1,198.19"),
+      makeRecord("2026-05-01", "$1,500.00"),
+      makeRecord("2026-05-09", "$1,198.19"),
     ];
     const stats = getMtdStats(records, TODAY, iso);
     expect(stats.deviation).not.toBeNull();
     expect(stats.deviation!.absChange).toBeCloseTo(301.81); // 3000 - 2698.19
+  });
+
+  it("uses December of prior year when today is in January", () => {
+    const records = [
+      makeRecord("2026-01-10", "100"),  // Jan MTD
+      makeRecord("2025-12-01", "40"),   // Dec (previous month)
+      makeRecord("2025-12-10", "60"),
+    ];
+    const stats = getMtdStats(records, "2026-01-10", iso);
+    expect(stats.deviation).not.toBeNull();
+    expect(stats.deviation!.priorLabel).toBe("Dec '25");
+    expect(stats.deviation!.absChange).toBeCloseTo(0); // 100 - 100
+  });
+
+  it("clamps comparison day to last day of short previous month (Mar 31 → Feb 28)", () => {
+    const records = [
+      makeRecord("2026-03-31", "90"),   // Mar 31 MTD
+      makeRecord("2026-02-01", "10"),
+      makeRecord("2026-02-28", "20"),
+      makeRecord("2026-02-29", "999"),  // non-existent date — not matched
+    ];
+    const stats = getMtdStats(records, "2026-03-31", iso);
+    expect(stats.deviation).not.toBeNull();
+    expect(stats.deviation!.priorLabel).toBe("Feb '26");
+    expect(stats.deviation!.absChange).toBeCloseTo(60); // 90 - 30
   });
 });
 
@@ -193,6 +219,7 @@ describe("getYtdStats", () => {
     ];
     const stats = getYtdStats(records, TODAY, iso);
     expect(stats.deviation!.priorLabel).toBe("2025");
+    expect(stats.deviation!.priorTotal).toBeCloseTo(80);
   });
 });
 
@@ -279,6 +306,7 @@ describe("getRolling12mStats", () => {
     expect(stats.deviation!.priorLabel).toBe("prior 12M");
     expect(stats.deviation!.absChange).toBeCloseTo(150); // 350 - 200
     expect(stats.deviation!.up).toBe(true);
+    expect(stats.deviation!.priorTotal).toBeCloseTo(200); // 80 + 120
   });
 
   it("returns null deviation when prior window has no records", () => {
