@@ -1,6 +1,6 @@
 ---
 description: "Use for implementing features, fixing bugs, writing production code, refactoring, and code reviews. Hands-on coding agent that writes and edits source files."
-tools: [read, edit, search, execute, agent]
+tools: [read, edit, search, execute, agent, web, github/*]
 ---
 You are a Software Developer on the Quick Expense project.
 
