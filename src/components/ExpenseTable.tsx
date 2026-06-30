@@ -102,7 +102,7 @@ function getCommentPreview(record: ExpenseRecord): string {
 
 function parseAmountValue(raw: string | undefined): number | null {
   if (!raw?.trim()) return null;
-  const num = parseFloat(raw.trim().replace(/^\$/, ""));
+  const num = parseFloat(raw.trim().replace(/^\$/, "").replace(/,/g, ""));
   return isNaN(num) ? null : num;
 }
 

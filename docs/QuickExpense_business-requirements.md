@@ -9,8 +9,7 @@ This document describes Business Requirements for the software application.
 Small web application or site to manage own/family expenses, supporting key use cases:
 
 1. submit an expense record (Add)
-2. view last N entered records (Tail)
-3. and search through the archive of expenses (Search)
+2. browse and filter expense history (History)
 
 Key problem to solve: ability to record expenses on-the-go as a time saver, without spending time on collecting receipts and processing at the end of the month. The data should be finally stored in a shared google spreadsheet (hereinafter called 'database') so that it could be easily detachable from the application and e.g. exported/analyzed.
 
@@ -48,7 +47,7 @@ Authorization is implicitly controlled by Google Sheets access rights.
 
 How long should login session persist? Keep the session as long as possible. Only ask user to re-authenticate if it passed more than 24 hours since the last time they used the application.
 
-Should access be revalidated on every Add/Tail/Search action? Validate spreadsheet access:
+Should access be revalidated on every Add/History action? Validate spreadsheet access:
 
 * On Setup
 * On each write (Add)
@@ -227,7 +226,7 @@ See §2.3.4 for the equivalent behaviour when editing an existing expense's date
 
 During every dataset load (initial load, Reload, or post-insert reload), the backend checks whether all Date values in the sheet are in non-decreasing chronological order.
 
-If at least one out-of-order date is detected, a persistent red banner is displayed in the header area of **all screens** (Home, Add, Tail, Search):
+If at least one out-of-order date is detected, a persistent red banner is displayed in the header area of **all screens** (Home, Add, History):
 
 *"⚠ Critical issue: your sheet's dates are not in chronological order. Open the sheet and sort all rows by Date (ascending) to fix this."*
 
@@ -244,7 +243,7 @@ When an existing expense is saved with a changed date that would place it out of
 
 A repositioning write triggers the same non-dismissible loading overlay and full dataset reload as an insert-mode add (§2.3.2). The edit card closes only after the reload completes.
 
-## 2.4 Preload for Home Dashboard, Tail and Search
+## 2.4 Preload for Home Dashboard and History
 
 For the Home dashboard and for Tail and Search operations — upon mounting the relevant screen, the application should check if the dataset is loaded from back-end. Key rules:
 
@@ -260,73 +259,33 @@ Header validation is always performed before any operation, but row-level datase
 
 From UI point of view, while loading the data, an icon of 'loading' should be displayed with the text "Loading expenses from Google Sheet…". In case of any errors during load (e.g. no file, no access, not enough memory, and so no), and error message should be displayed under the button.
 
-## 2.5 View last N expenses (Tail)
+## 2.5 Expense History (History)
 
-Prerequisites for this step: successful sign in and successful configuration set up complete.
+Prerequisites: successful sign in and configuration.
 
-Button: "Tail".
+The separate **Tail** and **Search** screens have been merged into a single **History** screen (`/history`).
 
-Opens a new screen allowing to view-only up to last 20 lines added in the database. Based strictly on row order in sheet.
+> **As of the History unification:** `/tail` and `/search` routes redirect to `/home`; the canonical history URL is `/history`.
 
-If file contains no or just a few rows? Show only a table with available records. If 0 records available - show an empty table with a message "No records found". If 10 - show as it is i.e. last 10 only. If more than 20 - show last 20.
+### Default view (unfiltered)
 
-"Tail" reuses "Search" dataset and vice versa (they share a loaded dataset between each other).
+Displays the most recent records in reverse-insertion order (same as old Tail). The header shows total record count and how many rows are currently visible. A **"Show earlier"** button progressively expands the view. **Reload** re-fetches the full sheet.
 
-"Add" invalidates loaded dataset.
+### Filtering
 
-In terms of a displaying on a client device, if no space on the screen - standard scrolling controls are available. On a smartphone - standard scrolling ability via fingers.
+A comment text input (always visible at the top of the page) enables instant substring search across the Comment field (case-insensitive, debounced). An expandable **Filter** panel provides additional criteria:
 
-Available buttons on this screen:
+- **Category** — chip-based multi-select (exact match, AND logic)
+- **Amount (USD)** — numeric from/to range
+- **Custom columns** — one substring input per configured custom column
 
-* "Back" - to return to a previous screen.
-* "Reload" - for on-demand refresh of data from backend. What exactly does Reload refresh? Answer: Reload should a) Re-fetch spreadsheet, b) Rebuild distinct values lists, c) Clear in-memory cache.
+When any filter is active, the full dataset is searched client-side and results are shown instead of the recency view. A badge on the Filter toggle counts active panel filters. **Clear filters** resets all fields. Filter state persists across navigation within the session (stored in `DatasetContext`).
 
-## 2.6 Search for expenses (Search)
+While the background Phase-2 history load is still in progress, a non-blocking banner "Complete history is still loading…" is shown.
 
-Prerequisites for this step: successful sign in and successful configuration set up.
+Search is client-side. If the sheet exceeds the 10 MB payload cap, History is denied with an error (same rule as §3.5).
 
-To search for expenses, click "Search" on a main screen.
-
-On entering this mode, application should load data from database (i.e. google spreadsheet) into memory. It's assumed to be not more than allowed limit on a dataset response payload (see in a separate section below), so can fit in memory. While loading, an icon of 'loading' should be displayed. In case of any errors during load (e.g. no file, no access, not enough memory, and so no), and error message should be displayed under the button. Show additional button "Reload" here - for on-demand refresh of data from backend. What exactly does Reload refresh? Answer: Reload should a) Re-fetch spreadsheet, b) Rebuild distinct values lists, c) Clear in-memory cache.
-
-After data is loaded, then here are fields on the form:
-
-a) category (to search across the category field in the database). This should be a multi-select dropdown control with all available values across the database.
-
-b) comments (to search across the comments field in the database, via wildcard similar to "LIKE '%x%' in SQL). This is a text control, no default value.
-
-Buttons: Back, Clear, Search.
-
-On Search is clicked, the search process should work like a wildcard in a database. This mean search for any occurrence of entered substring in appropriate fields.
-
-If either field is not filled, exclude it from search.
-
-If any field is filled - use it as 'AND' condition in a search.
-
-If no matching records are found - show a message 'Nothing is found', and button 'Back' which leads to a search screen. Keep previously entered values in input fields if a user returns to this screen.
-
-If any records are found - show a table with records, with the same columns/names/values as described in "Add expense" section.
-
-Why only category and comment searchable? Answer: Version 1 supports only:
-
-* Category (multi-select exact match)
-* Comment (substring match, case-insensitive)
-
-Future versions may extend filters.
-
-Is search case-sensitive? Answer: Search must be case-insensitive.
-
-Should search be client-side or server-side? Answer: Search is client-side after the backend loads the spreadsheet dataset through Google Sheets API. Every time the search dataset is prepared - check the size of a response payload, and if exceeds allowed size (see in the separate section below) then show an error that the file is too big, deny search, allow only returning to previous screen and other functions. Assumptions: files less than the defined limit are acceptable for client devices (smartphones, pc web browser).
-
-What if 100+ results found? Answer: show an information message "Too many records found", show only first 100, and show a total count of matching records. Allow user to return and refine conditions for a search. NO pagination in v1.
-
-No sorting, only sequential display of found items according to their position in the dataset.
-
-Available buttons on this screen:
-
-* "Back" - persist filter values during session only, then return to a previous screen.
-* "Clear" - clear entered values (if any), remain on the current screen.
-* "Reload" - for on-demand refresh of data from backend. What exactly does Reload refresh? Answer: Reload should a) Re-fetch spreadsheet, b) Rebuild distinct values lists, c) Clear in-memory cache.
+Available actions: **Reload**, **Edit** (redirect to edit form), **Delete last row** (confirm dialog, last row only).
 
 ## 2.7 Home Screen Dashboard
 
@@ -334,7 +293,7 @@ When a user is authenticated **and** has a sheet configured **and** the sheet co
 
 ### 2.7.1 Data source and loading
 
-Dashboard data is loaded via the same mechanism as Tail/Search (shared in-memory dataset). If a valid cache exists (e.g. from a recent Tail or Add visit), it is reused without an extra network call. While loading, skeleton placeholders are shown for each metric card. If loading fails, an error banner with a Retry action is shown.
+Dashboard data is loaded via the same mechanism as History (shared in-memory dataset). If a valid cache exists (e.g. from a recent History or Add visit), it is reused without an extra network call. While loading, skeleton placeholders are shown for each metric card. If loading fails, an error banner with a Retry action is shown.
 
 ### 2.7.2 TODAY card
 
@@ -402,8 +361,8 @@ When a new user authenticates, the backend checks whether any active owner has a
 
 ### 2.8.3 Story 3 — Access level enforcement (guest)
 
-- **Edit access:** full access to Add, Tail, Search, Edit, and Delete.
-- **View access:** Tail and Search are available. All write actions (Add, Edit, Delete) remain visible but are locked. Tapping a locked action shows: *"You don't have permission for this action. Contact the setup owner to request access."*
+- **Edit access:** full access to Add, History (including Edit and Delete).
+- **View access:** History (read-only) is available. All write actions (Add, Edit, Delete) remain visible but are locked. Tapping a locked action shows: *"You don't have permission for this action. Contact the setup owner to request access."*
 - The backend enforces access level independently — write requests from View-only guests are rejected with HTTP 403 regardless of UI state.
 - Setup is read-only for all guests regardless of access level.
 

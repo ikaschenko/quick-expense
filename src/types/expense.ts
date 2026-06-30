@@ -105,8 +105,11 @@ export interface FxRateBackupRecord {
 }
 
 export interface SearchFilters {
-  categories: string[];
   comment: string;
+  categories: string[];
+  amountFrom: string;    // "" = no lower bound
+  amountTo: string;      // "" = no upper bound
+  customFields: Record<string, string>; // keyed by column name, "" = skip
 }
 
 export type AppErrorKind =

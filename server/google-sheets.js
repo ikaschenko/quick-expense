@@ -1273,7 +1273,7 @@ export async function loadExpenses(accessToken, spreadsheetId, mapping = null, o
   const payloadBytes = calculateJsonByteSize(records);
 
   if (payloadBytes > MAX_DATASET_BYTES) {
-    throw new Error("Spreadsheet data is too large for Tail/Search. The JSON payload exceeds 10 MB.");
+    throw new Error("Spreadsheet data is too large for History. The JSON payload exceeds 10 MB.");
   }
 
   return {

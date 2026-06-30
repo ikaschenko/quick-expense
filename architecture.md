@@ -9,8 +9,7 @@
 Quick Expense is a small web application for recording personal/family expenses on the go. Users authenticate with Google, connect a Google Spreadsheet as their "database", and then:
 
 - **Add** an expense record (appended as a new row to the sheet).
-- **Tail** the last 20 rows.
-- **Search** across category and comment fields (client-side, after loading the full dataset from the Google Sheets API).
+- **Browse and filter expense history (History):** view the most recent records and search/filter by comment, category, amount range, and custom columns (client-side, after loading the full dataset).
 
 All expense data lives in the user's own Google Spreadsheet — the application never stores expense rows. The business requirements are documented in detail in `docs/QuickExpense_business-requirements.md`.
 
@@ -128,9 +127,8 @@ quick-expense/
 │   │   ├── AuthCallbackPage.tsx ← post-OAuth redirect handler
 │   │   ├── HomePage.tsx       ← spending dashboard (TODAY / MTD / YTD)
 │   │   ├── LoginPage.tsx      ← sign-in screen
-│   │   ├── SearchPage.tsx     ← search with category multi-select + comment filter
-│   │   ├── SetupPage.tsx      ← spreadsheet URL configuration + Google Picker
-│   │   └── TailPage.tsx       ← last 20 records view
+│   │   ├── HistoryPage.tsx    ← unified history: recent records + collapsible filter panel (comment, category, amount range, custom columns)
+│   │   └── SetupPage.tsx      ← spreadsheet URL configuration + Google Picker
 │   ├── services/              ← API client layer
 │   │   ├── authApi.ts         ← /api/auth/* calls
 │   │   ├── currency.ts        ← manual FX rate parsing + conversion
@@ -392,7 +390,7 @@ Stores sharing relationships between an owner user and their invited guests.
 - `guest_email` has no FK — an invited user may not have signed in yet.
 - `ON DELETE CASCADE` on `owner_email` means all guest references are automatically removed when an owner is deleted.
 - Index on `(guest_email)` for efficient per-request guest resolution.
-- Access levels: `edit` — full read/write; `view` — read-only (Tail, Search allowed; Add/Edit/Delete blocked at API and UI level).
+- Access levels: `edit` — full read/write; `view` — read-only (History allowed; Add/Edit/Delete blocked at API and UI level).
 
 ### 7.2 Expense Data — Google Spreadsheet
 
@@ -409,10 +407,10 @@ Required structure:
 - New currency columns are inserted before USD via Sheets batchUpdate `insertDimension`. Removed currencies keep their columns in-place for historical data (never deleted).
 - Auto-created if the sheet is empty on Setup.
 - Legacy column order (USD/EUR swapped from original PLN/BYN/USD/EUR layout) is auto-migrated.
-- Header validation occurs on Setup and before every Add, Tail, and Search operation.
+- Header validation occurs on Setup and before every Add and History load.
 - Append uses Google Sheets API `values:append` with `INSERT_ROWS`.
 - Load reads a dynamic column range `Expenses!A:{lastColumn}`, maps rows to `ExpenseRecord` objects with a `currencyAmounts` map.
-- Dataset payload size is capped at **10 MB** (calculated as JSON byte size of all records). If exceeded, Tail/Search is denied.
+- Dataset payload size is capped at **10 MB** (calculated as JSON byte size of all records). If exceeded, History is denied with an explanatory error message.
 
 #### Config Sheet (Optional)
 
@@ -472,10 +470,10 @@ The SPA uses three nested context providers (wrapped in `App.tsx`):
 - **AuthContext:** Checks `/api/auth/session` on mount. Exposes `status` (`initializing` | `signed_out` | `signed_in`), `session` (email + timestamps), `signIn()`, `signOut()`, `refreshSession()`.
 - **ConfigContext:** Fetches `/api/config` when a session is present. Exposes the `SpreadsheetConfig` object and methods to save/clear/refresh. The config includes a `configMode` field (`"default"` | `"config-driven"` | `"config-invalid"`) indicating whether a column mapping is active. When `configMode` is `"config-invalid"`, a `configModeReason` string explains the problem. `hiddenColumns: string[]` lists canonical field names hidden from the Add Expense form; `toggleColumnVisibility(field, hidden)` updates this list optimistically with server sync and automatic revert on failure.
 - **DatasetContext:** Manages the loaded expense dataset. Key behaviors:
-  - `loadDataset()` — fetches from `/api/expenses` unless a valid cached snapshot exists. Called on Home page mount (when status is `idle`) as well as by Tail/Search pages. Concurrent callers join the in-flight Promise instead of starting a duplicate request. A generation counter ensures stale Phase-2 results are discarded if a reload was triggered in the meantime.
+  - `loadDataset()` — fetches from `/api/expenses` unless a valid cached snapshot exists. Called on Home page mount (when status is `idle`) as well as by the History page. Concurrent callers join the in-flight Promise instead of starting a duplicate request. A generation counter ensures stale Phase-2 results are discarded if a reload was triggered in the meantime.
   - Two-phase progressive load: Phase 1 (blocking) fetches the configurable recent window and sets `status = "ready"` — the UI becomes interactive. If the server returns `loadPhase: "recent"`, Phase 2 immediately fires a background call to `/api/expenses/history` to retrieve older records and merges them into the snapshot when complete. Phase 2 failures are silently swallowed (recent window remains available).
-  - `isLoadingHistory` — boolean exposed in context; `true` while the Phase-2 background fetch is in progress. The Search page displays a non-blocking info banner while this is `true`.
-  - `invalidateDataset()` — marks the snapshot stale, forcing a full reload on the next Tail/Search/Home visit. Reserved for error-recovery and future external-change detection scenarios.
+  - `isLoadingHistory` — boolean exposed in context; `true` while the Phase-2 background fetch is in progress. The History page displays a non-blocking info banner while this is `true`.
+  - `invalidateDataset()` — marks the snapshot stale, forcing a full reload on the next History/Home visit. Reserved for error-recovery and future external-change detection scenarios.
   - `reloadDataset()` — explicit Reload button action, force-fetches regardless of cache.
   - `appendToDataset(record)` — called after a successful Add in append mode; appends the returned `ExpenseRecord` to the in-memory array and recomputes `distinctValues`. No full reload.
   - After a successful Add in insert mode (`insertMode: true` from the API), a full `reloadDataset()` is triggered instead of a surgical append — row numbers for shifted rows would otherwise be stale.
@@ -484,8 +482,8 @@ The SPA uses three nested context providers (wrapped in `App.tsx`):
   - All three mutation methods are no-ops when the snapshot has not yet been loaded.
   - After any surgical mutation, `HomePage.tsx` recomputes all dashboard metrics via its `useMemo` hooks and rewrites the `localStorage` metrics cache (`qe_metrics_{email}`) immediately — no reload, no "Refreshing…" indicator.
   - `DatasetSnapshot.hasDateOrderIssue` — boolean set on every load by scanning the date column. When `true`, `Layout.tsx` renders a persistent red banner on all screens prompting the user to sort their sheet. The banner disappears automatically on the next clean reload.
-  - Shared between Tail and Search pages (they reuse the same in-memory dataset).
-  - Holds `searchFilters` state so Search page filter values persist across navigation.
+  - Shared between Home and History pages (they reuse the same in-memory dataset).
+  - Holds `searchFilters` state (`SearchFilters`: `comment`, `categories`, `amountFrom`, `amountTo`, `customFields`) so History page filter values persist across navigation.
 
 ### 8.2 Routing
 
@@ -496,8 +494,9 @@ The SPA uses three nested context providers (wrapped in `App.tsx`):
 | `/home` | `HomePage` | Yes | Spending dashboard (TODAY / MTD / YTD metric cards + mini chart) |
 | `/setup` | `SetupPage` | Yes | Spreadsheet configuration + Google Picker |
 | `/add` | `AddExpensePage` | Yes | New expense form |
-| `/tail` | `TailPage` | Yes | Last 20 records |
-| `/search` | `SearchPage` | Yes | Category/comment search |
+| `/tail` | — | — | Legacy route — redirects to `/home` |
+| `/search` | — | — | Legacy route — redirects to `/home` |
+| `/history` | `HistoryPage` | Yes | Recent records + optional filtering (comment, category, amount, custom columns) |
 
 `ProtectedRoute` wraps all "Yes" routes — redirects to `/` if `auth.session` is null.
 

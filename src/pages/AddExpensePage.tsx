@@ -153,7 +153,7 @@ export function AddExpensePage(): JSX.Element {
   const editRowNumber = rowNumberParam ? parseInt(rowNumberParam, 10) : null;
   const editState = (location.state as { record?: ExpenseRecord; origin?: string } | null);
   const editRecord = editState?.record ?? null;
-  const editOrigin = editState?.origin ?? "/tail";
+  const editOrigin = editState?.origin ?? "/history";
 
   const handleEditBack = useCallback(() => {
     navigate(editOrigin, { state: { editResult: { rowNumber: editRowNumber, saved: false } }, replace: true });
@@ -357,7 +357,7 @@ export function AddExpensePage(): JSX.Element {
   }
 
   if (isEditMode && !editRecord) {
-    return <Navigate to="/tail" replace />;
+    return <Navigate to="/history" replace />;
   }
 
   const updateDraft = <K extends keyof Omit<ExpenseDraft, "currencyAmounts" | "customFields">>(

@@ -18,6 +18,24 @@ function makeRecord(overrides: Partial<ExpenseRecord> = {}): ExpenseRecord {
   };
 }
 
+describe("renderCardAmount — comma-formatted amounts", () => {
+  it("displays amounts ≥ 1,000 in full without truncation at the thousands separator", () => {
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+    const record = makeRecord({
+      USD: "$10,035.20",
+      currencyAmounts: { BYN: "26,091.50" },
+    });
+    const { baseElement } = render(
+      <ExpenseTable
+        records={[record]}
+        sheetCurrencies={["BYN"]}
+      />,
+    );
+    expect(baseElement.textContent).toContain("26,091");
+    expect(baseElement.textContent).toContain("10,035");
+  });
+});
+
 describe("ExpenseTable — isViewOnly", () => {
   const record = makeRecord({ rowNumber: 1 });
 

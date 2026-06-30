@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { PropsWithChildren, useState, useRef, useEffect } from "react";
-import { ChevronLeft, House, Plus, Clock, Search, LogOut, MessageSquareShare, X, Shield, FileText, Settings, Lock } from "lucide-react";
+import { ChevronLeft, House, Plus, Search, LogOut, MessageSquareShare, X, Shield, FileText, Settings, Lock } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useConfig } from "../contexts/ConfigContext";
 import { useDataset } from "../contexts/DatasetContext";
@@ -195,36 +195,34 @@ export function Layout({ children, title, onBack }: LayoutProps): JSX.Element {
           <House size={22} />
           <span>Home</span>
         </Link>
-        <Link
-          to="/tail"
-          className={`bottom-nav-item${location.pathname === "/tail" ? " active" : ""}`}
-          aria-label="History"
-        >
-          <Clock size={22} />
-          <span>History</span>
-        </Link>
         {isViewOnly ? (
           <button
-            className="bottom-nav-add bottom-nav-add--disabled"
+            className="bottom-nav-item"
             type="button"
             aria-label="Add expense (view only)"
             onClick={() => alert("You don't have permission for this action. Contact the setup owner to request access.")}
           >
-            <Plus size={24} />
-            <Lock size={28} className="bottom-nav-add-lock" aria-hidden />
+            <Plus size={22} />
+            <Lock size={14} className="bottom-nav-add-lock" aria-hidden />
+            <span>Add</span>
           </button>
         ) : (
-          <Link to="/add" className="bottom-nav-add" aria-label="Add expense">
-            <Plus size={24} />
+          <Link
+            to="/add"
+            className={`bottom-nav-item${location.pathname === "/add" ? " active" : ""}`}
+            aria-label="Add expense"
+          >
+            <Plus size={22} />
+            <span>Add</span>
           </Link>
         )}
         <Link
-          to="/search"
-          className={`bottom-nav-item${location.pathname === "/search" ? " active" : ""}`}
-          aria-label="Search"
+          to="/history"
+          className={`bottom-nav-item${location.pathname === "/history" ? " active" : ""}`}
+          aria-label="History"
         >
           <Search size={22} />
-          <span>Search</span>
+          <span>History</span>
         </Link>
         <Link
           to="/setup"

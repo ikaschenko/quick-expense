@@ -33,6 +33,7 @@ export function buildExpenseHeaders(sheetCurrencies: string[], customColumns: st
 /** QuickExpense fields that must be mapped in the column mapping editor. */
 export const REQUIRED_QE_FIELDS = ["Date", "USD", "Category", "Spent By", "Comment"] as const;
 
-export const MAX_TAIL_RECORDS = 20;
+export const HISTORY_PAGE_SIZE = 50;
+export const FILTER_DEBOUNCE_MS = 2500;
 export const MAX_SEARCH_RESULTS = 100;
 export const MAX_DATASET_BYTES = 10 * 1024 * 1024;

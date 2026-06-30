@@ -8,11 +8,10 @@ import { DatasetProvider } from "./contexts/DatasetContext";
 import { useAuth } from "./contexts/AuthContext";
 import { AddExpensePage } from "./pages/AddExpensePage";
 import { AuthCallbackPage } from "./pages/AuthCallbackPage";
+import { HistoryPage } from "./pages/HistoryPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
-import { SearchPage } from "./pages/SearchPage";
 import { SetupPage } from "./pages/SetupPage";
-import { TailPage } from "./pages/TailPage";
 
 function AppRoutes(): JSX.Element {
   const { session } = useAuth();
@@ -59,17 +58,17 @@ function AppRoutes(): JSX.Element {
       />
       <Route
         path="/tail"
-        element={
-          <ProtectedRoute>
-            <TailPage />
-          </ProtectedRoute>
-        }
+        element={<Navigate to="/home" replace />}
       />
       <Route
         path="/search"
+        element={<Navigate to="/home" replace />}
+      />
+      <Route
+        path="/history"
         element={
           <ProtectedRoute>
-            <SearchPage />
+            <HistoryPage />
           </ProtectedRoute>
         }
       />

@@ -50,8 +50,11 @@ export function DatasetProvider({ children }: PropsWithChildren): JSX.Element {
   const [isInvalidated, setIsInvalidated] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [searchFilters, setSearchFilters] = useState<SearchFilters>({
-    categories: [],
     comment: "",
+    categories: [],
+    amountFrom: "",
+    amountTo: "",
+    customFields: {},
   });
   const retryBackoffRef = useRef(new RetryBackoff());
 

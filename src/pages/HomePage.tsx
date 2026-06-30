@@ -263,7 +263,7 @@ export function HomePage(): JSX.Element {
             <div className="home-metric-card">
               <div className="home-metric-header">
                 <span className="home-metric-title">TODAY · {dayLabel}</span>
-                <Link to="/tail" className="home-metric-link">
+                <Link to="/history" className="home-metric-link">
                   {displayTodayStats.count} {displayTodayStats.count === 1 ? "entry" : "entries"} →
                 </Link>
               </div>
@@ -288,7 +288,7 @@ export function HomePage(): JSX.Element {
             <div className="home-metric-card">
               <div className="home-metric-header">
                 <span className="home-metric-title">{monthName} SO FAR</span>
-                <Link to="/tail" className="home-metric-link">
+                <Link to="/history" className="home-metric-link">
                   {displayMtdStats.count} {displayMtdStats.count === 1 ? "entry" : "entries"} →
                 </Link>
               </div>

@@ -36,7 +36,7 @@ vi.mock("../src/contexts/DatasetContext", () => ({
     reloadDataset: vi.fn(),
     removeLastFromDataset: vi.fn(),
     distinctValues: {},
-    searchFilters: { comment: "", categories: [] },
+    searchFilters: { comment: "", categories: [], amountFrom: "", amountTo: "", customFields: {} },
     setSearchFilters: vi.fn(),
   }),
 }));
