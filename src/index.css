@@ -1393,6 +1393,10 @@ button { cursor: pointer; }
   max-width: 380px;
 }
 
+.confirm-wide {
+  max-width: 480px;
+}
+
 .confirm-title {
   font-size: var(--font-size-lg);
   font-weight: 600;

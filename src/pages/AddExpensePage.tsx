@@ -19,8 +19,10 @@ import {
 } from "../types/expense";
 import { formatLocalDate, getTodayLocalDate, detectDateFormat } from "../utils/date";
 import { buildCommentSuggestions, expenseDraftToRowValues } from "../utils/spreadsheet";
+import { findDuplicateExpenses } from "../utils/expenseTable";
 import { parseOptionalDecimal, parsePositiveDecimal, validateExpenseDraft } from "../utils/validation";
 import { AutosuggestInput } from "../components/AutosuggestInput";
+import { ExpenseCard } from "../components/ExpenseTable";
 import { trackEvent } from "../services/analytics";
 
 function formatColumnLabel(name: string): string {
@@ -177,6 +179,7 @@ export function AddExpensePage(): JSX.Element {
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [duplicateMatches, setDuplicateMatches] = useState<ExpenseRecord[]>([]);
   const [isInsertingHistorical, setIsInsertingHistorical] = useState(false);
   const [isLoadingFxBackup, setIsLoadingFxBackup] = useState(false);
   const [manualFxRates, setManualFxRates] = useState<ManualFxRates>(
@@ -193,6 +196,8 @@ export function AddExpensePage(): JSX.Element {
   const amountInputRef = useRef<HTMLInputElement>(null);
   const pendingSaveMode = useRef<'continue' | 'close'>('continue');
   const hasFetchedLiveRates = useRef(false);
+  const isSavingRef = useRef(false);
+  const pendingNormalizedDraft = useRef<ExpenseDraft | null>(null);
 
   useEffect(() => { amountInputRef.current?.focus(); }, []);
 
@@ -413,73 +418,12 @@ export function AddExpensePage(): JSX.Element {
     });
   };
 
-  const onSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
-    event.preventDefault();
-    if (isSaving) return;
-
-    setSuccess(null);
-    setError(null);
-
-    const validationErrors = validateExpenseDraft(draft, activeCurrencies);
-    const nextFxErrors: Partial<Record<string, string>> = {};
-
-    for (const currency of activeCurrencies) {
-      try {
-        const amount = parseOptionalDecimal(draft.currencyAmounts[currency] ?? "");
-        const rate = parsePositiveDecimal(manualFxRates[currency] ?? "");
-
-        if ((manualFxRates[currency] ?? "").trim() && rate === null) {
-          nextFxErrors[currency] = "Provide a valid USD rate.";
-        }
-
-        if (amount !== null && amount !== 0 && !draft.USD.trim() && rate === null) {
-          nextFxErrors[currency] = "USD amount is required — enter an exchange rate here or fill the USD field directly.";
-        }
-      } catch (fxError) {
-        nextFxErrors[currency] = (fxError as Error).message;
-      }
-    }
-
-    setErrors(validationErrors);
-    setFxErrors(nextFxErrors);
-
-    if (
-      Object.keys(validationErrors).length > 0 ||
-      Object.keys(nextFxErrors).length > 0 ||
-      !config
-    ) {
-      return;
-    }
-
+  const executeSave = async (normalizedDraft: ExpenseDraft): Promise<void> => {
+    isSavingRef.current = true;
     setIsSaving(true);
 
     try {
       auth.touchSession();
-
-      const normalizedDraft: ExpenseDraft = {
-        ...draft,
-        Date: draft.Date.trim(),
-        USD: draft.USD.trim().replace(",", "."),
-        Category: draft.Category.trim(),
-        spentBy: draft.spentBy.trim(),
-        Comment: draft.Comment.trim(),
-        currencyAmounts: Object.fromEntries(
-          Object.entries(draft.currencyAmounts).map(([k, v]) => [k, v.trim().replace(",", ".")]),
-        ),
-        customFields: Object.fromEntries(
-          Object.entries(draft.customFields).map(([k, v]) => [k, v.trim()]),
-        ),
-      };
-
-      if (!normalizedDraft.USD.trim()) {
-        const nonUsdValues = parseNonUsdValues(normalizedDraft, activeCurrencies);
-        const parsedRates = currencyService.parseManualFxRates(manualFxRates, activeCurrencies);
-        const usdValue =
-          nonUsdValues !== null
-            ? currencyService.convertToUsdFromRates(nonUsdValues, parsedRates, activeCurrencies)
-            : 0;
-        normalizedDraft.USD = usdValue ? usdValue.toFixed(2) : "";
-      }
 
       if (isEditMode && editRowNumber !== null) {
         const { record, moveMode } = await googleSheetsService.updateExpenseRow(
@@ -550,8 +494,108 @@ export function AddExpensePage(): JSX.Element {
       setError((submitError as Error).message);
     } finally {
       setIsInsertingHistorical(false);
+      isSavingRef.current = false;
       setIsSaving(false);
     }
+  };
+
+  const handleCancelDuplicate = (): void => {
+    pendingNormalizedDraft.current = null;
+    setDuplicateMatches([]);
+  };
+
+  const handleConfirmSave = async (): Promise<void> => {
+    const pending = pendingNormalizedDraft.current;
+    if (!pending) return;
+    pendingNormalizedDraft.current = null;
+    setDuplicateMatches([]);
+    await executeSave(pending);
+  };
+
+  const onSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault();
+    if (isSavingRef.current) return;
+
+    setSuccess(null);
+    setError(null);
+
+    const validationErrors = validateExpenseDraft(draft, activeCurrencies);
+    const nextFxErrors: Partial<Record<string, string>> = {};
+
+    for (const currency of activeCurrencies) {
+      try {
+        const amount = parseOptionalDecimal(draft.currencyAmounts[currency] ?? "");
+        const rate = parsePositiveDecimal(manualFxRates[currency] ?? "");
+
+        if ((manualFxRates[currency] ?? "").trim() && rate === null) {
+          nextFxErrors[currency] = "Provide a valid USD rate.";
+        }
+
+        if (amount !== null && amount !== 0 && !draft.USD.trim() && rate === null) {
+          nextFxErrors[currency] = "USD amount is required — enter an exchange rate here or fill the USD field directly.";
+        }
+      } catch (fxError) {
+        nextFxErrors[currency] = (fxError as Error).message;
+      }
+    }
+
+    setErrors(validationErrors);
+    setFxErrors(nextFxErrors);
+
+    if (
+      Object.keys(validationErrors).length > 0 ||
+      Object.keys(nextFxErrors).length > 0 ||
+      !config
+    ) {
+      return;
+    }
+
+    const normalizedDraft: ExpenseDraft = {
+      ...draft,
+      Date: draft.Date.trim(),
+      USD: draft.USD.trim().replace(",", "."),
+      Category: draft.Category.trim(),
+      spentBy: draft.spentBy.trim(),
+      Comment: draft.Comment.trim(),
+      currencyAmounts: Object.fromEntries(
+        Object.entries(draft.currencyAmounts).map(([k, v]) => [k, v.trim().replace(",", ".")]),
+      ),
+      customFields: Object.fromEntries(
+        Object.entries(draft.customFields).map(([k, v]) => [k, v.trim()]),
+      ),
+    };
+
+    if (!normalizedDraft.USD.trim()) {
+      const nonUsdValues = parseNonUsdValues(normalizedDraft, activeCurrencies);
+      const parsedRates = currencyService.parseManualFxRates(manualFxRates, activeCurrencies);
+      const usdValue =
+        nonUsdValues !== null
+          ? currencyService.convertToUsdFromRates(nonUsdValues, parsedRates, activeCurrencies)
+          : 0;
+      normalizedDraft.USD = usdValue ? usdValue.toFixed(2) : "";
+    }
+
+    if (!isEditMode) {
+      // Draft dates are ISO ("2026-06-30"); snapshot record dates are in the sheet's
+      // locale format ("6/30/2026"). Convert before comparing.
+      const [y, m, d] = normalizedDraft.Date.split("-").map(Number);
+      const draftDateForSheet =
+        y && m && d && detectedDateFormat
+          ? detectedDateFormat.toSheet(new Date(y, m - 1, d))
+          : normalizedDraft.Date;
+      const dupes = findDuplicateExpenses(
+        { ...normalizedDraft, Date: draftDateForSheet },
+        dataset.snapshot?.records ?? [],
+        activeCurrencies,
+      );
+      if (dupes.length > 0) {
+        pendingNormalizedDraft.current = normalizedDraft;
+        setDuplicateMatches(dupes);
+        return;
+      }
+    }
+
+    await executeSave(normalizedDraft);
   };
 
   const selectedExpenseDate = useMemo(() => {
@@ -906,6 +950,53 @@ export function AddExpensePage(): JSX.Element {
         <LoadingBlock label="Loading suggestions…" />
       ) : null}
       {isLoadingFxBackup ? <LoadingBlock label="Loading saved FX rates…" /> : null}
+
+      {duplicateMatches.length > 0 ? (
+        <div
+          className="confirm-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="dup-dialog-title"
+          onKeyDown={(e) => { if (e.key === 'Escape') handleCancelDuplicate(); }}
+        >
+          <div className="confirm-dialog confirm-wide">
+            <p className="confirm-title" id="dup-dialog-title">Possible duplicate</p>
+            <p className="confirm-warning">
+              {duplicateMatches.length === 1
+                ? 'A similar expense already exists on this date.'
+                : `${duplicateMatches.length} similar expenses already exist on this date.`}{' '}
+              Save anyway?
+            </p>
+            <div style={{ marginBottom: 'var(--space-4)' }}>
+              {duplicateMatches.map((record) => (
+                <ExpenseCard
+                  key={record.rowNumber}
+                  record={record}
+                  sheetCurrencies={activeCurrencies}
+                  customColumns={customColumns}
+                />
+              ))}
+            </div>
+            <div className="confirm-actions">
+              <button
+                className="btn btn-secondary btn-inline"
+                type="button"
+                autoFocus
+                onClick={handleCancelDuplicate}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary btn-inline"
+                type="button"
+                onClick={() => { void handleConfirmSave(); }}
+              >
+                Save anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </Layout>
   );
 }

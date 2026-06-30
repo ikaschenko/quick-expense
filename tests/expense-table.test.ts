@@ -1,5 +1,5 @@
-import { getCustomColumnLabel, getDisplayAmount, getDisplayAmountFull, hasDetails } from "../src/utils/expenseTable";
-import { ExpenseRecord } from "../src/types/expense";
+import { findDuplicateExpenses, getCustomColumnLabel, getDisplayAmount, getDisplayAmountFull, hasDetails } from "../src/utils/expenseTable";
+import { ExpenseDraft, ExpenseRecord } from "../src/types/expense";
 
 function makeRecord(overrides: Partial<ExpenseRecord> = {}): ExpenseRecord {
   return {
@@ -11,6 +11,19 @@ function makeRecord(overrides: Partial<ExpenseRecord> = {}): ExpenseRecord {
     currencyAmounts: {},
     customFields: {},
     rowNumber: 1,
+    ...overrides,
+  };
+}
+
+function makeDraft(overrides: Partial<ExpenseDraft> = {}): ExpenseDraft {
+  return {
+    Date: "2026-01-01",
+    USD: "10.00",
+    Category: "Food",
+    spentBy: "a@example.com",
+    Comment: "",
+    currencyAmounts: {},
+    customFields: {},
     ...overrides,
   };
 }
@@ -115,5 +128,77 @@ describe("getDisplayAmountFull", () => {
   it("strips leading $ already present in raw USD value", () => {
     const record = makeRecord({ USD: "$19.00", currencyAmounts: { PLN: "70.25" } });
     expect(getDisplayAmountFull(record, ["PLN"])).toBe("PLN 70.25 / $19.00");
+  });
+});
+
+describe("findDuplicateExpenses", () => {
+  it("returns a matching record with identical date, category, and USD", () => {
+    const records = [makeRecord()];
+    const draft = makeDraft();
+    expect(findDuplicateExpenses(draft, records, [])).toEqual(records);
+  });
+
+  it("returns empty array when no records exist", () => {
+    expect(findDuplicateExpenses(makeDraft(), [], [])).toEqual([]);
+  });
+
+  it("does not match when date differs", () => {
+    const records = [makeRecord({ Date: "2026-01-02" })];
+    expect(findDuplicateExpenses(makeDraft(), records, [])).toEqual([]);
+  });
+
+  it("does not match when category differs", () => {
+    const records = [makeRecord({ Category: "Transport" })];
+    expect(findDuplicateExpenses(makeDraft(), records, [])).toEqual([]);
+  });
+
+  it("matches category case-insensitively", () => {
+    const records = [makeRecord({ Category: "FOOD" })];
+    expect(findDuplicateExpenses(makeDraft({ Category: "food" }), records, [])).toEqual(records);
+  });
+
+  it("does not match when USD amount differs beyond tolerance", () => {
+    const records = [makeRecord({ USD: "10.50" })];
+    expect(findDuplicateExpenses(makeDraft({ USD: "10.00" }), records, [])).toEqual([]);
+  });
+
+  it("matches USD amounts within 0.005 tolerance", () => {
+    const records = [makeRecord({ USD: "10.004" })];
+    expect(findDuplicateExpenses(makeDraft({ USD: "10.00" }), records, [])).toEqual(records);
+  });
+
+  it("handles comma-decimal USD in draft", () => {
+    const records = [makeRecord({ USD: "10.00" })];
+    expect(findDuplicateExpenses(makeDraft({ USD: "10,00" }), records, [])).toEqual(records);
+  });
+
+  it("falls back to non-USD currencies when USD is empty or zero", () => {
+    const records = [makeRecord({ USD: "", currencyAmounts: { PLN: "200.00" } })];
+    const draft = makeDraft({ USD: "", currencyAmounts: { PLN: "200.00" } });
+    expect(findDuplicateExpenses(draft, records, ["PLN"])).toEqual(records);
+  });
+
+  it("does not match on non-USD when amounts differ", () => {
+    const records = [makeRecord({ USD: "", currencyAmounts: { PLN: "200.00" } })];
+    const draft = makeDraft({ USD: "", currencyAmounts: { PLN: "150.00" } });
+    expect(findDuplicateExpenses(draft, records, ["PLN"])).toEqual([]);
+  });
+
+  it("returns multiple matching records", () => {
+    const r1 = makeRecord({ rowNumber: 1 });
+    const r2 = makeRecord({ rowNumber: 2 });
+    const unrelated = makeRecord({ rowNumber: 3, Category: "Other" });
+    expect(findDuplicateExpenses(makeDraft(), [r1, r2, unrelated], [])).toEqual([r1, r2]);
+  });
+
+  it("matches by non-USD currency even when USD values differ (different FX rates)", () => {
+    const records = [makeRecord({ USD: "8.55", currencyAmounts: { PLN: "32.15" } })];
+    const draft = makeDraft({ USD: "8.53", currencyAmounts: { PLN: "32.15" } });
+    expect(findDuplicateExpenses(draft, records, ["PLN"])).toEqual(records);
+  });
+
+  it("matches despite surrounding whitespace in record category", () => {
+    const records = [makeRecord({ Category: " Food " })];
+    expect(findDuplicateExpenses(makeDraft(), records, [])).toEqual(records);
   });
 });

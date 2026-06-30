@@ -126,7 +126,7 @@ function renderCardAmount(record: ExpenseRecord, sheetCurrencies: string[]): Rea
   return "\u2014";
 }
 
-interface ExpenseCardProps {
+export interface ExpenseCardProps {
   record: ExpenseRecord;
   sheetCurrencies: string[];
   customColumns: string[];
@@ -138,7 +138,7 @@ interface ExpenseCardProps {
   isViewOnly?: boolean;
 }
 
-function ExpenseCard({ record, sheetCurrencies, customColumns, isLastRecord, onDeleteRequest, onEditRequest, isHighlighted, isSaved, isViewOnly }: ExpenseCardProps): JSX.Element {
+export function ExpenseCard({ record, sheetCurrencies, customColumns, isLastRecord, onDeleteRequest, onEditRequest, isHighlighted, isSaved, isViewOnly }: ExpenseCardProps): JSX.Element {
   const [isOpen, setIsOpen] = useState(isHighlighted ?? false);
   const cardRef = useRef<HTMLDivElement>(null);
   const Icon = getCategoryIcon(record.Category);
