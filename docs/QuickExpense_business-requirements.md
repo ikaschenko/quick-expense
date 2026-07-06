@@ -199,13 +199,15 @@ Prerequisites for this step: successful sign in and successful configuration set
 
 To submit a new expense, click "Add" on a main screen.
 
-On this screen - show Buttons: Back, Save
+On this screen — show Buttons: **Back**, **Save & Continue**, **Save & Close**.
 
-Upon Save is clicked, the new record should be added to the database (shared google spreadsheet), and file saved.
+Upon either Save button is clicked, the new record is added to the database (shared google spreadsheet) and file saved.
 
-After successful Add, where does user go? Answer: After Save - show a success message with a green icon, clear the form, stay on Add screen.
+**Save & Continue:** shows a brief green "Saved!" flash on both buttons, clears only the amount fields (all currency amounts — non-USD and USD), retains all other fields, returns keyboard focus to the first amount field, and stays on the Add screen.
 
-On Back - return to a previous screen.
+**Save & Close:** saves the record and navigates to the Home screen (`/home`). A temporary green badge overlays the Add (`+`) button in the bottom navigation bar for ~5 seconds. No success message is shown on the Add screen.
+
+On **Back** — return to the previous screen without saving.
 
 ### 2.3.1 Date selection
 

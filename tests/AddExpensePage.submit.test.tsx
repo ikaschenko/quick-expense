@@ -149,3 +149,72 @@ describe("AddExpensePage — double-submit guard", () => {
     });
   });
 });
+
+describe("AddExpensePage — Save & Continue field retention", () => {
+  const successRecord = {
+    record: {
+      Date: "2026-06-30", USD: "10.00", Category: "Food",
+      spentBy: "test@example.com", Comment: "",
+      currencyAmounts: {}, customFields: {}, rowNumber: 2,
+    },
+    insertMode: false,
+  };
+
+  beforeEach(() => {
+    vi.mocked(googleSheetsService.appendExpenseRow).mockReset();
+    vi.mocked(googleSheetsService.appendExpenseRow).mockResolvedValue(successRecord);
+  });
+
+  it("A — non-amount fields are retained after Save & Continue", async () => {
+    renderAddPage();
+
+    const categoryInput = document.getElementById("category-field") as HTMLInputElement;
+    fireEvent.change(categoryInput, { target: { value: "Transport" } });
+
+    const commentInput = document.getElementById("comment-field") as HTMLTextAreaElement;
+    fireEvent.change(commentInput, { target: { value: "Bus ride" } });
+
+    // Fill amount so the form is valid
+    const amountInput = screen.getByRole("textbox", { name: /Amount in USD/i });
+    fireEvent.change(amountInput, { target: { value: "5.00" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /Save & Continue/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Expense saved successfully/i)).toBeTruthy();
+    });
+
+    expect(categoryInput.value).toBe("Transport");
+    expect(commentInput.value).toBe("Bus ride");
+  });
+
+  it("B — amount fields are cleared after Save & Continue", async () => {
+    renderAddPage();
+
+    const amountInput = screen.getByRole("textbox", { name: /Amount in USD/i }) as HTMLInputElement;
+    fireEvent.change(amountInput, { target: { value: "10.00" } });
+
+    const categoryInput = document.getElementById("category-field") as HTMLInputElement;
+    fireEvent.change(categoryInput, { target: { value: "Food" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /Save & Continue/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Expense saved successfully/i)).toBeTruthy();
+    });
+
+    expect(amountInput.value).toBe("");
+  });
+
+  it("C — Save & Close navigates to /home after save", async () => {
+    renderAddPage();
+
+    fillMinimalForm();
+
+    fireEvent.click(screen.getByRole("button", { name: /Save & Close/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Home")).toBeTruthy();
+    });
+  });
+});

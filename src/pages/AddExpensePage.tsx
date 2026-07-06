@@ -470,7 +470,11 @@ export function AddExpensePage(): JSX.Element {
 
       const submittedCurrency = getPreferredCurrency(normalizedDraft, activeCurrencies);
 
-      setDraft(createInitialDraft(auth.session?.givenName ?? auth.session?.email ?? "", activeCurrencies, customColumns));
+      setDraft((currentDraft) => {
+        const clearedAmounts: Record<string, string> = {};
+        for (const code of activeCurrencies) clearedAmounts[code] = "";
+        return { ...currentDraft, USD: "", currencyAmounts: clearedAmounts };
+      });
 
       // Preserve current FX rates
       const keptRates: ManualFxRates = {};
