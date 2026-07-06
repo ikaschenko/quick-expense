@@ -55,14 +55,13 @@ export function MtdSpendChart({ dailyAmounts, weekBoundaryPositions, year, month
       },
     };
 
-    // Trim to the last day with actual data (today); future days carry NaN.
-    const lastValidIdx = dailyAmounts.reduce((last, v, i) => (isNaN(v) ? last : i), -1);
-    const activeDays = lastValidIdx + 1;
+    // Show the full month on the x-axis; future days carry NaN and render as gaps.
+    const activeDays = dailyAmounts.length;
 
     const labels = Array.from({ length: activeDays }, (_, i) => String(i + 1));
 
     let running = 0;
-    const cumulativeAmounts = dailyAmounts.slice(0, activeDays).map((v) => (running += v));
+    const cumulativeAmounts = dailyAmounts.slice(0, activeDays).map((v) => isNaN(v) ? null : (running += v));
 
     const config: ChartConfiguration = {
       type: "line",

@@ -111,7 +111,6 @@ export function HomePage(): JSX.Element {
   const today = useMemo(() => getTodayLocalDate(), []);
 
   const [cachedEntry, setCachedEntry] = useState<MetricsCacheEntry | null>(null);
-  const [cacheChecking, setCacheChecking] = useState(false);
   const driveModifiedTimeRef = useRef<string | null>(null);
 
   const [showSavedBanner, setShowSavedBanner] = useState(
@@ -142,7 +141,6 @@ export function HomePage(): JSX.Element {
 
     // Cache hit — render it instantly and validate freshness with Drive in the background.
     setCachedEntry(entry);
-    setCacheChecking(true);
     googleSheetsService.getSheetModifiedTime()
       .then(({ modifiedTime }) => {
         driveModifiedTimeRef.current = modifiedTime;
@@ -151,16 +149,18 @@ export function HomePage(): JSX.Element {
           entry.sheetLastModifiedTime === null ||
           modifiedTime > entry.sheetLastModifiedTime;
         if (isStale) {
-          setCachedEntry(null);
           dataset.loadDataset().catch(() => {/* error surfaced via dataset.error */});
         }
       })
       .catch(() => {
-        setCachedEntry(null);
         dataset.loadDataset().catch(() => {/* error surfaced via dataset.error */});
-      })
-      .finally(() => setCacheChecking(false));
+      });
   }, [session?.email, config?.spreadsheetId, isConfigLoading, dataset.status, dataset.loadDataset]);
+
+  // Clear the cached entry once live data is ready so live values take over.
+  useEffect(() => {
+    if (dataset.status === "ready") setCachedEntry(null);
+  }, [dataset.status]);
 
   const records = dataset.snapshot?.records ?? [];
 
@@ -217,9 +217,6 @@ export function HomePage(): JSX.Element {
     <Layout title="Quick Expense">
       {showSavedBanner ? (
         <StatusBanner variant="success" message="Expense saved successfully." />
-      ) : null}
-      {cacheChecking ? (
-        <StatusBanner variant="info" message="Refreshing…" />
       ) : null}
       <div className="home-wrapper">
         <p className="home-greeting">
