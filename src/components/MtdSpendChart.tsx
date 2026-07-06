@@ -32,9 +32,33 @@ export function MtdSpendChart({ dailyAmounts, weekBoundaryPositions, year, month
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    // Read forecast colours from CSS design tokens via :root (reliable inheritance path)
+    const cssVars = getComputedStyle(document.documentElement);
+    const forecastBorderColor =
+      cssVars.getPropertyValue("--color-chart-forecast-border").trim() || "rgba(107,114,128,0.7)";
+    const forecastHatchColor =
+      cssVars.getPropertyValue("--color-chart-forecast-hatch").trim() || "rgba(107,114,128,0.3)";
+
     const gradient = ctx.createLinearGradient(0, 0, 0, canvas.offsetHeight || 100);
     gradient.addColorStop(0, "rgba(79,70,229,0.35)");
     gradient.addColorStop(1, "rgba(79,70,229,0.00)");
+
+    const totalDays = dailyAmounts.length;
+    const labels = Array.from({ length: totalDays }, (_, i) => String(i + 1));
+
+    // 0-based index of the last day with actual data (today), or -1 if none
+    let todayIndex = -1;
+    for (let i = totalDays - 1; i >= 0; i--) {
+      if (!isNaN(dailyAmounts[i])) { todayIndex = i; break; }
+    }
+
+    let running = 0;
+    const cumulativeActual = dailyAmounts.map((v) => isNaN(v) ? null : (running += v));
+
+    const cumulativeToday = todayIndex >= 0 ? (cumulativeActual[todayIndex] as number) : 0;
+
+    // Forecast zone: remaining days after today exist
+    const hasForecast = todayIndex >= 0 && todayIndex < totalDays - 1;
 
     const weekBoundaryPlugin: Plugin = {
       id: "weekBoundaryPlugin",
@@ -55,13 +79,57 @@ export function MtdSpendChart({ dailyAmounts, weekBoundaryPositions, year, month
       },
     };
 
-    // Show the full month on the x-axis; future days carry NaN and render as gaps.
-    const activeDays = dailyAmounts.length;
+    // Forecast plugin: draws directly on the canvas so it never affects the y-scale.
+    // Renders a hatched overlay + dashed reference line over the future zone.
+    const forecastPlugin: Plugin = {
+      id: "forecastPlugin",
+      afterDatasetsDraw(chart) {
+        if (!hasForecast) return;
+        const { ctx: c, chartArea, scales } = chart;
+        if (!chartArea) return;
 
-    const labels = Array.from({ length: activeDays }, (_, i) => String(i + 1));
+        // Start exactly at today's data point — no gap between the actual line and forecast zone
+        const xStart = scales["x"].getPixelForValue(todayIndex);
+        const zoneWidth = chartArea.right - xStart;
+        const zoneHeight = chartArea.bottom - chartArea.top;
 
-    let running = 0;
-    const cumulativeAmounts = dailyAmounts.slice(0, activeDays).map((v) => isNaN(v) ? null : (running += v));
+        // Reference y for today's cumulative total
+        const yLine = scales["y"].getPixelForValue(cumulativeToday);
+
+        // 1. Hatch/fill clipped to the area BELOW the reference line only
+        c.save();
+        c.beginPath();
+        c.rect(xStart, yLine, zoneWidth, chartArea.bottom - yLine);
+        c.clip();
+
+        // Subtle gray wash
+        c.fillStyle = "rgba(0,0,0,0.04)";
+        c.fillRect(xStart, yLine, zoneWidth, chartArea.bottom - yLine);
+
+        // Diagonal hatching
+        c.strokeStyle = forecastHatchColor;
+        c.lineWidth = 1;
+        c.setLineDash([]);
+        for (let d = -zoneHeight; d < zoneWidth + zoneHeight; d += 8) {
+          c.beginPath();
+          c.moveTo(xStart + d, chartArea.top);
+          c.lineTo(xStart + d + zoneHeight, chartArea.bottom);
+          c.stroke();
+        }
+        c.restore();
+
+        // 2. Dashed reference line at today's cumulative total (no clip)
+        c.save();
+        c.setLineDash([5, 4]);
+        c.strokeStyle = forecastBorderColor;
+        c.lineWidth = 1.5;
+        c.beginPath();
+        c.moveTo(xStart, yLine);
+        c.lineTo(chartArea.right, yLine);
+        c.stroke();
+        c.restore();
+      },
+    };
 
     const config: ChartConfiguration = {
       type: "line",
@@ -69,7 +137,7 @@ export function MtdSpendChart({ dailyAmounts, weekBoundaryPositions, year, month
         labels,
         datasets: [
           {
-            data: cumulativeAmounts,
+            data: cumulativeActual,
             fill: true,
             backgroundColor: gradient,
             borderColor: "rgba(79,70,229,0.9)",
@@ -126,7 +194,7 @@ export function MtdSpendChart({ dailyAmounts, weekBoundaryPositions, year, month
           },
         },
       },
-      plugins: [weekBoundaryPlugin],
+      plugins: [weekBoundaryPlugin, forecastPlugin],
     };
 
     if (chartRef.current) {
