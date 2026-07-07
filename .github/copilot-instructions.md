@@ -1,5 +1,13 @@
 # Quick Expense — Project Instructions
 
+## Who I Am & Project Stage
+
+- **Solo builder/entrepreneur.** There is no team. I am the sole person responsible for product decisions, design, code, shipping, and promotion.
+- **Current stage: personal + family use.** The product is live and used personally and within my family. The next milestone is a public launch (ProductHunt / TinyProduct).
+- **AI is the primary development force.** I use AI throughout the full lifecycle: idea → requirements → architecture → implementation → testing. I do not have a human QA role — AI must fill that gap entirely.
+- **Testing is a critical AI responsibility.** I test manually and tend to cover happy paths only. Edge cases, regression, and boundary conditions are easy for me to miss. AI must proactively cover these — not wait to be asked.
+- **Shipping velocity matters.** I want to spend time promoting the product, not manually testing it. The faster AI can produce verified, production-ready code, the more time I can invest in growth.
+
 ## Project Overview
 
 Quick Expense is a React 18 + Vite SPA with an Express 4 backend for recording personal/family expenses via Google Sheets. Frontend is TypeScript (`src/`), backend is plain JS with ES modules (`server/`). See [architecture.md](../architecture.md) for the full system design, data model, and technology stack.
