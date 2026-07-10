@@ -15,7 +15,7 @@ import {
 Chart.register(CategoryScale, LinearScale, LineController, PointElement, LineElement, Filler, Tooltip);
 
 interface MtdSpendChartProps {
-  dailyAmounts: number[];
+  dailyAmounts: (number | null)[];
   weekBoundaryPositions: number[];
   year: number;
   month: number;
@@ -49,11 +49,11 @@ export function MtdSpendChart({ dailyAmounts, weekBoundaryPositions, year, month
     // 0-based index of the last day with actual data (today), or -1 if none
     let todayIndex = -1;
     for (let i = totalDays - 1; i >= 0; i--) {
-      if (!isNaN(dailyAmounts[i])) { todayIndex = i; break; }
+      if (dailyAmounts[i] !== null) { todayIndex = i; break; }
     }
 
     let running = 0;
-    const cumulativeActual = dailyAmounts.map((v) => isNaN(v) ? null : (running += v));
+    const cumulativeActual = dailyAmounts.map((v) => v === null ? null : (running += v));
 
     const cumulativeToday = todayIndex >= 0 ? (cumulativeActual[todayIndex] as number) : 0;
 
@@ -165,6 +165,7 @@ export function MtdSpendChart({ dailyAmounts, weekBoundaryPositions, year, month
               label: (item) => {
                 const idx = item.dataIndex;
                 const daily = dailyAmounts[idx];
+                if (daily === null) return [];
                 return [
                   `Daily:  $${daily.toFixed(2)}`,
                   `Total:  $${(item.raw as number).toFixed(2)}`,

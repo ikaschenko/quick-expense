@@ -231,11 +231,11 @@ describe("getMtdDailyAmounts", () => {
     expect(amounts).toHaveLength(30); // June has 30 days
   });
 
-  it("fills past days with 0 and future days with NaN", () => {
+  it("fills past days with 0 and future days with null", () => {
     const amounts = getMtdDailyAmounts([], TODAY, iso);
     expect(amounts[0]).toBe(0);          // June 1 (past)
     expect(amounts[8]).toBe(0);          // June 9 (today)
-    expect(isNaN(amounts[9])).toBe(true); // June 10 (future)
+    expect(amounts[9]).toBeNull();       // June 10 (future)
   });
 
   it("accumulates USD per day correctly", () => {

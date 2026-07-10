@@ -9,7 +9,7 @@ vi.mock("../src/utils/date", () => ({
 
 function makeEntry(overrides: Partial<MetricsCacheEntry> = {}): MetricsCacheEntry {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     cacheDate: TODAY,
     sheetLastModifiedTime: "2026-06-24T10:00:00.000Z",
     todayStats: { count: 1, usdTotal: 50, dualCurrency: null },
@@ -37,6 +37,12 @@ describe("metricsCache.save / load", () => {
     const entry = makeEntry();
     metricsCache.save(EMAIL, entry);
     expect(metricsCache.load(EMAIL)).toEqual(entry);
+  });
+
+  it("round-trips null future-day sentinels in mtdDailyAmounts through JSON storage", () => {
+    const entry = makeEntry({ mtdDailyAmounts: [10, 20, null, null] });
+    metricsCache.save(EMAIL, entry);
+    expect(metricsCache.load(EMAIL)?.mtdDailyAmounts).toEqual([10, 20, null, null]);
   });
 
   it("is case-insensitive on email", () => {

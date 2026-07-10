@@ -203,17 +203,17 @@ export function getRolling12mStats(
 
 /**
  * Per-day USD totals for the current month.
- * Array length = days in month. Future days are NaN; past/today are actual totals (0 if no records).
+ * Array length = days in month. Future days are null; past/today are actual totals (0 if no records).
  */
 export function getMtdDailyAmounts(
   records: ExpenseRecord[],
   todayStr: string,
   toIso: IsoNormalizer,
-): number[] {
+): (number | null)[] {
   const [year, month, day] = todayStr.split("-").map(Number);
   const totalDays = daysInMonth(year, month);
 
-  const amounts = new Array<number>(totalDays).fill(NaN);
+  const amounts = new Array<number | null>(totalDays).fill(null);
   for (let d = 1; d <= day; d++) amounts[d - 1] = 0;
 
   for (const r of records) {
@@ -221,7 +221,7 @@ export function getMtdDailyAmounts(
     if (!iso) continue;
     const [ry, rm, rd] = iso.split("-").map(Number);
     if (ry !== year || rm !== month || rd > day) continue;
-    amounts[rd - 1] += parseUsd(r);
+    amounts[rd - 1] = (amounts[rd - 1] ?? 0) + parseUsd(r);
   }
 
   return amounts;
