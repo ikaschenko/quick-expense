@@ -70,3 +70,28 @@ Every task is complete only when tests and docs are current. Apply these checks 
 - New DB migration file → append it to the migration table in `architecture.md` §7.3 and to the `psql` command list in `db/database.md`.
 - Changed context shape or service method → update the relevant description in `architecture.md` §8.
 - File renamed or moved → update every reference across `architecture.md`, `README.md`, `.github/copilot-instructions.md`, and agent/skill files.
+
+> **Orchestrated mode:** when invoked as a subagent by the `feature-implementation-orchestrator`, DO NOT update BRD (`docs/QuickExpense_business-requirements.md`) or SDD (`architecture.md`, `db/database.md`, `README.md`). Those are updated by the Product Owner and Architect in the dedicated doc-sync stage. Still keep tests current, and list any needed doc changes under "Docs Needed" in the handoff below.
+
+## Handoff Artifact
+
+When implementation is complete (build + tests green), always output a **Dev Summary** as the last message, formatted exactly as:
+
+```
+---DEV SUMMARY---
+Feature: [one-line title]
+Branch: [feature/issue-<N>-<slug>]
+Plan Steps Implemented:
+1. [step] → [what changed]
+2. [step] → [what changed]
+Files Changed:
+- [path] — [reason]
+Deviations From Plan: [none | description + why]
+Tests: [added/updated files]; [N passing, 0 failing]
+Build: [clean | errors]
+Docs Needed: [none | BRD: … / SDD: …]  (for the doc-sync stage — do not apply yourself in orchestrated mode)
+Follow-ups / Risks: [none | notes]
+---END DEV SUMMARY---
+```
+
+This block is the authoritative input for the Tester conversation. Do not rely on conversation history.
