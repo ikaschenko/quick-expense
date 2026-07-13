@@ -296,14 +296,14 @@ export function ExpenseTable({
             <span>{formatGroupDate(group.date)}</span>
             {dayTotal ? (
               <span className="expense-date-totals">
-                <span className="expense-date-badge">
-                  <FormattedAmount prefix="$" value={dayTotal.usdTotal} />
-                </span>
                 {dayTotal.dualCurrency ? (
                   <span className="expense-date-badge expense-date-badge--secondary">
                     <FormattedAmount prefix={`${dayTotal.dualCurrency.code} `} value={dayTotal.dualCurrency.amount} />
                   </span>
                 ) : null}
+                <span className="expense-date-badge">
+                  <FormattedAmount prefix="$" value={dayTotal.usdTotal} />
+                </span>
               </span>
             ) : null}
           </div>
