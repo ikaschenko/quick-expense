@@ -21,7 +21,8 @@ import {
   Lock,
 } from "lucide-react";
 import { ExpenseRecord } from "../types/expense";
-import { COMMENT_PREVIEW_LENGTH, getCustomColumnLabel, hasDetails } from "../utils/expenseTable";
+import { COMMENT_PREVIEW_LENGTH, getCustomColumnLabel, groupByDate, hasDetails } from "../utils/expenseTable";
+import { DayTotal } from "../utils/currencyTotals";
 import { FormattedAmount } from "./FormattedAmount";
 import { LucideProps } from "lucide-react";
 
@@ -46,6 +47,8 @@ interface ExpenseTableProps {
   savedRowNumber?: number | null;
   /** When true, Edit and Delete controls are locked for View-only guests. */
   isViewOnly?: boolean;
+  /** Per-day USD/dual-currency totals, keyed by date group key. Omitted when totals should not be shown (e.g. filtered views). */
+  dayTotals?: Map<string, DayTotal>;
 }
 
 type LucideIcon = React.ForwardRefExoticComponent<Omit<LucideProps, "ref"> & React.RefAttributes<SVGSVGElement>>;
@@ -258,27 +261,6 @@ export function ExpenseCard({ record, sheetCurrencies, customColumns, isLastReco
   );
 }
 
-interface DateGroup {
-  date: string;
-  records: ExpenseRecord[];
-}
-
-function groupByDate(records: ExpenseRecord[]): DateGroup[] {
-  const groups = new Map<string, ExpenseRecord[]>();
-
-  // Iterate in reverse so newest dates appear first
-  for (let i = records.length - 1; i >= 0; i--) {
-    const record = records[i];
-    const date = record.Date || "Unknown";
-    if (!groups.has(date)) {
-      groups.set(date, []);
-    }
-    groups.get(date)!.push(record);
-  }
-
-  return Array.from(groups.entries()).map(([date, recs]) => ({ date, records: recs }));
-}
-
 export function ExpenseTable({
   records,
   emptyMessage = "No records found.",
@@ -291,6 +273,7 @@ export function ExpenseTable({
   highlightedRowNumber,
   savedRowNumber,
   isViewOnly,
+  dayTotals,
 }: ExpenseTableProps): JSX.Element {
   const groups = useMemo(() => groupByDate(records), [records]);
 
@@ -305,9 +288,25 @@ export function ExpenseTable({
 
   return (
     <div>
-      {groups.map((group) => (
+      {groups.map((group) => {
+        const dayTotal = dayTotals?.get(group.date);
+        return (
         <div key={group.date} className="expense-date-group">
-          <div className="expense-date-header">{formatGroupDate(group.date)}</div>
+          <div className="expense-date-header">
+            <span>{formatGroupDate(group.date)}</span>
+            {dayTotal ? (
+              <span className="expense-date-totals">
+                {dayTotal.dualCurrency ? (
+                  <span className="expense-date-badge expense-date-badge--secondary">
+                    <FormattedAmount prefix={`${dayTotal.dualCurrency.code} `} value={dayTotal.dualCurrency.amount} />
+                  </span>
+                ) : null}
+                <span className="expense-date-badge">
+                  <FormattedAmount prefix="$" value={dayTotal.usdTotal} />
+                </span>
+              </span>
+            ) : null}
+          </div>
           {group.records.map((record) => (
             <ExpenseCard
               key={record.rowNumber}
@@ -323,7 +322,8 @@ export function ExpenseTable({
             />
           ))}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

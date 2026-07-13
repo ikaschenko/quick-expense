@@ -12,7 +12,8 @@ import { useDataset } from "../contexts/DatasetContext";
 import { filterExpenses } from "../utils/search";
 import { googleSheetsService } from "../services/googleSheets";
 import { trackEvent } from "../services/analytics";
-import { getDisplayAmountFull } from "../utils/expenseTable";
+import { getDisplayAmountFull, groupByDate } from "../utils/expenseTable";
+import { computeDayTotal, DayTotal } from "../utils/currencyTotals";
 import { ExpenseRecord, SearchFilters } from "../types/expense";
 
 const emptyFilters: SearchFilters = {
@@ -127,6 +128,27 @@ export function HistoryPage(): JSX.Element {
 
   const lastRecord = dataset.snapshot?.records.at(-1) ?? null;
   const totalRecords = dataset.snapshot?.records.length ?? 0;
+
+  // Per-day totals: shown only in the default unfiltered view, and only for date groups
+  // whose visible record count matches the full in-memory dataset's count for that date
+  // (i.e. not yet truncated by pagination).
+  const dayTotals = useMemo((): Map<string, DayTotal> | null => {
+    if (isFiltered || !dataset.snapshot) return null;
+
+    const fullCounts = new Map<string, number>();
+    for (const r of dataset.snapshot.records) {
+      const date = r.Date || "Unknown";
+      fullCounts.set(date, (fullCounts.get(date) ?? 0) + 1);
+    }
+
+    const totals = new Map<string, DayTotal>();
+    for (const group of groupByDate(visibleRecords)) {
+      if (group.records.length === (fullCounts.get(group.date) ?? 0)) {
+        totals.set(group.date, computeDayTotal(group.records));
+      }
+    }
+    return totals;
+  }, [isFiltered, dataset.snapshot, visibleRecords]);
 
   const canShowEarlier = !isFiltered && (pageSize < totalRecords || dataset.isLoadingHistory);
   const showEarlierLoading = !isFiltered && pageSize >= totalRecords && dataset.isLoadingHistory;
@@ -406,6 +428,7 @@ export function HistoryPage(): JSX.Element {
               highlightedRowNumber={highlightedRowNumber}
               savedRowNumber={savedRowNumber}
               isViewOnly={isViewOnly}
+              dayTotals={dayTotals ?? undefined}
             />
             {canShowEarlier ? (
               <button
