@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ExpenseTable } from "../src/components/ExpenseTable";
 import { ExpenseRecord } from "../src/types/expense";
+import { DayTotal } from "../src/utils/currencyTotals";
 
 function makeRecord(overrides: Partial<ExpenseRecord> = {}): ExpenseRecord {
   return {
@@ -134,5 +135,49 @@ describe("ExpenseTable — isViewOnly", () => {
     );
     await user.click(screen.getByRole("button", { name: /edit this expense/i }));
     expect(onEditRequest).toHaveBeenCalledWith(record);
+  });
+});
+
+describe("ExpenseTable — per-day total badges", () => {
+  const record = makeRecord({ Date: "2026-06-09", rowNumber: 1 });
+
+  it("renders the USD total badge when dayTotals has an entry for the group's date", () => {
+    const dayTotals = new Map<string, DayTotal>([
+      ["2026-06-09", { usdTotal: 45, dualCurrency: null }],
+    ]);
+    const { container } = render(<ExpenseTable records={[record]} dayTotals={dayTotals} />);
+    const badge = container.querySelector(".expense-date-badge");
+    expect(badge).toBeTruthy();
+    expect(badge!.textContent).toContain("45");
+  });
+
+  it("renders a secondary badge when the day shares one non-USD currency", () => {
+    const dayTotals = new Map<string, DayTotal>([
+      ["2026-06-09", { usdTotal: 45, dualCurrency: { code: "PLN", amount: 180 } }],
+    ]);
+    const { container } = render(<ExpenseTable records={[record]} dayTotals={dayTotals} />);
+    expect(container.textContent).toContain("PLN");
+    expect(container.querySelectorAll(".expense-date-badge")).toHaveLength(2);
+  });
+
+  it("does not render a secondary badge when dualCurrency is null (mixed-currency day)", () => {
+    const dayTotals = new Map<string, DayTotal>([
+      ["2026-06-09", { usdTotal: 45, dualCurrency: null }],
+    ]);
+    const { container } = render(<ExpenseTable records={[record]} dayTotals={dayTotals} />);
+    expect(container.querySelectorAll(".expense-date-badge")).toHaveLength(1);
+  });
+
+  it("renders no badge when the dayTotals prop is omitted", () => {
+    const { container } = render(<ExpenseTable records={[record]} />);
+    expect(container.querySelector(".expense-date-badge")).toBeNull();
+  });
+
+  it("renders no badge when dayTotals has no entry for the group's date", () => {
+    const dayTotals = new Map<string, DayTotal>([
+      ["2026-01-01", { usdTotal: 45, dualCurrency: null }],
+    ]);
+    const { container } = render(<ExpenseTable records={[record]} dayTotals={dayTotals} />);
+    expect(container.querySelector(".expense-date-badge")).toBeNull();
   });
 });

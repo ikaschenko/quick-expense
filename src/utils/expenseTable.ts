@@ -2,6 +2,27 @@ import { ExpenseDraft, ExpenseRecord } from "../types/expense";
 
 export const COMMENT_PREVIEW_LENGTH = 72;
 
+export interface DateGroup {
+  date: string;
+  records: ExpenseRecord[];
+}
+
+export function groupByDate(records: ExpenseRecord[]): DateGroup[] {
+  const groups = new Map<string, ExpenseRecord[]>();
+
+  // Iterate in reverse so newest dates appear first
+  for (let i = records.length - 1; i >= 0; i--) {
+    const record = records[i];
+    const date = record.Date || "Unknown";
+    if (!groups.has(date)) {
+      groups.set(date, []);
+    }
+    groups.get(date)!.push(record);
+  }
+
+  return Array.from(groups.entries()).map(([date, recs]) => ({ date, records: recs }));
+}
+
 const CUSTOM_COLUMN_LABELS: Record<string, string> = {
   SpentFor: "Spent For",
 };
