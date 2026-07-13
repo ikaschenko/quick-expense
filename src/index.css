@@ -1224,6 +1224,9 @@ button { cursor: pointer; }
 }
 
 .expense-date-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: var(--font-size-xs);
   font-weight: 600;
   text-transform: uppercase;
@@ -1231,6 +1234,32 @@ button { cursor: pointer; }
   color: var(--color-text-secondary);
   padding: var(--space-2) 0;
   margin-bottom: var(--space-2);
+}
+
+.expense-date-totals {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.expense-date-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+}
+
+.expense-date-badge--secondary {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
 }
 
 .expense-card {
