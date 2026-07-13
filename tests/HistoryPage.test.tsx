@@ -109,11 +109,17 @@ describe("HistoryPage — per-day totals", () => {
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
   });
 
-  it("suppresses per-day totals when a filter is active", () => {
+  it.each([
+    ["categories", { ...emptyFilters, categories: ["Misc"] }],
+    ["comment", { ...emptyFilters, comment: "coffee" }],
+    ["amountFrom", { ...emptyFilters, amountFrom: "10" }],
+    ["amountTo", { ...emptyFilters, amountTo: "100" }],
+    ["customFields", { ...emptyFilters, customFields: { SpentFor: "trip" } }],
+  ])("suppresses per-day totals when the %s filter is active", (_label, searchFilters) => {
     const records = [makeRecord(1, "2026-06-09", "45"), makeRecord(2, "2026-06-09", "5")];
     mockDataset({
       snapshot: { records, distinctValues: { Category: [], spentBy: [], customFields: {} }, loadedAt: 0, payloadBytes: 0, loadPhase: "full" },
-      searchFilters: { ...emptyFilters, categories: ["Misc"] },
+      searchFilters,
     });
     const { container } = renderHistory();
     expect(container.querySelector(".expense-date-badge")).toBeNull();

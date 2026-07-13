@@ -117,4 +117,34 @@ describe("computeDayTotal", () => {
     expect(result.usdTotal).toBeCloseTo(30);
     expect(result.dualCurrency).toBeNull();
   });
+
+  it("sums negative (refund) USD amounts without producing NaN", () => {
+    const records = [
+      makeRecord("2026-06-09", "10"),
+      makeRecord("2026-06-09", "-4"),
+    ];
+    const result = computeDayTotal(records);
+    expect(result.usdTotal).toBeCloseTo(6);
+    expect(Number.isNaN(result.usdTotal)).toBe(false);
+  });
+
+  it("falls back to 0 (not NaN) for a malformed/non-numeric USD value", () => {
+    const records = [
+      makeRecord("2026-06-09", "not-a-number"),
+      makeRecord("2026-06-09", "20"),
+    ];
+    const result = computeDayTotal(records);
+    expect(result.usdTotal).toBeCloseTo(20);
+    expect(Number.isNaN(result.usdTotal)).toBe(false);
+  });
+
+  it("sums ALL records for the day regardless of Category or spentBy (no hidden filtering)", () => {
+    const records = [
+      makeRecord("2026-06-09", "10", { Category: "Groceries", spentBy: "Alice" }),
+      makeRecord("2026-06-09", "20", { Category: "Rent", spentBy: "Bob" }),
+      makeRecord("2026-06-09", "5", { Category: "Misc", spentBy: "Alice" }),
+    ];
+    const result = computeDayTotal(records);
+    expect(result.usdTotal).toBeCloseTo(35);
+  });
 });
