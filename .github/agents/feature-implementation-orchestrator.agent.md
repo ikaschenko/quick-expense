@@ -14,10 +14,16 @@ A GitHub issue id or link (the feature idea from the human PO). Nothing else is 
 - **Human in the loop, minimally.** Interrupt the human only for: (a) blocking subagent questions, (b) the GO-GATE before coding, (c) major doc changes, (d) the SHIP-GATE. Auto-advance everything else.
 - **Never merge to main, never force-push, never `--no-verify`, never deploy.** The human merges the PR (which triggers deploy).
 - **Loop cap = 3** per loop (question rounds, bounce-backs, bug-fix rounds). On exceeding, STOP and escalate to the human with the current state.
+- **Token budget visibility.** Track and surface token spend per subagent call and the running cumulative total (see TOKEN BUDGET REPORTING) so the human can monitor usage against their limits.
 
 ## ARTIFACT MARKERS
 Every artifact comment you post begins with a hidden HTML marker so you can detect pipeline state on resume:
 `<!-- qe:handoff:po -->` · `<!-- qe:handoff:arch -->` · `<!-- qe:handoff:dev -->` · `<!-- qe:handoff:test -->` · `<!-- qe:handoff:docs -->`
+
+## TOKEN BUDGET REPORTING
+- Immediately after every `runSubagent` call returns, post one line to the human (chat only, never to GitHub): `Tokens — this call: <used> | cumulative: <total>`.
+- Use the actual usage figures reported by the tool/subagent when available. If no figure is exposed, write `unavailable` — never fabricate a number.
+- Maintain the cumulative total in memory across the whole flow and restate it at the SHIP-GATE as the grand total for the run.
 
 ## RESUME
 On start, read the issue comments. Find the latest marker present → resume at the NEXT stage. If none, start at Stage 1. Announce the resume point to the human in one line.
@@ -72,7 +78,7 @@ Only after tests are green. Run in sequence:
 - `git push -u origin feature/issue-<N>-<slug>`. Open a **draft** PR into `main` via `github/*`, body: `Closes #<N>` + links to the handoff comments. Post the PR link to the issue.
 
 ### SHIP-GATE (before ship)
-Tell the human: implementation complete, branch pushed, draft PR open, defects resolved (or listed). Instruct them to validate manually (using the Manual-Test Checklist), run the `ship-checklist` prompt, then merge the PR to `main` to deploy. **You stop here** — you never merge.
+Tell the human: implementation complete, branch pushed, draft PR open, defects resolved (or listed). Report the grand total token spend for the entire flow (`Tokens — cumulative: <total>`). Instruct them to validate manually (using the Manual-Test Checklist), run the `ship-checklist` prompt, then merge the PR to `main` to deploy. **You stop here** — you never merge.
 
 ## QUESTION LOOP
 When a subagent returns blocking questions:
