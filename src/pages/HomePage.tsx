@@ -14,9 +14,11 @@ import {
   getTodayStats,
   getMtdStats,
   getYtdStats,
+  getYtdForecast,
   getRolling12mStats,
   getMtdDailyAmounts,
   getMtdWeekBoundaryPositions,
+  type YtdForecast,
 } from "../utils/dashboardStats";
 import { metricsCache, type MetricsCacheEntry } from "../services/metricsCache";
 import { googleSheetsService } from "../services/googleSheets";
@@ -102,6 +104,18 @@ function DeviationLine({ deviation }: DeviationProps): JSX.Element {
   );
 }
 
+interface ForecastLineProps {
+  forecast: YtdForecast;
+}
+
+function ForecastLine({ forecast }: ForecastLineProps): JSX.Element {
+  return (
+    <p className="home-metric-forecast">
+      Forecasted full year: {forecast.amountUsd === null ? "Not enough data" : `$${Math.round(forecast.amountUsd)}`}
+    </p>
+  );
+}
+
 export function HomePage(): JSX.Element {
   const { config, isConfigLoading } = useConfig();
   const { session } = useAuth();
@@ -169,6 +183,7 @@ export function HomePage(): JSX.Element {
   const todayStats = useMemo(() => getTodayStats(records, today, toIso), [records, today, toIso]);
   const mtdStats = useMemo(() => getMtdStats(records, today, toIso), [records, today, toIso]);
   const ytdStats = useMemo(() => getYtdStats(records, today, toIso), [records, today, toIso]);
+  const ytdForecast = useMemo(() => getYtdForecast(records, today, toIso), [records, today, toIso]);
   const rolling12mStats = useMemo(() => getRolling12mStats(records, today, toIso), [records, today, toIso]);
   const mtdDailyAmounts = useMemo(() => getMtdDailyAmounts(records, today, toIso), [records, today, toIso]);
 
@@ -187,12 +202,13 @@ export function HomePage(): JSX.Element {
       todayStats,
       mtdStats,
       ytdStats,
+      ytdForecast,
       rolling12mStats,
       mtdDailyAmounts,
       weekBoundaryPositions,
     });
     driveModifiedTimeRef.current = null;
-  }, [dataset.status, todayStats, mtdStats, ytdStats, rolling12mStats]);
+  }, [dataset.status, todayStats, mtdStats, ytdStats, ytdForecast, rolling12mStats]);
 
   const monthName = new Date(year, month - 1, 1).toLocaleString("en", { month: "long" }).toUpperCase();
   const dayLabel = new Date(year, month - 1, parseInt(today.split("-")[2], 10))
@@ -209,6 +225,7 @@ export function HomePage(): JSX.Element {
   const displayTodayStats = cachedEntry?.todayStats ?? todayStats;
   const displayMtdStats = cachedEntry?.mtdStats ?? mtdStats;
   const displayYtdStats = cachedEntry?.ytdStats ?? ytdStats;
+  const displayYtdForecast = cachedEntry?.ytdForecast ?? ytdForecast;
   const displayRolling12mStats = cachedEntry?.rolling12mStats ?? rolling12mStats;
   const displayMtdDailyAmounts = cachedEntry?.mtdDailyAmounts ?? mtdDailyAmounts;
   const displayWeekBoundaryPositions = cachedEntry?.weekBoundaryPositions ?? weekBoundaryPositions;
@@ -317,6 +334,7 @@ export function HomePage(): JSX.Element {
                   <>
                     <p className="home-metric-amount"><FormattedAmount prefix="$" value={displayYtdStats.usdTotal} /></p>
                     {displayYtdStats.deviation && <DeviationLine deviation={displayYtdStats.deviation} />}
+                    <ForecastLine forecast={displayYtdForecast} />
                   </>
                 )}
               </div>
