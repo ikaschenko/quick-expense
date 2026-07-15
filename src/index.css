@@ -776,6 +776,12 @@ button { cursor: pointer; }
   color: var(--color-success);
 }
 
+.home-metric-forecast {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-placeholder);
+  margin: 0 0 var(--space-3);
+}
+
 .home-metric-empty {
   font-size: var(--font-size-base);
   color: var(--color-text-placeholder);

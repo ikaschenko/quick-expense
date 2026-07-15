@@ -4,6 +4,7 @@ import {
   getTodayStats,
   getMtdStats,
   getYtdStats,
+  getYtdForecast,
   getRolling12mStats,
   getMtdDailyAmounts,
   getMtdWeekBoundaryPositions,
@@ -220,6 +221,138 @@ describe("getYtdStats", () => {
     const stats = getYtdStats(records, TODAY, iso);
     expect(stats.deviation!.priorLabel).toBe("2025");
     expect(stats.deviation!.priorTotal).toBeCloseTo(80);
+  });
+});
+
+// ─── getYtdForecast ───────────────────────────────────────────────────────────
+
+describe("getYtdForecast", () => {
+  it("projects a common-year baseline through Dec 31 (2026)", () => {
+    // Default window: Jan 1 → Jun 8 (159 days), total Jan 1 → Dec 31 = 365 days.
+    const records = [
+      makeRecord("2026-01-01", "100"),
+      makeRecord("2026-01-02", "100"),
+      makeRecord("2026-01-03", "100"),
+    ];
+    const forecast = getYtdForecast(records, "2026-06-09", iso);
+    expect(forecast.amountUsd).toBeCloseTo((300 * 365) / 159);
+  });
+
+  it("accounts for the leap day when projecting a leap-year baseline (2024)", () => {
+    // Default window: Jan 1 → Jun 8 (160 days, includes Feb 29), total = 366 days.
+    const records = [
+      makeRecord("2024-01-01", "100"),
+      makeRecord("2024-01-02", "100"),
+      makeRecord("2024-01-03", "100"),
+    ];
+    const forecast = getYtdForecast(records, "2024-06-09", iso);
+    expect(forecast.amountUsd).toBeCloseTo(686.25);
+  });
+
+  it("applies early-January smoothing (trailing 15-day window crossing into prior year)", () => {
+    // today = 2026-01-10 (before Jan 15) with no records yet in 2026 → smoothing kicks in.
+    // Baseline: 2025-12-26 → 2026-01-09 (15 days). Projection: 2025-12-26 → 2026-12-31 (371 days).
+    const records = [
+      makeRecord("2025-12-26", "50"),
+      makeRecord("2025-12-27", "50"),
+      makeRecord("2025-12-28", "50"),
+    ];
+    const forecast = getYtdForecast(records, "2026-01-10", iso);
+    expect(forecast.amountUsd).toBeCloseTo(3710);
+  });
+
+  it("applies the late-starter override when the first YTD expense is after Jan 1", () => {
+    // Baseline starts at the earliest 2026 record (Mar 1), not Jan 1.
+    // Baseline: Mar 1 → Jun 8 (100 days). Projection: Mar 1 → Dec 31 (306 days).
+    const records = [
+      makeRecord("2026-03-01", "100"),
+      makeRecord("2026-03-02", "100"),
+      makeRecord("2026-03-03", "100"),
+    ];
+    const forecast = getYtdForecast(records, "2026-06-09", iso);
+    expect(forecast.amountUsd).toBeCloseTo(918);
+  });
+
+  it("prefers the late-starter override over early-January smoothing when both apply", () => {
+    // today = 2026-01-10 (before Jan 15, would smooth) but earliest record is Jan 5 (late-starter).
+    // Baseline: Jan 5 → Jan 9 (5 days). Projection: Jan 5 → Dec 31 (361 days).
+    const records = [
+      makeRecord("2026-01-05", "100"),
+      makeRecord("2026-01-06", "100"),
+      makeRecord("2026-01-07", "100"),
+    ];
+    const forecast = getYtdForecast(records, "2026-01-10", iso);
+    expect(forecast.amountUsd).toBeCloseTo(21660);
+  });
+
+  it("returns null (not enough data) with only 2 distinct baseline days", () => {
+    const records = [makeRecord("2026-01-01", "100"), makeRecord("2026-01-02", "100")];
+    const forecast = getYtdForecast(records, "2026-06-09", iso);
+    expect(forecast.amountUsd).toBeNull();
+  });
+
+  it("returns null (not enough data) with an empty records array", () => {
+    const forecast = getYtdForecast([], "2026-06-09", iso);
+    expect(forecast.amountUsd).toBeNull();
+  });
+
+  it("counts multiple records on the same day as a single distinct day", () => {
+    // 5 records but only 2 distinct calendar days → still not enough data.
+    const records = [
+      makeRecord("2026-01-01", "100"),
+      makeRecord("2026-01-01", "50"),
+      makeRecord("2026-01-01", "25"),
+      makeRecord("2026-01-02", "100"),
+      makeRecord("2026-01-02", "100"),
+    ];
+    const forecast = getYtdForecast(records, "2026-06-09", iso);
+    expect(forecast.amountUsd).toBeNull();
+  });
+
+  it("sums all records within a distinct day, not just one per day", () => {
+    // 3 distinct days, but day 1 has 2 records → baseline total is 400, not 300.
+    const records = [
+      makeRecord("2026-01-01", "100"),
+      makeRecord("2026-01-01", "100"),
+      makeRecord("2026-01-02", "100"),
+      makeRecord("2026-01-03", "100"),
+    ];
+    const forecast = getYtdForecast(records, "2026-06-09", iso);
+    expect(forecast.amountUsd).toBeCloseTo((400 * 365) / 159);
+  });
+
+  it("ignores records with unparseable dates when resolving the baseline", () => {
+    const records = [
+      makeRecord("2026-01-01", "100"),
+      makeRecord("2026-01-02", "100"),
+      makeRecord("2026-01-03", "100"),
+      makeRecord("not-a-date", "9999"),
+    ];
+    const badIso: IsoNormalizer = (s) => (s === "not-a-date" ? null : s);
+    const forecast = getYtdForecast(records, "2026-06-09", badIso);
+    expect(forecast.amountUsd).toBeCloseTo((300 * 365) / 159);
+  });
+
+  it("returns a forecast once a 3rd distinct baseline day is added", () => {
+    const records = [
+      makeRecord("2026-01-01", "100"),
+      makeRecord("2026-01-02", "100"),
+      makeRecord("2026-01-03", "100"),
+    ];
+    const forecast = getYtdForecast(records, "2026-06-09", iso);
+    expect(forecast.amountUsd).not.toBeNull();
+  });
+
+  it("uses the default Jan 1 window (no smoothing) on the Jan 15 boundary", () => {
+    // today = 2026-01-15 (not before Jan 15) → default window Jan 1 → Jan 14 (14 days),
+    // not the smoothed 15-day trailing window.
+    const records = [
+      makeRecord("2026-01-01", "100"),
+      makeRecord("2026-01-02", "100"),
+      makeRecord("2026-01-03", "100"),
+    ];
+    const forecast = getYtdForecast(records, "2026-01-15", iso);
+    expect(forecast.amountUsd).toBeCloseTo((300 * 365) / 14);
   });
 });
 

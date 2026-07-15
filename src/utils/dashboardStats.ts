@@ -103,6 +103,78 @@ export function getYtdStats(
   };
 }
 
+export interface YtdForecast {
+  amountUsd: number | null;
+}
+
+/**
+ * Full-year USD spend forecast for the YTD card. Projects the daily run-rate of a
+ * recent baseline window through Dec 31 of the current year.
+ *
+ * Baseline window resolution (first matching rule wins):
+ *  - Late-starter: if the earliest YTD record is after Jan 1, start there (takes
+ *    precedence over early-Jan smoothing).
+ *  - Early-Jan smoothing: if today is before Jan 15, use a trailing 15-day window
+ *    (may cross into the prior year) instead of the too-short Jan 1 → yesterday window.
+ *  - Default: Jan 1 → yesterday.
+ *
+ * Returns `amountUsd: null` ("not enough data") when the baseline window contains
+ * fewer than 3 distinct calendar days with at least one recorded expense.
+ */
+export function getYtdForecast(
+  records: ExpenseRecord[],
+  todayStr: string,
+  toIso: IsoNormalizer,
+): YtdForecast {
+  const [year, month, day] = todayStr.split("-").map(Number);
+  const yearStart = `${year}-01-01`;
+
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  const windowEndDate = new Date(year, month - 1, day - 1); // yesterday
+  const windowEnd = fmt(windowEndDate);
+
+  const yearToDateIsoDates = filterPeriod(records, yearStart, todayStr, toIso)
+    .map((r) => toIso(r.Date))
+    .filter((iso): iso is string => iso !== null);
+  const earliestIso = yearToDateIsoDates.length > 0
+    ? yearToDateIsoDates.reduce((min, iso) => (iso < min ? iso : min))
+    : null;
+
+  let baselineStart: string;
+  let baselineStartDate: Date;
+  if (earliestIso !== null && earliestIso > yearStart) {
+    // Late-starter override — takes precedence over early-Jan smoothing.
+    baselineStart = earliestIso;
+    const [sy, sm, sd] = earliestIso.split("-").map(Number);
+    baselineStartDate = new Date(sy, sm - 1, sd);
+  } else if (month === 1 && day < 15) {
+    // Early-January smoothing — extend to a trailing 15-day window.
+    baselineStartDate = new Date(year, month - 1, day - 15);
+    baselineStart = fmt(baselineStartDate);
+  } else {
+    baselineStart = yearStart;
+    baselineStartDate = new Date(year, 0, 1);
+  }
+
+  const baselineRecords = filterPeriod(records, baselineStart, windowEnd, toIso);
+  const distinctDays = new Set(
+    baselineRecords.map((r) => toIso(r.Date)).filter((iso): iso is string => iso !== null),
+  ).size;
+  if (distinctDays < 3) return { amountUsd: null };
+
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const daysInBaselineWindow = Math.round((windowEndDate.getTime() - baselineStartDate.getTime()) / msPerDay) + 1;
+  const yearEndDate = new Date(year, 11, 31);
+  const totalDaysInProjectionPeriod = Math.round((yearEndDate.getTime() - baselineStartDate.getTime()) / msPerDay) + 1;
+
+  const baselineTotalUsd = sumUsd(baselineRecords);
+  const amountUsd = (baselineTotalUsd * totalDaysInProjectionPeriod) / daysInBaselineWindow;
+
+  return { amountUsd };
+}
+
 /** Rolling 12-month card stats. Window: [same calendar date 1 year ago, yesterday]. */
 export function getRolling12mStats(
   records: ExpenseRecord[],

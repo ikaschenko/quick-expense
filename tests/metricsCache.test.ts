@@ -9,12 +9,13 @@ vi.mock("../src/utils/date", () => ({
 
 function makeEntry(overrides: Partial<MetricsCacheEntry> = {}): MetricsCacheEntry {
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     cacheDate: TODAY,
     sheetLastModifiedTime: "2026-06-24T10:00:00.000Z",
     todayStats: { count: 1, usdTotal: 50, dualCurrency: null },
     mtdStats: { count: 5, usdTotal: 200, deviation: null },
     ytdStats: { count: 20, usdTotal: 800, deviation: null },
+    ytdForecast: { amountUsd: 1500 },
     rolling12mStats: { count: 100, usdTotal: 4000, deviation: null },
     mtdDailyAmounts: [10, 20, 30],
     weekBoundaryPositions: [6, 13],
@@ -58,6 +59,13 @@ describe("metricsCache.save / load", () => {
   it("returns null when schemaVersion is missing or outdated", () => {
     // Simulate stale entry written by old app code (before schema version bump)
     localStorage.setItem(`qe_metrics_${EMAIL}`, JSON.stringify({ ...makeEntry(), schemaVersion: 1 }));
+    expect(metricsCache.load(EMAIL)).toBeNull();
+  });
+
+  it("returns null for a pre-forecast cache entry (schemaVersion 4, no ytdForecast field)", () => {
+    // Simulate an entry written before the schema 4→5 bump that added ytdForecast.
+    const { ytdForecast, ...legacyEntry } = makeEntry();
+    localStorage.setItem(`qe_metrics_${EMAIL}`, JSON.stringify({ ...legacyEntry, schemaVersion: 4 }));
     expect(metricsCache.load(EMAIL)).toBeNull();
   });
 

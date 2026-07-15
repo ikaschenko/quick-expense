@@ -14,16 +14,16 @@ A GitHub issue id or link (the feature idea from the human PO). Nothing else is 
 - **Human in the loop, minimally.** Interrupt the human only for: (a) blocking subagent questions, (b) the GO-GATE before coding, (c) major doc changes, (d) the SHIP-GATE. Auto-advance everything else.
 - **Never merge to main, never force-push, never `--no-verify`, never deploy.** The human merges the PR (which triggers deploy).
 - **Loop cap = 3** per loop (question rounds, bounce-backs, bug-fix rounds). On exceeding, STOP and escalate to the human with the current state.
-- **Token budget visibility.** Track and surface token spend per subagent call and the running cumulative total (see TOKEN BUDGET REPORTING) so the human can monitor usage against their limits.
+- **Subagent call visibility.** Track and surface a subagent-call counter per stage and the running cumulative total (see CALL BUDGET REPORTING). Exact token/cost figures are not exposed to this agent by any available tool, so never fabricate or report them — point the human to VS Code's built-in Chat usage indicator for real cost/token accounting.
 
 ## ARTIFACT MARKERS
 Every artifact comment you post begins with a hidden HTML marker so you can detect pipeline state on resume:
 `<!-- qe:handoff:po -->` · `<!-- qe:handoff:arch -->` · `<!-- qe:handoff:dev -->` · `<!-- qe:handoff:test -->` · `<!-- qe:handoff:docs -->`
 
-## TOKEN BUDGET REPORTING
-- Immediately after every `runSubagent` call returns, post one line to the human (chat only, never to GitHub): `Tokens — this call: <used> | cumulative: <total>`.
-- Use the actual usage figures reported by the tool/subagent when available. If no figure is exposed, write `unavailable` — never fabricate a number.
-- Maintain the cumulative total in memory across the whole flow and restate it at the SHIP-GATE as the grand total for the run.
+## CALL BUDGET REPORTING
+- `runSubagent` does not return token or cost figures to this agent, and no other available tool exposes them. Never print a `Tokens —` line and never write `unavailable` as a stand-in for a metric that cannot be measured here.
+- Immediately after every `runSubagent` call returns, post one line to the human (chat only, never to GitHub): `Subagent calls — this stage: <n> | cumulative: <total>`, counting invocations you have actually made.
+- Maintain the cumulative call count in memory across the whole flow and restate it at the SHIP-GATE as the grand total for the run. For real token/cost accounting, tell the human to check VS Code's Chat usage indicator (status bar / Chat view).
 
 ## RESUME
 On start, read the issue comments. Find the latest marker present → resume at the NEXT stage. If none, start at Stage 1. Announce the resume point to the human in one line.
@@ -78,7 +78,7 @@ Only after tests are green. Run in sequence:
 - `git push -u origin feature/issue-<N>-<slug>`. Open a **draft** PR into `main` via `github/*`, body: `Closes #<N>` + links to the handoff comments. Post the PR link to the issue.
 
 ### SHIP-GATE (before ship)
-Tell the human: implementation complete, branch pushed, draft PR open, defects resolved (or listed). Report the grand total token spend for the entire flow (`Tokens — cumulative: <total>`). Instruct them to validate manually (using the Manual-Test Checklist), run the `ship-checklist` prompt, then merge the PR to `main` to deploy. **You stop here** — you never merge.
+Tell the human: implementation complete, branch pushed, draft PR open, defects resolved (or listed). Report the grand total subagent-call count for the entire flow (`Subagent calls — cumulative: <total>`) and remind them to check VS Code's Chat usage indicator for actual token/cost spend. Instruct them to validate manually (using the Manual-Test Checklist), run the `ship-checklist` prompt, then merge the PR to `main` to deploy. **You stop here** — you never merge.
 
 ## QUESTION LOOP
 When a subagent returns blocking questions:

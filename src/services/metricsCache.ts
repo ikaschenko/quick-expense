@@ -1,8 +1,8 @@
-import { type TodayStats, type PeriodStats } from "../utils/dashboardStats";
+import { type TodayStats, type PeriodStats, type YtdForecast } from "../utils/dashboardStats";
 import { readJsonStorage, writeJsonStorage } from "../utils/storage";
 import { getTodayLocalDate } from "../utils/date";
 
-const CURRENT_SCHEMA_VERSION = 4;
+const CURRENT_SCHEMA_VERSION = 5;
 
 export interface MetricsCacheEntry {
   schemaVersion?: number;
@@ -11,6 +11,7 @@ export interface MetricsCacheEntry {
   todayStats: TodayStats;
   mtdStats: PeriodStats;
   ytdStats: PeriodStats;
+  ytdForecast: YtdForecast;
   rolling12mStats: PeriodStats;
   mtdDailyAmounts: (number | null)[];
   weekBoundaryPositions: number[];
