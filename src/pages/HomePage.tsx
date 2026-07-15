@@ -23,19 +23,6 @@ import {
 import { metricsCache, type MetricsCacheEntry } from "../services/metricsCache";
 import { googleSheetsService } from "../services/googleSheets";
 
-function getGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
-}
-
-function getFirstName(email: string): string {
-  const local = email.split("@")[0] ?? "";
-  const name = local.split(/[._-]/)[0] ?? "";
-  return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
-}
-
 interface EmptyStateProps {
   variant: "no-sheet" | "no-data";
 }
@@ -121,7 +108,6 @@ export function HomePage(): JSX.Element {
   const { session } = useAuth();
   const dataset = useDataset();
   const location = useLocation();
-  const firstName = session?.givenName ?? (session?.email ? getFirstName(session.email) : "");
   const today = useMemo(() => getTodayLocalDate(), []);
 
   const [cachedEntry, setCachedEntry] = useState<MetricsCacheEntry | null>(null);
@@ -236,10 +222,6 @@ export function HomePage(): JSX.Element {
         <StatusBanner variant="success" message="Expense saved successfully." />
       ) : null}
       <div className="home-wrapper">
-        <p className="home-greeting">
-          {getGreeting()}, {firstName} 👋
-        </p>
-
         {isConfigLoading ? (
           <div className="skeleton-list">
             <MetricCardSkeleton />

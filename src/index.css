@@ -636,13 +636,6 @@ button { cursor: pointer; }
 }
 
 /* ===== Home Page ===== */
-.home-greeting {
-  font-size: var(--font-size-xl);
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin-bottom: var(--space-5);
-}
-
 .action-busy-toast {
   position: fixed;
   top: 50%;
