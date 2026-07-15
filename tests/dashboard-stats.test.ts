@@ -291,6 +291,48 @@ describe("getYtdForecast", () => {
     expect(forecast.amountUsd).toBeNull();
   });
 
+  it("returns null (not enough data) with an empty records array", () => {
+    const forecast = getYtdForecast([], "2026-06-09", iso);
+    expect(forecast.amountUsd).toBeNull();
+  });
+
+  it("counts multiple records on the same day as a single distinct day", () => {
+    // 5 records but only 2 distinct calendar days → still not enough data.
+    const records = [
+      makeRecord("2026-01-01", "100"),
+      makeRecord("2026-01-01", "50"),
+      makeRecord("2026-01-01", "25"),
+      makeRecord("2026-01-02", "100"),
+      makeRecord("2026-01-02", "100"),
+    ];
+    const forecast = getYtdForecast(records, "2026-06-09", iso);
+    expect(forecast.amountUsd).toBeNull();
+  });
+
+  it("sums all records within a distinct day, not just one per day", () => {
+    // 3 distinct days, but day 1 has 2 records → baseline total is 400, not 300.
+    const records = [
+      makeRecord("2026-01-01", "100"),
+      makeRecord("2026-01-01", "100"),
+      makeRecord("2026-01-02", "100"),
+      makeRecord("2026-01-03", "100"),
+    ];
+    const forecast = getYtdForecast(records, "2026-06-09", iso);
+    expect(forecast.amountUsd).toBeCloseTo((400 * 365) / 159);
+  });
+
+  it("ignores records with unparseable dates when resolving the baseline", () => {
+    const records = [
+      makeRecord("2026-01-01", "100"),
+      makeRecord("2026-01-02", "100"),
+      makeRecord("2026-01-03", "100"),
+      makeRecord("not-a-date", "9999"),
+    ];
+    const badIso: IsoNormalizer = (s) => (s === "not-a-date" ? null : s);
+    const forecast = getYtdForecast(records, "2026-06-09", badIso);
+    expect(forecast.amountUsd).toBeCloseTo((300 * 365) / 159);
+  });
+
   it("returns a forecast once a 3rd distinct baseline day is added", () => {
     const records = [
       makeRecord("2026-01-01", "100"),
@@ -316,7 +358,8 @@ describe("getYtdForecast", () => {
 
 // ─── getMtdDailyAmounts ───────────────────────────────────────────────────────
 
-describe("getMtdDailyAmounts", () => {  it("has length equal to days in the month", () => {
+describe("getMtdDailyAmounts", () => {
+  it("has length equal to days in the month", () => {
     const amounts = getMtdDailyAmounts([], TODAY, iso);
     expect(amounts).toHaveLength(30); // June has 30 days
   });

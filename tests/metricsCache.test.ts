@@ -62,6 +62,13 @@ describe("metricsCache.save / load", () => {
     expect(metricsCache.load(EMAIL)).toBeNull();
   });
 
+  it("returns null for a pre-forecast cache entry (schemaVersion 4, no ytdForecast field)", () => {
+    // Simulate an entry written before the schema 4→5 bump that added ytdForecast.
+    const { ytdForecast, ...legacyEntry } = makeEntry();
+    localStorage.setItem(`qe_metrics_${EMAIL}`, JSON.stringify({ ...legacyEntry, schemaVersion: 4 }));
+    expect(metricsCache.load(EMAIL)).toBeNull();
+  });
+
   it("returns null for a different email", () => {
     metricsCache.save("other@example.com", makeEntry());
     expect(metricsCache.load(EMAIL)).toBeNull();
