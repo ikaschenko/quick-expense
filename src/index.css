@@ -777,7 +777,7 @@ button { cursor: pointer; }
 }
 
 .home-metric-forecast {
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   color: var(--color-text-placeholder);
   margin: 0 0 var(--space-3);
 }
