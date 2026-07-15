@@ -80,6 +80,14 @@ Only after tests are green. Run in sequence:
 ### SHIP-GATE (before ship)
 Tell the human: implementation complete, branch pushed, draft PR open, defects resolved (or listed). Report the grand total subagent-call count for the entire flow (`Subagent calls — cumulative: <total>`) and remind them to check VS Code's Chat usage indicator for actual token/cost spend. Instruct them to validate manually (using the Manual-Test Checklist), run the `ship-checklist` prompt, then merge the PR to `main` to deploy. **You stop here** — you never merge.
 
+Also give the human the cleanup sequence to run themselves **after** the PR is merged on GitHub, to fully switch their local repo from the feature branch back to `main` and discard the now-obsolete local branch:
+```
+git switch main
+git pull origin main
+git branch -D feature/issue-<N>-<slug>
+```
+Note this only after confirming the merge happened: `git pull origin main` brings down the merged commit, and `git branch -D` force-deletes the local feature branch (discarding any local-only commits or uncommitted changes left on it). Flag this as irreversible for anything on that branch not already on `main`.
+
 ## QUESTION LOOP
 When a subagent returns blocking questions:
 1. Relay them to the human **verbatim** in this conversation (never via GitHub — the fast loop stays in chat).
