@@ -10,6 +10,10 @@ window.__i18n.es = {
   "hero.cta": "Comienza - Es Gratis",
   "hero.note": "Inicia sesi\u00f3n con Google \u2022 Empieza en 2 minutos",
 
+  "demo.title": "M\u00edralo en Acci\u00f3n",
+  "demo.duration": "2:27",
+  "demo.playAriaLabel": "Reproducir video de demostraci\u00f3n",
+
   "features.title": "\u00bfPor qu\u00e9 Quick Expense?",
   "features.mobile.title": "Pensado para el M\u00f3vil",
   "features.mobile.desc": "Registra un gasto en el minuto libre que tengas: haciendo fila, en el autob\u00fas, o cuando abrir la laptop es simplemente demasiado esfuerzo. Quick Expense est\u00e1 dise\u00f1ado para tu m\u00f3vil.",

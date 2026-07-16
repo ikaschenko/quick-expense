@@ -10,6 +10,10 @@ window.__i18n.en = {
   "hero.cta": "Get Started - It's Free",
   "hero.note": "Sign in with Google \u2022 Start in 2 minutes",
 
+  "demo.title": "See It in Action",
+  "demo.duration": "2:27",
+  "demo.playAriaLabel": "Play demo video",
+
   "features.title": "Why Quick Expense?",
   "features.mobile.title": "Mobile-First",
   "features.mobile.desc": "Log an expense in whatever free minute you have — waiting in line, on the bus, or when opening a laptop just feels like too much. Quick Expense is built for your phone.",
