@@ -8,6 +8,7 @@ on:
       - main
     paths:
       - 'landing/**'
+      - 'public/favicon.svg'
 jobs:
   deploy:
     name: Deploy landing page
@@ -15,6 +16,8 @@ jobs:
     concurrency: deploy-landing
     steps:
       - uses: actions/checkout@v4
+      - name: Sync app icon into landing page
+        run: cp public/favicon.svg landing/favicon.svg
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - run: flyctl deploy --remote-only
         working-directory: landing
