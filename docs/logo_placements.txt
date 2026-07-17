@@ -1,0 +1,13 @@
+In case of a change for a product logo - don't forget to update in the following places for consistency.
+
+At the moment: 
+
+1. main app (favicon)
+2. landing page (favicon)
+3. gmail account for the product support (via accounts.google.com - q.expense.support)
+4. youtube channel of QuickExpense
+5. google authentication form (via console.cloud.google.com -> OAuth -> Branding)
+6. product logo in the buyMeACoffee project entry (q.expense.support) 
+7. product logo in the launch at https://www.tinylaunch.com/
+8. product logo in the launch at https://www.producthunt.com/ 
+
