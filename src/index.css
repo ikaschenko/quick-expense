@@ -665,12 +665,13 @@ button { cursor: pointer; }
 
 .home-metric-row {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-4);
 }
 
 .home-metric-row > .home-metric-card {
-  flex: 1 1 0;
-  min-width: 0;
+  flex: 1 1 220px;
+  min-width: 220px;
 }
 
 @media (max-width: 480px) {
@@ -695,6 +696,9 @@ button { cursor: pointer; }
 }
 
 .home-metric-title {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
   font-size: var(--font-size-sm);
   font-weight: 700;
   letter-spacing: 0.05em;
