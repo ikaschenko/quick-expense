@@ -351,6 +351,16 @@ To eliminate the 5–8 second reload on repeated Home visits, the dashboard pers
 
 **UX on cache hit:** The dashboard renders instantly with cached values while a background `GET /api/sheet/modifiedtime` request validates freshness. A subtle "Refreshing…" status indicator is shown during validation. If the sheet is unchanged, the indicator disappears and the cached view remains. If the sheet changed, a full reload occurs silently and the cache is updated.
 
+### 2.7.8 Widget info tooltips (issue #63)
+
+Each of the 4 dashboard metric cards (TODAY, MTD, YTD, ROLLING 12M) shows a small **info icon (ⓘ)** next to its header. Tapping the icon toggles an inline explanatory tooltip below the header; tapping again (or re-tapping the same icon) hides it. Each widget's tooltip state is independent — opening one does not close the others. All tooltips start collapsed. The icon is keyboard-accessible (button element, `aria-expanded` reflects open state).
+
+Tooltip copy per widget:
+- **TODAY:** "Total amount of expenses for today."
+- **MTD:** "Total amount of expenses for the ongoing month, compared to the same date range for the previous month (shown only when comparable prior-month data exists)."
+- **YTD:** "Total amount of expenses for the ongoing year, compared to the same date range for the previous year (if enough data). The forecast projects your full-year total from your recent daily spending rate." (This also covers the YTD forecast line — there is no separate help icon for it.)
+- **ROLLING 12M:** "Total amount of expenses over the trailing 12 months (up to yesterday), compared to the preceding 12-month period (shown when that data exists)."
+
 ## 2.8 Share Setup with Another User
 
 ### 2.8.1 Story 1 — Manage shared access (owner)
