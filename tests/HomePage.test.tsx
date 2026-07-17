@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { HomePage } from "../src/pages/HomePage";
 import { useDataset } from "../src/contexts/DatasetContext";
 import { ExpenseRecord } from "../src/types/expense";
+import { formatLocalDate } from "../src/utils/date";
 
 vi.mock("../src/contexts/AuthContext", () => ({
   useAuth: () => ({
@@ -173,5 +174,81 @@ describe("HomePage — widget info tooltips", () => {
         "Total amount of expenses over the trailing 12 months (up to yesterday), compared to the preceding 12-month period (shown when that data exists).",
       ),
     ).toBeTruthy();
+  });
+
+  it("starts every widget's help button collapsed (aria-expanded=false)", () => {
+    mockDataset({});
+    renderHome();
+
+    const buttons = screen.getAllByRole("button", { name: /^Show info about/ });
+    expect(buttons).toHaveLength(4);
+    for (const button of buttons) {
+      expect(button.getAttribute("aria-expanded")).toBe("false");
+    }
+  });
+
+  it("reuses the existing .section-help-btn / .section-help-popover CSS classes rather than introducing new ones", async () => {
+    const user = userEvent.setup();
+    mockDataset({});
+    const { container } = renderHome();
+
+    expect(container.querySelectorAll(".section-help-btn")).toHaveLength(4);
+
+    await user.click(screen.getByRole("button", { name: "Show info about TODAY" }));
+    const popover = container.querySelector(".section-help-popover");
+    expect(popover).not.toBeNull();
+    expect(popover?.textContent).toBe("Total amount of expenses for today.");
+  });
+
+  it("toggles the popover via keyboard activation (Enter), matching native button semantics", async () => {
+    const user = userEvent.setup();
+    mockDataset({});
+    renderHome();
+
+    const todayButton = screen.getByRole("button", { name: "Show info about TODAY" });
+    todayButton.focus();
+    expect(document.activeElement).toBe(todayButton);
+
+    await user.keyboard("{Enter}");
+    expect(screen.getByText("Total amount of expenses for today.")).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Hide info about TODAY" }));
+
+    await user.keyboard("{Enter}");
+    expect(screen.queryByText("Total amount of expenses for today.")).toBeNull();
+  });
+
+  it("leaves the ROLLING 12M EXPENSES on-screen title text unchanged", () => {
+    mockDataset({});
+    const { container } = renderHome();
+
+    const title = Array.from(container.querySelectorAll(".home-metric-title")).find((el) =>
+      el.textContent?.startsWith("ROLLING 12M EXPENSES"),
+    );
+    expect(title).toBeTruthy();
+    // The title text node itself (excluding the button's accessible label) is unchanged.
+    expect(title?.firstChild?.textContent?.trim()).toBe("ROLLING 12M EXPENSES");
+  });
+
+  it("does not render a separate help icon for the YTD forecast line — it is folded into the YTD widget tooltip", () => {
+    const today = formatLocalDate(new Date());
+    mockDataset({
+      snapshot: {
+        records: [makeRecord(1, today, "25")],
+        distinctValues: { Category: [], spentBy: [], customFields: {} },
+        loadedAt: 0,
+        payloadBytes: 0,
+        loadPhase: "full",
+      },
+    });
+    const { container } = renderHome();
+
+    // YTD now has data, so ForecastLine renders alongside the amount.
+    expect(screen.getByText(/Forecasted full year/)).toBeTruthy();
+
+    const ytdCard = Array.from(container.querySelectorAll(".home-metric-card")).find((el) =>
+      el.textContent?.includes("SO FAR") && el.textContent?.includes("Forecasted full year"),
+    );
+    expect(ytdCard).toBeTruthy();
+    expect(ytdCard?.querySelectorAll(".section-help-btn")).toHaveLength(1);
   });
 });
