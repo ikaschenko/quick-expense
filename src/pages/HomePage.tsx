@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { FileSpreadsheet, Receipt } from "lucide-react";
+import { FileSpreadsheet, Info, Receipt } from "lucide-react";
 import { FormattedAmount } from "../components/FormattedAmount";
 import { Layout } from "../components/Layout";
 import { MtdSpendChart } from "../components/MtdSpendChart";
@@ -103,6 +103,34 @@ function ForecastLine({ forecast }: ForecastLineProps): JSX.Element {
   );
 }
 
+const TODAY_HELP_TEXT = "Total amount of expenses for today.";
+const MTD_HELP_TEXT =
+  "Total amount of expenses for the ongoing month, compared to the same date range for the previous month (shown only when comparable prior-month data exists).";
+const YTD_HELP_TEXT =
+  "Total amount of expenses for the ongoing year, compared to the same date range for the previous year (if enough data). The forecast projects your full-year total from your recent daily spending rate.";
+const ROLLING_12M_HELP_TEXT =
+  "Total amount of expenses over the trailing 12 months (up to yesterday), compared to the preceding 12-month period (shown when that data exists).";
+
+interface WidgetHelpButtonProps {
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+}
+
+function WidgetHelpButton({ label, open, onToggle }: WidgetHelpButtonProps): JSX.Element {
+  return (
+    <button
+      type="button"
+      className="section-help-btn"
+      aria-expanded={open}
+      aria-label={`${open ? "Hide" : "Show"} info about ${label}`}
+      onClick={onToggle}
+    >
+      <Info size={14} aria-hidden />
+    </button>
+  );
+}
+
 export function HomePage(): JSX.Element {
   const { config, isConfigLoading } = useConfig();
   const { session } = useAuth();
@@ -112,6 +140,11 @@ export function HomePage(): JSX.Element {
 
   const [cachedEntry, setCachedEntry] = useState<MetricsCacheEntry | null>(null);
   const driveModifiedTimeRef = useRef<string | null>(null);
+
+  const [todayHelpOpen, setTodayHelpOpen] = useState(false);
+  const [mtdHelpOpen, setMtdHelpOpen] = useState(false);
+  const [ytdHelpOpen, setYtdHelpOpen] = useState(false);
+  const [rolling12mHelpOpen, setRolling12mHelpOpen] = useState(false);
 
   const [showSavedBanner, setShowSavedBanner] = useState(
     !!(location.state as { expenseSaved?: boolean } | null)?.expenseSaved,
@@ -258,11 +291,15 @@ export function HomePage(): JSX.Element {
             {/* TODAY */}
             <div className="home-metric-card">
               <div className="home-metric-header">
-                <span className="home-metric-title">TODAY · {dayLabel}</span>
+                <span className="home-metric-title">
+                  TODAY · {dayLabel}
+                  <WidgetHelpButton label="TODAY" open={todayHelpOpen} onToggle={() => setTodayHelpOpen((v) => !v)} />
+                </span>
                 <Link to="/history" className="home-metric-link">
                   {displayTodayStats.count} {displayTodayStats.count === 1 ? "entry" : "entries"} →
                 </Link>
               </div>
+              {todayHelpOpen && <p className="section-help-popover">{TODAY_HELP_TEXT}</p>}
               {displayTodayStats.count === 0 ? (
                 <p className="home-metric-empty">No expense entries</p>
               ) : (
@@ -283,11 +320,15 @@ export function HomePage(): JSX.Element {
             {/* MTD */}
             <div className="home-metric-card">
               <div className="home-metric-header">
-                <span className="home-metric-title">{monthName} SO FAR</span>
+                <span className="home-metric-title">
+                  {monthName} SO FAR
+                  <WidgetHelpButton label={`${monthName} SO FAR`} open={mtdHelpOpen} onToggle={() => setMtdHelpOpen((v) => !v)} />
+                </span>
                 <Link to="/history" className="home-metric-link">
                   {displayMtdStats.count} {displayMtdStats.count === 1 ? "entry" : "entries"} →
                 </Link>
               </div>
+              {mtdHelpOpen && <p className="section-help-popover">{MTD_HELP_TEXT}</p>}
               {displayMtdStats.count === 0 ? (
                 <p className="home-metric-empty">No expense entries</p>
               ) : (
@@ -308,8 +349,12 @@ export function HomePage(): JSX.Element {
             <div className="home-metric-row">
               <div className="home-metric-card">
                 <div className="home-metric-header">
-                  <span className="home-metric-title">{year} SO FAR</span>
+                  <span className="home-metric-title">
+                    {year} SO FAR
+                    <WidgetHelpButton label={`${year} SO FAR`} open={ytdHelpOpen} onToggle={() => setYtdHelpOpen((v) => !v)} />
+                  </span>
                 </div>
+                {ytdHelpOpen && <p className="section-help-popover">{YTD_HELP_TEXT}</p>}
                 {displayYtdStats.count === 0 ? (
                   <p className="home-metric-empty">No expense entries</p>
                 ) : (
@@ -324,8 +369,16 @@ export function HomePage(): JSX.Element {
               {/* ROLLING 12M */}
               <div className="home-metric-card">
                 <div className="home-metric-header">
-                  <span className="home-metric-title">ROLLING 12M EXPENSES</span>
+                  <span className="home-metric-title">
+                    ROLLING 12M EXPENSES
+                    <WidgetHelpButton
+                      label="ROLLING 12M EXPENSES"
+                      open={rolling12mHelpOpen}
+                      onToggle={() => setRolling12mHelpOpen((v) => !v)}
+                    />
+                  </span>
                 </div>
+                {rolling12mHelpOpen && <p className="section-help-popover">{ROLLING_12M_HELP_TEXT}</p>}
                 {displayRolling12mStats.count === 0 ? (
                   <p className="home-metric-empty">No expense entries</p>
                 ) : (
