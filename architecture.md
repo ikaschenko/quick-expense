@@ -135,7 +135,6 @@ quick-expense/
 │   │   ├── googlePicker.ts    ← Google Picker API integration
 │   │   ├── googleSheets.ts    ← /api/config + /api/expenses calls
 │   │   ├── http.ts            ← fetch wrappers with typed error handling
-│   │   ├── localConfig.ts     ← localStorage config cache (per-email key)
 │   │   ├── metricsCache.ts    ← localStorage metrics cache for Home dashboard (key: qe_metrics_{email})
 │   │   └── sharingApi.ts      ← /api/sharing/* calls (owner share management + guest reset)
 │   ├── types/
@@ -509,7 +508,6 @@ Frontend services in `src/services/` are thin wrappers around `fetch`:
 - **`googleSheets.ts`** — config CRUD, expense load/append, FX rate backup, column visibility toggle.
 - **`googlePicker.ts`** — loads Google Picker script, opens file picker dialog.
 - **`currency.ts`** — manual FX rate parsing and USD conversion logic.
-- **`localConfig.ts`** — per-email localStorage cache for spreadsheet config (fallback/optimization).
 - **`metricsCache.ts`** — `localStorage` cache for Home dashboard metrics (`qe_metrics_{email}`). Stores pre-computed `TodayStats`, `PeriodStats` (MTD/YTD/Rolling12M), chart daily amounts, and `sheetLastModifiedTime`. Automatically expires at midnight (date rollover on `load()`), cleared on sign-out and config clear.
 - **`sharingApi.ts`** — `/api/sharing/*` calls: list/add/update/remove shared users (owner); guest reset.
 
