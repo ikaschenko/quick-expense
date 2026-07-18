@@ -36,6 +36,8 @@ let buildDateParser;
 let findExpenseStartRow;
 let addExpenseRow;
 let moveExpenseRow;
+let isStructuredHeader;
+let writeExpenseValues;
 
 beforeAll(async () => {
   ({
@@ -50,6 +52,8 @@ beforeAll(async () => {
     findExpenseStartRow,
     addExpenseRow,
     moveExpenseRow,
+    isStructuredHeader,
+    writeExpenseValues,
   } = await import("../server/google-sheets.js"));
 });
 
@@ -298,6 +302,69 @@ describe("loadExpenses", () => {
   });
 });
 
+describe("isStructuredHeader", () => {
+  it('returns true for "Date"', () => expect(isStructuredHeader("Date")).toBe(true));
+  it('returns true for "date" (lowercase)', () => expect(isStructuredHeader("date")).toBe(true));
+  it('returns true for "USD"', () => expect(isStructuredHeader("USD")).toBe(true));
+  it('returns true for "usd" (lowercase)', () => expect(isStructuredHeader("usd")).toBe(true));
+  it('returns true for "PLN"', () => expect(isStructuredHeader("PLN")).toBe(true));
+  it('returns true for "EUR"', () => expect(isStructuredHeader("EUR")).toBe(true));
+  it('returns false for "Category"', () => expect(isStructuredHeader("Category")).toBe(false));
+  it('returns false for "Spent By"', () => expect(isStructuredHeader("Spent By")).toBe(false));
+  it('returns false for "Comment"', () => expect(isStructuredHeader("Comment")).toBe(false));
+  it('returns false for custom column', () => expect(isStructuredHeader("MyCustomColumn")).toBe(false));
+});
+
+describe("writeExpenseValues", () => {
+  const TOKEN = "tok";
+  const SHEET_ID = "sid";
+
+  function noContentResponse() {
+    return { ok: true, status: 200, json: () => Promise.resolve({}) };
+  }
+
+  it("makes two batchUpdate calls: one USER_ENTERED for structured and one RAW for free-text", async () => {
+    setupFetchSequence([noContentResponse(), noContentResponse()]);
+
+    await writeExpenseValues(TOKEN, SHEET_ID, 5, ["2026-01-01", "10", "Food"], ["Date", "USD", "Category"]);
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    const body0 = JSON.parse(mockFetch.mock.calls[0][1].body);
+    const body1 = JSON.parse(mockFetch.mock.calls[1][1].body);
+    expect(body0.valueInputOption).toBe("USER_ENTERED");
+    expect(body1.valueInputOption).toBe("RAW");
+    expect(mockFetch.mock.calls[0][0]).toContain("values:batchUpdate");
+    expect(mockFetch.mock.calls[1][0]).toContain("values:batchUpdate");
+  });
+
+  it("routes formula string in Comment only to the RAW call", async () => {
+    setupFetchSequence([noContentResponse(), noContentResponse()]);
+    const formula = "=IMPORTDATA(\"evil\")";
+
+    await writeExpenseValues(TOKEN, SHEET_ID, 5, ["2026-01-01", "10", formula], ["Date", "USD", "Comment"]);
+
+    const rawBody = JSON.parse(mockFetch.mock.calls[1][1].body);
+    const rawValues = rawBody.data.map((d) => d.values[0][0]);
+    expect(rawValues).toContain(formula);
+
+    const userBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+    const userValues = userBody.data.map((d) => d.values[0][0]);
+    expect(userValues).not.toContain(formula);
+  });
+
+  it("routes Date and currency amounts only to the USER_ENTERED call", async () => {
+    setupFetchSequence([noContentResponse(), noContentResponse()]);
+
+    await writeExpenseValues(TOKEN, SHEET_ID, 5, ["2026-01-01", "100", "a note"], ["Date", "PLN", "Comment"]);
+
+    const userBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+    const userValues = userBody.data.map((d) => d.values[0][0]);
+    expect(userValues).toContain("2026-01-01");
+    expect(userValues).toContain("100");
+    expect(userValues).not.toContain("a note");
+  });
+});
+
 describe("appendExpenseRow", () => {
   const TOKEN = "test-token";
   const SHEET_ID = "spreadsheet-123";
@@ -340,6 +407,9 @@ describe("appendExpenseRow", () => {
       valuesResponse([header]),
       // append call
       appendResponse(),
+      // writeExpenseValues: USER_ENTERED (structured) + RAW (free-text)
+      jsonResponse({}),
+      jsonResponse({}),
     ]);
 
     await appendExpenseRow(TOKEN, SHEET_ID, canonicalValues);
@@ -348,18 +418,18 @@ describe("appendExpenseRow", () => {
     expect(appendCall[0]).toContain(":append");
     const body = JSON.parse(appendCall[1].body);
 
-    // Expected order by actual header:
-    // Date, PLN, USD, Category, Spent By, SpentFor, Comment, Channel, Theme
+    // Free-text slots (Category, Spent By, SpentFor, Comment, Channel, Theme) are blanked
+    // for the USER_ENTERED append call; Date, PLN, USD (structured) keep their values.
     expect(body.values[0]).toEqual([
       "2026-01-02",
       "120",
       "30",
-      "Food",
-      "ivan@x.com",
-      "Family",
-      "samsung galaxy",
-      "cash",
-      "Tech",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
     ]);
   });
 
@@ -382,13 +452,16 @@ describe("appendExpenseRow", () => {
       valuesResponse([header]),
       valuesResponse([header]),
       appendResponse(),
+      jsonResponse({}),
+      jsonResponse({}),
     ]);
 
     await appendExpenseRow(TOKEN, SHEET_ID, canonicalValues);
 
     const appendCall = mockFetch.mock.calls[3];
     const body = JSON.parse(appendCall[1].body);
-    expect(body.values[0]).toEqual(canonicalValues);
+    // Free-text slots blanked in the USER_ENTERED append; Date, PLN, USD kept.
+    expect(body.values[0]).toEqual(["2026-01-03", "90", "22", "", "", "", "", "", ""]);
   });
 
   it("aligns outgoing row values when actual header casing differs", async () => {
@@ -410,23 +483,16 @@ describe("appendExpenseRow", () => {
       valuesResponse([header]),
       valuesResponse([header]),
       appendResponse(),
+      jsonResponse({}),
+      jsonResponse({}),
     ]);
 
     await appendExpenseRow(TOKEN, SHEET_ID, canonicalValues);
 
     const appendCall = mockFetch.mock.calls[3];
     const body = JSON.parse(appendCall[1].body);
-    expect(body.values[0]).toEqual([
-      "2026-01-04",
-      "77",
-      "19",
-      "Other",
-      "ivan@x.com",
-      "Family",
-      "note text",
-      "cash",
-      "Trip",
-    ]);
+    // Free-text slots blanked; Date, USD (structured) kept.
+    expect(body.values[0]).toEqual(["2026-01-04", "77", "19", "", "", "", "", "", ""]);
   });
 
   it("returns an ExpenseRecord with rowNumber parsed from updatedRange", async () => {
@@ -438,6 +504,8 @@ describe("appendExpenseRow", () => {
       valuesResponse([header]),
       valuesResponse([header]),
       appendResponse(7),
+      jsonResponse({}),
+      jsonResponse({}),
     ]);
 
     const { record } = await appendExpenseRow(TOKEN, SHEET_ID, canonicalValues);
@@ -465,6 +533,35 @@ describe("appendExpenseRow", () => {
 
     const { record } = await appendExpenseRow(TOKEN, SHEET_ID, canonicalValues);
     expect(record.rowNumber).toBe(0);
+  });
+
+  it("blanks free-text slots in append body and writes actual values via RAW batchUpdate", async () => {
+    const header = ["Date", "USD", "Category", "Spent By", "Comment"];
+    const values = ["2026-01-01", "25", "Food", "user@example.com", "=IMPORTDATA(\"evil\")"];
+
+    setupFetchSequence([
+      metadataResponse(["Expenses"]),
+      valuesResponse([header]),
+      valuesResponse([header]),
+      appendResponse(10),
+      jsonResponse({}),  // USER_ENTERED batchUpdate
+      jsonResponse({}),  // RAW batchUpdate
+    ]);
+
+    await appendExpenseRow(TOKEN, SHEET_ID, values);
+
+    // Append call should have blanks for free-text slots (Category, Spent By, Comment); Date and USD kept.
+    const appendCall = mockFetch.mock.calls[3];
+    expect(appendCall[0]).toContain(":append");
+    const appendBody = JSON.parse(appendCall[1].body);
+    expect(appendBody.values[0]).toEqual(["2026-01-01", "25", "", "", ""]);
+
+    // RAW batchUpdate call should carry the actual formula value.
+    const rawCall = mockFetch.mock.calls[5];
+    const rawBody = JSON.parse(rawCall[1].body);
+    expect(rawBody.valueInputOption).toBe("RAW");
+    const commentEntry = rawBody.data.find((d) => d.values[0][0] === "=IMPORTDATA(\"evil\")");
+    expect(commentEntry).toBeDefined();
   });
 });
 
@@ -495,6 +592,7 @@ describe("updateExpenseRow", () => {
       valuesResponse([header]),
       valuesResponse([header]),
       updateResponse(),
+      updateResponse(),
     ]);
 
     const { record } = await updateExpenseRow(TOKEN, SHEET_ID, 5, canonicalValues);
@@ -517,6 +615,7 @@ describe("updateExpenseRow", () => {
       metadataResponse(["Expenses"]),
       valuesResponse([header]),
       valuesResponse([header]),
+      updateResponse(),
       updateResponse(),
     ]);
 
@@ -1439,6 +1538,8 @@ describe("addExpenseRow", () => {
       headerResponse(headers),                           // validateSpreadsheet – header row
       headerResponse(headers),                           // appendExpenseRow header alignment read
       jsonResponse({ updates: { updatedRange: "Expenses!A3:F3" } }), // sheets append
+      jsonResponse({}),                                  // writeExpenseValues USER_ENTERED
+      jsonResponse({}),                                  // writeExpenseValues RAW
     ]);
     const result = await addExpenseRow(TOKEN, SHEET_ID, canonicalValues);
     expect(result.insertMode).toBe(false);
@@ -1455,7 +1556,8 @@ describe("addExpenseRow", () => {
       headerResponse(headers),                                     // insert mode: header alignment read
       sheetMetaResponse(),                                         // insert mode: getMetadata for sheetId
       { ok: true, status: 200, json: () => Promise.resolve({}) }, // batchUpdate insertDimension
-      { ok: true, status: 200, json: () => Promise.resolve({}) }, // updateValues write data
+      { ok: true, status: 200, json: () => Promise.resolve({}) }, // writeExpenseValues USER_ENTERED
+      { ok: true, status: 200, json: () => Promise.resolve({}) }, // writeExpenseValues RAW
     ]);
     const result = await addExpenseRow(TOKEN, SHEET_ID, pastValues);
     expect(result.insertMode).toBe(true);
@@ -1473,6 +1575,8 @@ describe("addExpenseRow", () => {
       headerResponse(headers),                           // validateSpreadsheet – header row
       headerResponse(headers),                           // appendExpenseRow header alignment read
       jsonResponse({ updates: { updatedRange: "Expenses!A4:F4" } }), // sheets append
+      jsonResponse({}),                                  // writeExpenseValues USER_ENTERED
+      jsonResponse({}),                                  // writeExpenseValues RAW
     ]);
     const pastValues = ["2024-12-01", "100", "50", "Food", "user@example.com", "Lunch"];
     const result = await addExpenseRow(TOKEN, SHEET_ID, pastValues);
@@ -1487,6 +1591,8 @@ describe("addExpenseRow", () => {
       headerResponse(headers),                           // validateSpreadsheet – header row
       headerResponse(headers),                           // appendExpenseRow header alignment read
       jsonResponse({ updates: { updatedRange: "Expenses!A2:F2" } }), // sheets append
+      jsonResponse({}),                                  // writeExpenseValues USER_ENTERED
+      jsonResponse({}),                                  // writeExpenseValues RAW
     ]);
     const result = await addExpenseRow(TOKEN, SHEET_ID, canonicalValues);
     expect(result.insertMode).toBe(false);
@@ -1530,6 +1636,7 @@ describe("moveExpenseRow", () => {
       headerResponse(headers),
       headerResponse(headers),
       updateValuesResponse(),
+      updateValuesResponse(),
     ]);
     const result = await moveExpenseRow(TOKEN, SHEET_ID, 3, newValues);
     expect(result.moveMode).toBe(false);
@@ -1543,6 +1650,7 @@ describe("moveExpenseRow", () => {
       sheetMetaResponse(),
       headerResponse(headers),
       headerResponse(headers),
+      updateValuesResponse(),
       updateValuesResponse(),
     ]);
     const result = await moveExpenseRow(TOKEN, SHEET_ID, 3, VALUES_JAN);
@@ -1562,7 +1670,8 @@ describe("moveExpenseRow", () => {
       headerResponse(headers),                                     // header alignment read
       sheetMetaResponse(),                                         // addExpenseRow getMetadata for sheetId
       batchUpdateResponse(),                                       // insertDimension (new row at 2)
-      updateValuesResponse(),                                      // write data
+      updateValuesResponse(),                                      // writeExpenseValues USER_ENTERED
+      updateValuesResponse(),                                      // writeExpenseValues RAW
       sheetMetaResponse(),                                         // deleteSheetRowByIndex getMetadata
       batchUpdateResponse(),                                       // deleteDimension
     ]);
@@ -1570,7 +1679,7 @@ describe("moveExpenseRow", () => {
     expect(result.moveMode).toBe(true);
     expect(result.record.rowNumber).toBe(2);
     // Original was at row 3; new row inserted at row 2 (before it) → original shifted to row 4 (0-based index 3)
-    const deleteBody = JSON.parse(mockFetch.mock.calls[9][1].body);
+    const deleteBody = JSON.parse(mockFetch.mock.calls[10][1].body);
     expect(deleteBody.requests[0].deleteDimension.range.startIndex).toBe(3);
   });
 
@@ -1586,7 +1695,8 @@ describe("moveExpenseRow", () => {
       headerResponse(headers),
       sheetMetaResponse(),
       batchUpdateResponse(),   // insertDimension (new row at 5)
-      updateValuesResponse(),
+      updateValuesResponse(),  // writeExpenseValues USER_ENTERED
+      updateValuesResponse(),  // writeExpenseValues RAW
       sheetMetaResponse(),
       batchUpdateResponse(),   // deleteDimension
     ]);
@@ -1594,7 +1704,7 @@ describe("moveExpenseRow", () => {
     expect(result.moveMode).toBe(true);
     expect(result.record.rowNumber).toBe(5);
     // Original at row 3; new row inserted at row 5 (after) → original stays at row 3 (0-based index 2)
-    const deleteBody = JSON.parse(mockFetch.mock.calls[9][1].body);
+    const deleteBody = JSON.parse(mockFetch.mock.calls[10][1].body);
     expect(deleteBody.requests[0].deleteDimension.range.startIndex).toBe(2);
   });
 
@@ -1605,6 +1715,7 @@ describe("moveExpenseRow", () => {
       sheetMetaResponse(),
       headerResponse(headers),
       headerResponse(headers),
+      updateValuesResponse(),
       updateValuesResponse(),
     ]);
     const result = await moveExpenseRow(TOKEN, SHEET_ID, 3, ["2025-06-01", "100", "50", "Food", "u@e.com", ""]);
@@ -1618,6 +1729,7 @@ describe("moveExpenseRow", () => {
       headerResponse(headers),
       headerResponse(headers),
       updateValuesResponse(),
+      updateValuesResponse(),
     ]);
     const result = await moveExpenseRow(TOKEN, SHEET_ID, 2, VALUES_JAN);
     expect(result.moveMode).toBe(false);
@@ -1630,6 +1742,7 @@ describe("moveExpenseRow", () => {
       sheetMetaResponse(),
       headerResponse(headers),
       headerResponse(headers),
+      updateValuesResponse(),
       updateValuesResponse(),
     ]);
     const result = await moveExpenseRow(TOKEN, SHEET_ID, 2, VALUES_JAN);

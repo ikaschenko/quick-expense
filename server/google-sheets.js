@@ -87,6 +87,12 @@ function normalizeHeaders(row = []) {
   return normalized;
 }
 
+export function isStructuredHeader(name) {
+  const trimmed = name.trim();
+  const lower = trimmed.toLowerCase();
+  return lower === "date" || lower === "usd" || VALID_CURRENCY_CODES.has(trimmed.toUpperCase());
+}
+
 function parseEffectiveSheetStructure(headerRow, mapping = null) {
   const normalizedHeader = normalizeHeaders(headerRow);
   const effectiveHeader = mapping ? applyMappingToHeader(normalizedHeader, mapping) : normalizedHeader;
@@ -266,6 +272,40 @@ async function updateValues(accessToken, spreadsheetId, range, values) {
       }),
     },
   );
+}
+
+async function batchUpdateValues(accessToken, spreadsheetId, valueInputOption, data) {
+  await requestNoContent(
+    accessToken,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`,
+    {
+      method: "POST",
+      headers: createHeaders(accessToken, true),
+      body: JSON.stringify({ valueInputOption, data }),
+    },
+  );
+}
+
+export async function writeExpenseValues(accessToken, spreadsheetId, rowNumber, alignedValues, targetHeaders) {
+  const structuredData = [];
+  const freeTextData = [];
+
+  for (let i = 0; i < targetHeaders.length; i++) {
+    const cellRange = `${SHEET_NAME}!${columnLetter(i + 1)}${rowNumber}`;
+    const entry = { range: cellRange, majorDimension: "ROWS", values: [[alignedValues[i] ?? ""]] };
+    if (isStructuredHeader(targetHeaders[i])) {
+      structuredData.push(entry);
+    } else {
+      freeTextData.push(entry);
+    }
+  }
+
+  if (structuredData.length > 0) {
+    await batchUpdateValues(accessToken, spreadsheetId, "USER_ENTERED", structuredData);
+  }
+  if (freeTextData.length > 0) {
+    await batchUpdateValues(accessToken, spreadsheetId, "RAW", freeTextData);
+  }
 }
 
 function remapLegacyRowToCurrent(row = [], customColumnCount) {
@@ -1296,6 +1336,11 @@ export async function appendExpenseRow(accessToken, spreadsheetId, values, mappi
 
   const { alignedValues, endCol } = alignValuesToHeaders(canonicalHeaders, targetHeaders, values, mapping);
 
+  // Blank free-text slots — formula injection cannot reach USER_ENTERED.
+  const safeValues = alignedValues.map((v, i) =>
+    isStructuredHeader(targetHeaders[i]) ? v : ""
+  );
+
   const appendResult = await requestJson(
     accessToken,
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(
@@ -1306,13 +1351,19 @@ export async function appendExpenseRow(accessToken, spreadsheetId, values, mappi
       headers: createHeaders(accessToken, true),
       body: JSON.stringify({
         majorDimension: "ROWS",
-        values: [alignedValues],
+        values: [safeValues],
       }),
     },
   );
 
   const updatedRange = appendResult?.updates?.updatedRange ?? "";
   const rowNumber = parseInt(/([0-9]+)$/.exec(updatedRange)?.[1] ?? "0", 10);
+
+  // Write actual free-text values with RAW (structured fields also re-affirmed idempotently).
+  if (rowNumber > 0) {
+    await writeExpenseValues(accessToken, spreadsheetId, rowNumber, alignedValues, targetHeaders);
+  }
+
   const record = buildRecordFromCanonicalValues(values, rowNumber, report.sheetCurrencies, report.customColumns);
 
   return { record, sheetCurrencies: report.sheetCurrencies, customColumns: report.customColumns };
@@ -1387,7 +1438,7 @@ export async function addExpenseRow(accessToken, spreadsheetId, values, mapping 
   const actualHeaders = normalizeHeaders(headerRows[0] ?? []);
   const targetHeaders = actualHeaders.length > 0 ? actualHeaders : canonicalHeaders;
 
-  const { alignedValues, endCol } = alignValuesToHeaders(canonicalHeaders, targetHeaders, values, mapping);
+  const { alignedValues } = alignValuesToHeaders(canonicalHeaders, targetHeaders, values, mapping);
 
   // Find the last 0-based index in dateValues where date <= submittedMs.
   let insertAfterDataIndex = -1; // -1 means insert before all data rows (right after header)
@@ -1436,12 +1487,7 @@ export async function addExpenseRow(accessToken, spreadsheetId, values, mapping 
   );
 
   // Write the expense data into the newly inserted blank row.
-  await updateValues(
-    accessToken,
-    spreadsheetId,
-    `${SHEET_NAME}!A${newRowNumber}:${endCol}${newRowNumber}`,
-    [alignedValues],
-  );
+  await writeExpenseValues(accessToken, spreadsheetId, newRowNumber, alignedValues, targetHeaders);
 
   const record = buildRecordFromCanonicalValues(values, newRowNumber, report.sheetCurrencies, report.customColumns);
   return { record, insertMode: true, sheetCurrencies: report.sheetCurrencies, customColumns: report.customColumns };
@@ -1455,14 +1501,9 @@ export async function updateExpenseRow(accessToken, spreadsheetId, rowNumber, va
   const actualHeaders = normalizeHeaders(headerRows[0] ?? []);
   const targetHeaders = actualHeaders.length > 0 ? actualHeaders : canonicalHeaders;
 
-  const { alignedValues, endCol } = alignValuesToHeaders(canonicalHeaders, targetHeaders, values, mapping);
+  const { alignedValues } = alignValuesToHeaders(canonicalHeaders, targetHeaders, values, mapping);
 
-  await updateValues(
-    accessToken,
-    spreadsheetId,
-    `${SHEET_NAME}!A${rowNumber}:${endCol}${rowNumber}`,
-    [alignedValues],
-  );
+  await writeExpenseValues(accessToken, spreadsheetId, rowNumber, alignedValues, targetHeaders);
 
   const record = buildRecordFromCanonicalValues(values, rowNumber, report.sheetCurrencies, report.customColumns);
   return { record, sheetCurrencies: report.sheetCurrencies, customColumns: report.customColumns };
