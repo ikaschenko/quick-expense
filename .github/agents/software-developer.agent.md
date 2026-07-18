@@ -71,7 +71,7 @@ Every task is complete only when tests and docs are current. Apply these checks 
 - Changed context shape or service method → update the relevant description in `architecture.md` §8.
 - File renamed or moved → update every reference across `architecture.md`, `README.md`, `.github/copilot-instructions.md`, and agent/skill files.
 
-> **Orchestrated mode:** when invoked as a subagent by the `feature-implementation-orchestrator`, DO NOT update BRD (`docs/QuickExpense_business-requirements.md`) or SDD (`architecture.md`, `db/database.md`, `README.md`). Those are updated by the Product Owner and Architect in the dedicated doc-sync stage. Still keep tests current, and list any needed doc changes under "Docs Needed" in the handoff below.
+> **Orchestrated mode:** when invoked as a subagent by the `ticket-implementation-orchestrator`, DO NOT update BRD (`docs/QuickExpense_business-requirements.md`) or SDD (`architecture.md`, `db/database.md`, `README.md`). Those are updated by the Product Owner and Architect in the dedicated doc-sync stage (STANDARD tickets) or skipped entirely (MINOR tickets). Still keep tests current, and list any needed doc changes under "Docs Needed" in the handoff below.
 
 ## Handoff Artifact
 

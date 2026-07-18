@@ -94,7 +94,7 @@ Component tests use Vitest + jsdom. Follow patterns in `tests/AddExpensePage.tes
 
 ## Mode 4 — Story Review (orchestrated)
 
-Used when invoked as a subagent by the `feature-implementation-orchestrator`. Input: the GitHub issue (user story + acceptance criteria), the Architect implementation plan, the Dev Summary, and the feature branch name.
+Used when invoked as a subagent by the `ticket-implementation-orchestrator`. Input: the GitHub issue (user story + acceptance criteria), the Architect implementation plan (STANDARD tickets) or the Dev Summary's "Plan Steps Implemented" (MINOR tickets), the Dev Summary, and the feature branch name. When no separate Architect plan is provided, use the Dev Summary as the implementation reference.
 
 1. **Static code review** — read the diff of the branch vs `main` using `git diff main...<branch>` (via `execute`). Verify the actual code changes satisfy each acceptance criterion. Flag: unmet criteria, scope creep, security concerns (OWASP), missing input validation, and pattern violations.
 2. **Test alignment** — compare existing tests against the delivered behaviour. Add, refine, or refactor scenarios to cover the feature plus regression around it (invalid inputs, empty states, boundaries, auth edges, API failures).
