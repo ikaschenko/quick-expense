@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import express from "express";
+import helmet from "helmet";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import rateLimit from "express-rate-limit";
@@ -84,6 +85,25 @@ import pool from "./db.js";
 const PgSession = connectPgSimple(session);
 const app = express();
 app.set("trust proxy", 1);
+
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "https://apis.google.com"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "https://lh3.googleusercontent.com"],
+        connectSrc: ["'self'"],
+        frameSrc: ["https://docs.google.com", "https://drive.google.com"],
+        frameAncestors: ["'none'"],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+      },
+    },
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+  }),
+);
 
 const port = Number(process.env.PORT ?? 3001);
 const shutdownTimeoutMs = 10_000;
