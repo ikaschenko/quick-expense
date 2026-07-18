@@ -26,7 +26,6 @@ description: "Use when analyzing feature requirements, finding gaps or inconsist
    - Are error/edge cases covered? (network failure, missing data, auth expiry, empty spreadsheet)
    - Are there implicit assumptions about Google Sheets structure or data shape?
 4. **Conflict check.** Verify the requirement does not:
-   - Violate append-only design (§12.4 — no edit/delete of existing rows).
    - Assume multi-sheet support (§12.8 — single sheet named "Expenses").
    - Require cross-boundary imports (`server/` ↔ `src/`).
    - Duplicate logic already in `src/utils/` or `src/services/`.
