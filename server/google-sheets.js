@@ -33,6 +33,8 @@ const DEFAULT_CUSTOM_COLUMNS = ["SpentFor", "Channel", "Theme"];
 // Reserved column names (case-insensitive) that cannot be used for custom columns
 const RESERVED_COLUMN_NAMES = new Set(["date", "usd", "category", "spent by", "comment"]);
 const MAX_DATASET_BYTES = 10 * 1024 * 1024;
+// NOTE: intentional cross-boundary duplicate of src/constants/expenses.ts MAX_CUSTOM_COLUMNS.
+// The server cannot import frontend TypeScript sources. Keep both values in sync.
 const MAX_CUSTOM_COLUMNS = 10;
 const MAX_OPTIONAL_CURRENCIES = 10;
 

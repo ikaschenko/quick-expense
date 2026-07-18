@@ -14,7 +14,7 @@ import { sharingApi } from "../services/sharingApi";
 import { trackEvent } from "../services/analytics";
 import { AppError, ColumnMapping, ConfigMode, CurrencyDictionary, HeaderDetails, SetupReport, ShareEntry } from "../types/expense";
 import { deriveHeaderRowDetails, validateColumnName } from "../utils/spreadsheet";
-import { REQUIRED_QE_FIELDS } from "../constants/expenses";
+import { MAX_CUSTOM_COLUMNS, REQUIRED_QE_FIELDS } from "../constants/expenses";
 
 type ColumnType = "mandatory-field" | "mandatory-currency" | "optional-currency" | "custom-column";
 
@@ -91,8 +91,6 @@ function typeLabel(type: ColumnType): string {
     case "custom-column": return "Custom column";
   }
 }
-
-const MAX_CUSTOM_COLUMNS = 10;
 
 type SetupPath = "choose" | "fresh" | "existing" | "configured";
 
