@@ -16,5 +16,9 @@ export default defineConfig({
     globals: true,
     pool: "forks",
     exclude: [...configDefaults.exclude, "tests/*.integration.test.*"],
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "lcov"],
+    },
   },
 });
