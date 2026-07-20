@@ -98,7 +98,7 @@ quick-expense/
 │   ├── sharing.js             ← sharing CRUD: list/add/update/remove guest access
 │   ├── email.js               ← Resend email sender (fire-and-forget delivery)
 │   ├── email-templates.js     ← HTML + plain-text email templates for share/revoke notifications
-│   ├── resilience.js          ← retry + backoff helpers for external API calls
+│   ├── resilience.js          ← auth middleware (createRequireAuthenticatedUser, requireOwner, requireGuest, requireEditAccess), health check, and graceful shutdown
 │   ├── validation.js          ← server-side expense input validation
 │   └── utils.js               ← shared backend utilities
 │
