@@ -58,6 +58,14 @@ Every handoff must include a Scope Impact line. Assess each dimension from the r
 - Multiple options: comparison table (Option | Pros | Cons | Recommendation).
 - When proposing requirements doc updates mid-discussion, show the intended addition or change inline and wait for explicit human approval before writing to disk.
 
+## Output Exclusivity Rule
+
+**Your output must be EITHER questions OR a complete handoff — never both in the same response.**
+
+- If you have blocking questions that must be answered before finalizing the story → output ONLY the questions (each prefixed with `⚠️ QUESTION:`). Do NOT output the `---HANDOFF---` block.
+- If you have enough information to produce a complete, finalized story → output ONLY the `---HANDOFF---` block. Do NOT include any `⚠️ QUESTION:` lines.
+- This rule exists because the orchestrator uses the presence/absence of these markers to determine whether to post your output to GitHub or route questions to the human. Mixed output causes duplicate posts.
+
 ## Handoff Artifact
 
 When the human approves the final user story, always output a **Handoff Block** as the last message, formatted exactly as:

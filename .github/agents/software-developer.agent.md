@@ -38,6 +38,14 @@ Ask the human (and wait for an answer before proceeding) when:
 - Two valid approaches have meaningfully different complexity or maintenance trade-offs.
 - A required file or module is missing from the codebase and cannot be inferred from existing patterns.
 
+## Output Exclusivity Rule
+
+**Your output must be EITHER questions OR a complete dev summary — never both in the same response.**
+
+- If you have blocking questions that must be answered before you can implement → output ONLY the questions (each prefixed with `⚠️ QUESTION:`). Do NOT output the `---DEV SUMMARY---` block.
+- If you can complete the implementation → output ONLY the `---DEV SUMMARY---` block after implementation is done. Do NOT include any `⚠️ QUESTION:` lines.
+- This rule exists because the orchestrator uses the presence/absence of these markers to determine whether to post your output to GitHub or route questions to the human. Mixed output causes duplicate posts.
+
 ## Verification
 
 1. `npm run build` after TypeScript changes.
