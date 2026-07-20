@@ -151,9 +151,10 @@ export function AddExpensePage(): JSX.Element {
 
   const isEditMode = !!rowNumberParam;
   const editRowNumber = rowNumberParam ? parseInt(rowNumberParam, 10) : null;
-  const editState = (location.state as { record?: ExpenseRecord; origin?: string } | null);
+  const editState = (location.state as { record?: ExpenseRecord; origin?: string; repeatRecord?: ExpenseRecord } | null);
   const editRecord = editState?.record ?? null;
   const editOrigin = editState?.origin ?? "/history";
+  const repeatRecord = editState?.repeatRecord ?? null;
 
   const handleEditBack = useCallback(() => {
     navigate(editOrigin, { state: { editResult: { rowNumber: editRowNumber, saved: false } }, replace: true });
@@ -228,12 +229,17 @@ export function AddExpensePage(): JSX.Element {
   // Add mode: the useState initialiser already sets a blank draft with today's ISO date.
   // Both modes init once — background config changes no longer reset in-progress input.
   useEffect(() => {
-    if (!isEditMode || !editRecord) return;
-    const normalizedDate = detectedDateFormat?.toIso(editRecord.Date) ?? editRecord.Date;
-    setDraft(createDraftFromRecord({ ...editRecord, Date: normalizedDate }, activeCurrencies, customColumns));
-    setManualFxRates(deriveInitialFxRates(editRecord, activeCurrencies));
-    setActiveNonUsdCurrency(getPreferredCurrency(editRecord, visibleCurrencies));
-    setHasManuallySelectedCurrency(true);
+    if (isEditMode && editRecord) {
+      const normalizedDate = detectedDateFormat?.toIso(editRecord.Date) ?? editRecord.Date;
+      setDraft(createDraftFromRecord({ ...editRecord, Date: normalizedDate }, activeCurrencies, customColumns));
+      setManualFxRates(deriveInitialFxRates(editRecord, activeCurrencies));
+      setActiveNonUsdCurrency(getPreferredCurrency(editRecord, visibleCurrencies));
+      setHasManuallySelectedCurrency(true);
+    } else if (repeatRecord) {
+      setDraft(createDraftFromRecord({ ...repeatRecord, Date: getTodayLocalDate() }, activeCurrencies, customColumns));
+      setActiveNonUsdCurrency(getPreferredCurrency(repeatRecord, visibleCurrencies));
+      setHasManuallySelectedCurrency(true);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // intentionally run once on mount
 

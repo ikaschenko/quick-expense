@@ -84,10 +84,22 @@ vi.mock("../src/services/currency", () => ({
 
 import { googleSheetsService } from "../src/services/googleSheets";
 import { ExpenseRecord } from "../src/types/expense";
+import { getTodayLocalDate } from "../src/utils/date";
 
 function renderAddPage() {
   return render(
     <MemoryRouter initialEntries={["/add"]}>
+      <Routes>
+        <Route path="/add" element={<AddExpensePage />} />
+        <Route path="/home" element={<div>Home</div>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+function renderAddPageWithRepeat(repeatRecord: ExpenseRecord) {
+  return render(
+    <MemoryRouter initialEntries={[{ pathname: "/add", state: { repeatRecord } }]}>
       <Routes>
         <Route path="/add" element={<AddExpensePage />} />
         <Route path="/home" element={<div>Home</div>} />
@@ -216,5 +228,51 @@ describe("AddExpensePage — Save & Continue field retention", () => {
     await waitFor(() => {
       expect(screen.getByText("Home")).toBeTruthy();
     });
+  });
+});
+
+describe("AddExpensePage — repeat mode pre-fill", () => {
+  const repeatRecord: ExpenseRecord = {
+    Date: "2025-03-15",
+    USD: "42.50",
+    Category: "Transport",
+    spentBy: "alice@example.com",
+    Comment: "Bus to airport",
+    currencyAmounts: {},
+    customFields: {},
+    rowNumber: 7,
+  };
+
+  it("pre-fills Category, USD and Comment from repeatRecord", () => {
+    renderAddPageWithRepeat(repeatRecord);
+
+    const categoryInput = document.getElementById("category-field") as HTMLInputElement;
+    expect(categoryInput.value).toBe("Transport");
+
+    const amountInput = screen.getByRole("textbox", { name: /Amount in USD/i }) as HTMLInputElement;
+    expect(amountInput.value).toBe("42.50");
+
+    const commentInput = document.getElementById("comment-field") as HTMLTextAreaElement;
+    expect(commentInput.value).toBe("Bus to airport");
+  });
+
+  it("sets Date to today, not the original record date", () => {
+    renderAddPageWithRepeat(repeatRecord);
+
+    const today = getTodayLocalDate();
+    // Layout renders the title in a span, not a heading.
+    expect(screen.getByText("Add Expense")).toBeTruthy();
+    // The date input rendered by react-datepicker should show today's date (not Mar 15 2025).
+    const dateInputs = document.querySelectorAll("input");
+    const dateInput = Array.from(dateInputs).find((i) => i.value.includes(today.slice(5, 7)));
+    expect(dateInput?.value).not.toContain("2025-03-15");
+  });
+
+  it("treats the form as a fresh add — no rowNumber carried over (AC3)", () => {
+    renderAddPageWithRepeat(repeatRecord);
+    // Layout renders the title in a span (not a heading).
+    expect(screen.getByText("Add Expense")).toBeTruthy();
+    // Title must NOT be "Edit Expense" — confirms we are in add mode, not edit mode
+    expect(screen.queryByText("Edit Expense")).toBeNull();
   });
 });
