@@ -6,7 +6,8 @@ import { HistoryPage } from "../src/pages/HistoryPage";
 import { useDataset } from "../src/contexts/DatasetContext";
 import { ExpenseRecord } from "../src/types/expense";
 
-const { mockUseAuth } = vi.hoisted(() => ({
+const { mockUseAuth, mockNavigate } = vi.hoisted(() => ({
+  mockNavigate: vi.fn(),
   mockUseAuth: vi.fn(() => ({
     session: { guestAccessLevel: null as 'view' | 'edit' | null, email: "test@example.com", givenName: "Test", picture: null },
     error: null,
@@ -22,6 +23,11 @@ const { mockUseAuth } = vi.hoisted(() => ({
 vi.mock("../src/contexts/AuthContext", () => ({
   useAuth: mockUseAuth,
 }));
+
+vi.mock("react-router-dom", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-router-dom")>();
+  return { ...actual, useNavigate: () => mockNavigate };
+});
 
 vi.mock("../src/contexts/ConfigContext", () => ({
   useConfig: () => ({
@@ -162,6 +168,7 @@ describe("HistoryPage — per-day totals", () => {
 describe("HistoryPage — Repeat button", () => {
   beforeEach(() => {
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
+    mockNavigate.mockReset();
     mockUseAuth.mockReset();
     mockUseAuth.mockReturnValue({
       session: { guestAccessLevel: null, email: "test@example.com", givenName: "Test", picture: null },
@@ -176,6 +183,7 @@ describe("HistoryPage — Repeat button", () => {
   });
 
   afterEach(() => {
+    mockNavigate.mockReset();
     mockUseAuth.mockReset();
     mockUseAuth.mockReturnValue({
       session: { guestAccessLevel: null, email: "test@example.com", givenName: "Test", picture: null },
@@ -204,6 +212,26 @@ describe("HistoryPage — Repeat button", () => {
     const card = document.querySelector(".expense-card--interactive")!;
     await user.click(card);
     expect(screen.getByRole("button", { name: /repeat this expense/i })).toBeTruthy();
+  });
+
+  it("navigates to /add with the source record in state when Repeat is clicked", async () => {
+    const user = userEvent.setup();
+    const record = makeRecord(1, "2026-07-01", "25");
+    mockDataset({
+      snapshot: {
+        records: [record],
+        distinctValues: { Category: [], spentBy: [], customFields: {} },
+        loadedAt: 0,
+        payloadBytes: 0,
+        loadPhase: "full",
+      },
+    });
+    renderHistory();
+    const card = document.querySelector(".expense-card--interactive")!;
+    await user.click(card);
+    const repeatBtn = screen.getByRole("button", { name: /repeat this expense/i });
+    await user.click(repeatBtn);
+    expect(mockNavigate).toHaveBeenCalledWith("/add", { state: { repeatRecord: record } });
   });
 
   it("hides Repeat button for view-only users", async () => {

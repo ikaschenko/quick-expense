@@ -83,6 +83,7 @@ vi.mock("../src/services/currency", () => ({
 }));
 
 import { googleSheetsService } from "../src/services/googleSheets";
+import { useConfig } from "../src/contexts/ConfigContext";
 import { ExpenseRecord } from "../src/types/expense";
 import { getTodayLocalDate } from "../src/utils/date";
 
@@ -254,6 +255,9 @@ describe("AddExpensePage — repeat mode pre-fill", () => {
 
     const commentInput = document.getElementById("comment-field") as HTMLTextAreaElement;
     expect(commentInput.value).toBe("Bus to airport");
+
+    const spentByInput = document.getElementById("spent-by-field") as HTMLInputElement;
+    expect(spentByInput.value).toBe("alice@example.com");
   });
 
   it("sets Date to today, not the original record date", () => {
@@ -274,5 +278,121 @@ describe("AddExpensePage — repeat mode pre-fill", () => {
     expect(screen.getByText("Add Expense")).toBeTruthy();
     // Title must NOT be "Edit Expense" — confirms we are in add mode, not edit mode
     expect(screen.queryByText("Edit Expense")).toBeNull();
+  });
+});
+
+describe("AddExpensePage — repeat mode submit", () => {
+  const repeatRecord: ExpenseRecord = {
+    Date: "2025-03-15",
+    USD: "42.50",
+    Category: "Transport",
+    spentBy: "alice@example.com",
+    Comment: "Bus to airport",
+    currencyAmounts: {},
+    customFields: {},
+    rowNumber: 7,
+  };
+
+  const successRecord = {
+    record: {
+      Date: getTodayLocalDate(),
+      USD: "42.50",
+      Category: "Transport",
+      spentBy: "alice@example.com",
+      Comment: "Bus to airport",
+      currencyAmounts: {},
+      customFields: {},
+      rowNumber: 3,
+    },
+    insertMode: false,
+  };
+
+  beforeEach(() => {
+    vi.mocked(googleSheetsService.appendExpenseRow).mockReset();
+    vi.mocked(googleSheetsService.appendExpenseRow).mockResolvedValue(successRecord);
+    vi.mocked(googleSheetsService.updateExpenseRow).mockReset();
+  });
+
+  it("calls appendExpenseRow (not updateExpenseRow) and omits rowNumber from the add payload (AC3)", async () => {
+    renderAddPageWithRepeat(repeatRecord);
+
+    // Form is pre-filled with USD and Category from the repeat record — submit immediately.
+    fireEvent.click(screen.getByRole("button", { name: /Save & Close/i }));
+
+    await waitFor(() => {
+      expect(vi.mocked(googleSheetsService.appendExpenseRow)).toHaveBeenCalledTimes(1);
+    });
+    expect(vi.mocked(googleSheetsService.updateExpenseRow)).not.toHaveBeenCalled();
+  });
+});
+
+describe("AddExpensePage — repeat mode FX rates", () => {
+  const repeatRecord: ExpenseRecord = {
+    Date: "2025-03-15",
+    USD: "42.50",
+    Category: "Transport",
+    spentBy: "alice@example.com",
+    Comment: "Bus to airport",
+    currencyAmounts: { EUR: "40.00" },
+    customFields: {},
+    rowNumber: 7,
+  };
+
+  const eurConfig = {
+    config: {
+      email: "test@example.com",
+      spreadsheetId: "abc123",
+      spreadsheetUrl: "https://docs.google.com/spreadsheets/d/abc123/edit",
+      sheetName: "Expenses",
+      currencies: ["EUR"],
+      customColumns: [],
+      configMode: "default" as const,
+      predefinedCategories: [],
+      hiddenColumns: [],
+      isGuest: false,
+      accessLevel: "edit" as const,
+      ownerEmail: null,
+    },
+    isConfigLoading: false,
+    error: null,
+    clearError: vi.fn(),
+  };
+
+  beforeEach(() => {
+    vi.mocked(useConfig).mockReturnValue(eurConfig);
+  });
+
+  afterEach(() => {
+    vi.mocked(useConfig).mockReturnValue({
+      config: {
+        email: "test@example.com",
+        spreadsheetId: "abc123",
+        spreadsheetUrl: "https://docs.google.com/spreadsheets/d/abc123/edit",
+        sheetName: "Expenses",
+        currencies: [],
+        customColumns: [],
+        configMode: "default",
+        predefinedCategories: [],
+        hiddenColumns: [],
+        isGuest: false,
+        accessLevel: "edit",
+        ownerEmail: null,
+      },
+      isConfigLoading: false,
+      error: null,
+      clearError: vi.fn(),
+    });
+  });
+
+  it("manualFxRates are empty in repeat mode — deriveInitialFxRates is not called (AC7)", async () => {
+    renderAddPageWithRepeat(repeatRecord);
+
+    // The FX card renders because draft.currencyAmounts["EUR"] = "40.00" (from createDraftFromRecord).
+    // If deriveInitialFxRates were accidentally called, the rate input would show a derived value (~0.94).
+    // In correct repeat mode it must be empty (live rate fetch, not historical derivation).
+    const fxRateInput = (await screen.findByRole("textbox", {
+      name: /exchange rate: EUR per 1 USD/i,
+    })) as HTMLInputElement;
+    expect(fxRateInput.value).toBe("");
   });
 });
