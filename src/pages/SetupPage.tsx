@@ -59,11 +59,6 @@ function configModeTooltip(mode: ConfigMode): string | undefined {
   }
 }
 
-interface ColumnInfo {
-  name: string;
-  type: ColumnType;
-}
-
 function classifyColumns(currencies: string[], customColumns: string[]): ColumnInfo[] {
   const result: ColumnInfo[] = [];
   result.push({ name: "Date", type: "mandatory-field", hideable: false });

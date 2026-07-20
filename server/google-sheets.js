@@ -1332,9 +1332,7 @@ export async function appendExpenseRow(accessToken, spreadsheetId, values, mappi
 
   // Align outgoing row values to the actual sheet header order.
   // Some legacy sheets can have custom columns before Comment.
-  const headerRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!1:1`);
-  const actualHeaders = normalizeHeaders(headerRows[0] ?? []);
-  const targetHeaders = actualHeaders.length > 0 ? actualHeaders : canonicalHeaders;
+  const targetHeaders = resolveTargetHeaders(report, canonicalHeaders);
 
   const { alignedValues, endCol } = alignValuesToHeaders(canonicalHeaders, targetHeaders, values, mapping);
 
@@ -1376,6 +1374,15 @@ export async function appendExpenseRow(accessToken, spreadsheetId, values, mappi
  * applying column mapping when provided.
  * Returns { alignedValues, endCol }.
  */
+/**
+ * Resolve the actual sheet header order to align values against, reusing the header row
+ * already captured by validateSpreadsheet instead of re-fetching it from the API.
+ */
+function resolveTargetHeaders(report, canonicalHeaders) {
+  const actualHeaders = normalizeHeaders(report.headerRow);
+  return actualHeaders.length > 0 ? actualHeaders : canonicalHeaders;
+}
+
 function alignValuesToHeaders(canonicalHeaders, targetHeaders, values, mapping) {
   const valueByCanonicalHeader = new Map();
   for (let index = 0; index < canonicalHeaders.length; index += 1) {
@@ -1436,9 +1443,7 @@ export async function addExpenseRow(accessToken, spreadsheetId, values, mapping 
   const report = await validateSpreadsheet(accessToken, spreadsheetId, mapping);
   const canonicalHeaders = buildExpenseHeaders(report.sheetCurrencies, report.customColumns);
 
-  const headerRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!1:1`);
-  const actualHeaders = normalizeHeaders(headerRows[0] ?? []);
-  const targetHeaders = actualHeaders.length > 0 ? actualHeaders : canonicalHeaders;
+  const targetHeaders = resolveTargetHeaders(report, canonicalHeaders);
 
   const { alignedValues } = alignValuesToHeaders(canonicalHeaders, targetHeaders, values, mapping);
 
@@ -1499,9 +1504,7 @@ export async function updateExpenseRow(accessToken, spreadsheetId, rowNumber, va
   const report = await validateSpreadsheet(accessToken, spreadsheetId, mapping);
   const canonicalHeaders = buildExpenseHeaders(report.sheetCurrencies, report.customColumns);
 
-  const headerRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!1:1`);
-  const actualHeaders = normalizeHeaders(headerRows[0] ?? []);
-  const targetHeaders = actualHeaders.length > 0 ? actualHeaders : canonicalHeaders;
+  const targetHeaders = resolveTargetHeaders(report, canonicalHeaders);
 
   const { alignedValues } = alignValuesToHeaders(canonicalHeaders, targetHeaders, values, mapping);
 
