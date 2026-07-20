@@ -343,7 +343,7 @@ describe("AddExpensePage — repeat mode FX rates", () => {
       email: "test@example.com",
       spreadsheetId: "abc123",
       spreadsheetUrl: "https://docs.google.com/spreadsheets/d/abc123/edit",
-      sheetName: "Expenses",
+      sheetName: "Expenses" as const,
       currencies: ["EUR"],
       customColumns: [],
       configMode: "default" as const,
@@ -355,7 +355,14 @@ describe("AddExpensePage — repeat mode FX rates", () => {
     },
     isConfigLoading: false,
     error: null,
+    fileName: null,
+    isFileNameLoading: false,
+    saveConfig: vi.fn(),
+    clearConfig: vi.fn(),
     clearError: vi.fn(),
+    refreshConfig: vi.fn(),
+    updateStructure: vi.fn(),
+    toggleColumnVisibility: vi.fn(),
   };
 
   beforeEach(() => {
@@ -380,7 +387,14 @@ describe("AddExpensePage — repeat mode FX rates", () => {
       },
       isConfigLoading: false,
       error: null,
+      fileName: null,
+      isFileNameLoading: false,
+      saveConfig: vi.fn(),
+      clearConfig: vi.fn(),
       clearError: vi.fn(),
+      refreshConfig: vi.fn(),
+      updateStructure: vi.fn(),
+      toggleColumnVisibility: vi.fn(),
     });
   });
 
