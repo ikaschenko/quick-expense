@@ -162,6 +162,13 @@ export function HistoryPage(): JSX.Element {
     [navigate],
   );
 
+  const handleRepeatRequest = useCallback(
+    (record: ExpenseRecord) => {
+      navigate("/add", { state: { repeatRecord: record } });
+    },
+    [navigate],
+  );
+
   const handleDeleteConfirm = useCallback(async () => {
     if (!confirmRecord || !dataset.snapshot) return;
     setIsDeleting(true);
@@ -404,6 +411,7 @@ export function HistoryPage(): JSX.Element {
                   activeCurrencies={config?.currencies}
                   customColumns={config?.customColumns}
                   onEditRequest={handleEditRequest}
+                  onRepeatRequest={handleRepeatRequest}
                   highlightedRowNumber={highlightedRowNumber}
                   savedRowNumber={savedRowNumber}
                   isViewOnly={isViewOnly}
@@ -425,6 +433,7 @@ export function HistoryPage(): JSX.Element {
               lastRecordRowNumber={lastRecord?.rowNumber}
               onDeleteRequest={setConfirmRecord}
               onEditRequest={handleEditRequest}
+              onRepeatRequest={handleRepeatRequest}
               highlightedRowNumber={highlightedRowNumber}
               savedRowNumber={savedRowNumber}
               isViewOnly={isViewOnly}

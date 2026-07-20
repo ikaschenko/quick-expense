@@ -19,6 +19,7 @@ import {
   Pencil,
   Check,
   Lock,
+  Repeat2,
 } from "lucide-react";
 import { ExpenseRecord } from "../types/expense";
 import { COMMENT_PREVIEW_LENGTH, getCustomColumnLabel, groupByDate, hasDetails } from "../utils/expenseTable";
@@ -45,6 +46,8 @@ interface ExpenseTableProps {
   highlightedRowNumber?: number | null;
   /** Row number of a record that was just successfully saved (shows badge). */
   savedRowNumber?: number | null;
+  /** Called when the user requests repeating a record. */
+  onRepeatRequest?: (record: ExpenseRecord) => void;
   /** When true, Edit and Delete controls are locked for View-only guests. */
   isViewOnly?: boolean;
   /** Per-day USD/dual-currency totals, keyed by date group key. Omitted when totals should not be shown (e.g. filtered views). */
@@ -136,16 +139,17 @@ export interface ExpenseCardProps {
   isLastRecord?: boolean;
   onDeleteRequest?: (record: ExpenseRecord) => void;
   onEditRequest?: (record: ExpenseRecord) => void;
+  onRepeatRequest?: (record: ExpenseRecord) => void;
   isHighlighted?: boolean;
   isSaved?: boolean;
   isViewOnly?: boolean;
 }
 
-export function ExpenseCard({ record, sheetCurrencies, customColumns, isLastRecord, onDeleteRequest, onEditRequest, isHighlighted, isSaved, isViewOnly }: ExpenseCardProps): JSX.Element {
+export function ExpenseCard({ record, sheetCurrencies, customColumns, isLastRecord, onDeleteRequest, onEditRequest, onRepeatRequest, isHighlighted, isSaved, isViewOnly }: ExpenseCardProps): JSX.Element {
   const [isOpen, setIsOpen] = useState(isHighlighted ?? false);
   const cardRef = useRef<HTMLDivElement>(null);
   const Icon = getCategoryIcon(record.Category);
-  const cardHasDetails = hasDetails(record, customColumns) || (isLastRecord && !!onDeleteRequest) || !!onEditRequest;
+  const cardHasDetails = hasDetails(record, customColumns) || (isLastRecord && !!onDeleteRequest) || !!onEditRequest || (!!onRepeatRequest && !isViewOnly);
   const preview = getCommentPreview(record);
 
   useEffect(() => {
@@ -196,13 +200,24 @@ export function ExpenseCard({ record, sheetCurrencies, customColumns, isLastReco
                 </div>
               );
             })}
-            {(onEditRequest || (isLastRecord && onDeleteRequest)) ? (
+            {(onEditRequest || (isLastRecord && onDeleteRequest) || (!!onRepeatRequest && !isViewOnly)) ? (
               <div className="expense-card-actions">
                 {isSaved ? (
                   <span className="expense-saved-badge">
                     <Check size={11} aria-hidden />
                     Saved
                   </span>
+                ) : null}
+                {onRepeatRequest && !isViewOnly ? (
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    type="button"
+                    aria-label="Repeat this expense"
+                    onClick={(e) => { e.stopPropagation(); onRepeatRequest(record); }}
+                  >
+                    <Repeat2 size={14} aria-hidden />
+                    Repeat
+                  </button>
                 ) : null}
                 {onEditRequest ? (
                   isViewOnly ? (
@@ -270,6 +285,7 @@ export function ExpenseTable({
   lastRecordRowNumber,
   onDeleteRequest,
   onEditRequest,
+  onRepeatRequest,
   highlightedRowNumber,
   savedRowNumber,
   isViewOnly,
@@ -316,6 +332,7 @@ export function ExpenseTable({
               isLastRecord={record.rowNumber === lastRecordRowNumber}
               onDeleteRequest={onDeleteRequest}
               onEditRequest={onEditRequest}
+              onRepeatRequest={onRepeatRequest}
               isHighlighted={record.rowNumber === highlightedRowNumber}
               isSaved={record.rowNumber === savedRowNumber}
               isViewOnly={isViewOnly}

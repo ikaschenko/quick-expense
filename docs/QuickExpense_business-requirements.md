@@ -287,7 +287,7 @@ While the background Phase-2 history load is still in progress, a non-blocking b
 
 Search is client-side. If the sheet exceeds the 10 MB payload cap, History is denied with an error (same rule as §3.5).
 
-Available actions: **Reload**, **Edit** (redirect to edit form), **Delete last row** (confirm dialog, last row only).
+Available actions: **Reload**, **Edit** (redirect to edit form), **Delete last row** (confirm dialog, last row only), **Repeat** (opens the Add Expense form pre-populated with all fields from the selected row; Date resets to today; the user may adjust any field and save as a new expense row).
 
 ## 2.7 Home Screen Dashboard
 

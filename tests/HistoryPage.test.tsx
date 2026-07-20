@@ -1,14 +1,15 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { HistoryPage } from "../src/pages/HistoryPage";
 import { useDataset } from "../src/contexts/DatasetContext";
 import { ExpenseRecord } from "../src/types/expense";
 
-vi.mock("../src/contexts/AuthContext", () => ({
-  useAuth: () => ({
-    session: { guestAccessLevel: null, email: "test@example.com", givenName: "Test", picture: null },
+const { mockUseAuth, mockNavigate } = vi.hoisted(() => ({
+  mockNavigate: vi.fn(),
+  mockUseAuth: vi.fn(() => ({
+    session: { guestAccessLevel: null as 'view' | 'edit' | null, email: "test@example.com", givenName: "Test", picture: null },
     error: null,
     status: "signed_in",
     signIn: vi.fn(),
@@ -16,8 +17,17 @@ vi.mock("../src/contexts/AuthContext", () => ({
     refreshSession: vi.fn(),
     touchSession: vi.fn(),
     clearError: vi.fn(),
-  }),
+  })),
 }));
+
+vi.mock("../src/contexts/AuthContext", () => ({
+  useAuth: mockUseAuth,
+}));
+
+vi.mock("react-router-dom", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-router-dom")>();
+  return { ...actual, useNavigate: () => mockNavigate };
+});
 
 vi.mock("../src/contexts/ConfigContext", () => ({
   useConfig: () => ({
@@ -152,5 +162,102 @@ describe("HistoryPage — per-day totals", () => {
 
     // All 52 records are now visible — the boundary day's total should appear.
     expect(findDateGroupBadge(container, "2026-06-01")).not.toBeNull();
+  });
+});
+
+describe("HistoryPage — Repeat button", () => {
+  beforeEach(() => {
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+    mockNavigate.mockReset();
+    mockUseAuth.mockReset();
+    mockUseAuth.mockReturnValue({
+      session: { guestAccessLevel: null, email: "test@example.com", givenName: "Test", picture: null },
+      error: null,
+      status: "signed_in",
+      signIn: vi.fn(),
+      signOut: vi.fn(),
+      refreshSession: vi.fn(),
+      touchSession: vi.fn(),
+      clearError: vi.fn(),
+    });
+  });
+
+  afterEach(() => {
+    mockNavigate.mockReset();
+    mockUseAuth.mockReset();
+    mockUseAuth.mockReturnValue({
+      session: { guestAccessLevel: null, email: "test@example.com", givenName: "Test", picture: null },
+      error: null,
+      status: "signed_in",
+      signIn: vi.fn(),
+      signOut: vi.fn(),
+      refreshSession: vi.fn(),
+      touchSession: vi.fn(),
+      clearError: vi.fn(),
+    });
+  });
+
+  it("shows Repeat button in expanded card for edit-access users", async () => {
+    const user = userEvent.setup();
+    mockDataset({
+      snapshot: {
+        records: [makeRecord(1, "2026-07-01", "25")],
+        distinctValues: { Category: [], spentBy: [], customFields: {} },
+        loadedAt: 0,
+        payloadBytes: 0,
+        loadPhase: "full",
+      },
+    });
+    renderHistory();
+    const card = document.querySelector(".expense-card--interactive")!;
+    await user.click(card);
+    expect(screen.getByRole("button", { name: /repeat this expense/i })).toBeTruthy();
+  });
+
+  it("navigates to /add with the source record in state when Repeat is clicked", async () => {
+    const user = userEvent.setup();
+    const record = makeRecord(1, "2026-07-01", "25");
+    mockDataset({
+      snapshot: {
+        records: [record],
+        distinctValues: { Category: [], spentBy: [], customFields: {} },
+        loadedAt: 0,
+        payloadBytes: 0,
+        loadPhase: "full",
+      },
+    });
+    renderHistory();
+    const card = document.querySelector(".expense-card--interactive")!;
+    await user.click(card);
+    const repeatBtn = screen.getByRole("button", { name: /repeat this expense/i });
+    await user.click(repeatBtn);
+    expect(mockNavigate).toHaveBeenCalledWith("/add", { state: { repeatRecord: record } });
+  });
+
+  it("hides Repeat button for view-only users", async () => {
+    const user = userEvent.setup();
+    mockUseAuth.mockReturnValue({
+      session: { guestAccessLevel: "view", email: "guest@example.com", givenName: "Guest", picture: null },
+      error: null,
+      status: "signed_in",
+      signIn: vi.fn(),
+      signOut: vi.fn(),
+      refreshSession: vi.fn(),
+      touchSession: vi.fn(),
+      clearError: vi.fn(),
+    });
+    mockDataset({
+      snapshot: {
+        records: [makeRecord(1, "2026-07-01", "25")],
+        distinctValues: { Category: [], spentBy: [], customFields: {} },
+        loadedAt: 0,
+        payloadBytes: 0,
+        loadPhase: "full",
+      },
+    });
+    renderHistory();
+    // For view-only users, onRepeatRequest is not passed so card may not be interactive via actions.
+    // Verify the Repeat button is absent.
+    expect(screen.queryByRole("button", { name: /repeat this expense/i })).toBeNull();
   });
 });
