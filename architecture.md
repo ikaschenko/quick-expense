@@ -10,6 +10,7 @@ Quick Expense is a small web application for recording personal/family expenses 
 
 - **Add** an expense record (appended as a new row to the sheet).
 - **Browse and filter expense history (History):** view the most recent records and search/filter by comment, category, amount range, and custom columns (client-side, after loading the full dataset).
+- **Repeat** a past expense: tapping the Repeat action on a History record pre-fills the Add form with that record's data and today's date.
 
 All expense data lives in the user's own Google Spreadsheet — the application never stores expense rows. The business requirements are documented in detail in `docs/QuickExpense_business-requirements.md`.
 
@@ -108,7 +109,7 @@ quick-expense/
 │   ├── index.css              ← global styles
 │   ├── vite-env.d.ts
 │   ├── components/            ← reusable UI components
-│   │   ├── ExpenseTable.tsx   ← expense card list; tap/click to expand full details inline
+│   │   ├── ExpenseTable.tsx   <- expense card list; tap/click to expand full details inline; optional Repeat button pre-fills Add form
 │   │   ├── Layout.tsx         ← app shell: topbar + footer + page slot; Setup badge
 │   │   ├── LoadingBlock.tsx   ← spinner component
 │   │   ├── MtdSpendChart.tsx  ← Chart.js area chart for MTD daily spend (Home dashboard)
@@ -123,11 +124,11 @@ quick-expense/
 │   │   ├── ConfigContext.tsx   ← spreadsheet config state
 │   │   └── DatasetContext.tsx  ← expense dataset loading, caching, surgical mutations
 │   ├── pages/                 ← route-level page components
-│   │   ├── AddExpensePage.tsx  ← expense form with currency conversion
+│   │   ├── AddExpensePage.tsx  <- expense form with currency conversion; accepts repeat record via React Router location state
 │   │   ├── AuthCallbackPage.tsx ← post-OAuth redirect handler
 │   │   ├── HomePage.tsx       ← spending dashboard (TODAY / MTD / YTD)
 │   │   ├── LoginPage.tsx      ← sign-in screen
-│   │   ├── HistoryPage.tsx    ← unified history: recent records + collapsible filter panel (comment, category, amount range, custom columns)
+│   │   ├── HistoryPage.tsx    <- unified history: recent records + collapsible filter panel (comment, category, amount range, custom columns); Repeat navigates to /add with pre-filled state
 │   │   └── SetupPage.tsx      ← spreadsheet URL configuration + Google Picker
 │   ├── services/              ← API client layer
 │   │   ├── authApi.ts         ← /api/auth/* calls
@@ -495,7 +496,7 @@ The SPA uses three nested context providers (wrapped in `App.tsx`):
 | `/add` | `AddExpensePage` | Yes | New expense form |
 | `/tail` | — | — | Legacy route — redirects to `/home` |
 | `/search` | — | — | Legacy route — redirects to `/home` |
-| `/history` | `HistoryPage` | Yes | Recent records + optional filtering (comment, category, amount, custom columns) |
+| `/history` | `HistoryPage` | Yes | Recent records + optional filtering (comment, category, amount, custom columns); Repeat button pre-fills `/add` via Router state |
 
 `ProtectedRoute` wraps all "Yes" routes — redirects to `/` if `auth.session` is null.
 
