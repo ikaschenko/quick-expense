@@ -53,3 +53,11 @@ For every major change, verify against the OWASP-aligned rules in `copilot-instr
 - Open questions prefixed with **⚠️ QUESTION:**
 - When proposing doc updates mid-discussion, show the intended change as a clear diff (section, before/after) and wait for explicit human approval before writing to disk.
 - **Implementation plan summary:** At the end of every implementation plan, output a compact version formatted for a GitHub issue comment — concise, structured, no explanations. Use a `## Implementation Plan` heading with numbered steps, each step a single line. No prose, no rationale, no alternatives. End with: "💾 Save this as a comment on GitHub Issue #[N] for developer reference."
+
+## Output Exclusivity Rule
+
+**Your output must be EITHER questions OR a complete plan — never both in the same response.**
+
+- If you have blocking questions that must be answered before you can produce the plan → output ONLY the questions (each prefixed with `⚠️ QUESTION:`). Do NOT output the `## Implementation Plan` section.
+- If you have enough information to produce the plan → output the `## Implementation Plan` and any supporting design notes. Do NOT include any `⚠️ QUESTION:` lines.
+- This rule exists because the orchestrator uses the presence/absence of these markers to determine whether to post your output to GitHub or route questions to the human. Mixed output causes duplicate posts.

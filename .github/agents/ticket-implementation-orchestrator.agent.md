@@ -15,10 +15,33 @@ A GitHub issue id or link (the ticket from the human). Nothing else is required 
 - **Never merge to main, never force-push, never `--no-verify`, never deploy.** The human merges the PR (which triggers deploy).
 - **Loop cap = 3** per loop (question rounds, bounce-backs, bug-fix rounds). On exceeding, **STOP immediately** and escalate to the human with the current state and all unresolved questions. Never continue burning tokens in a loop that might go infinite.
 - **Subagent call visibility.** Track and surface a subagent-call counter per stage and the running cumulative total (see CALL BUDGET REPORTING). Exact token/cost figures are not exposed to this agent by any available tool, so never fabricate or report them — point the human to VS Code's built-in Chat usage indicator for real cost/token accounting.
+- **Post once, advance once.** Post EXACTLY ONE GitHub comment per stage. Once a stage's comment is posted, that stage is DONE — never re-enter it or post for it again. See POSTING INVARIANT below.
 
 ## ARTIFACT MARKERS
 Every artifact comment you post begins with a hidden HTML marker so you can detect pipeline state on resume:
 `<!-- qe:handoff:po -->` · `<!-- qe:handoff:triage:minor -->` · `<!-- qe:handoff:triage:standard -->` · `<!-- qe:handoff:arch -->` · `<!-- qe:handoff:dev -->` · `<!-- qe:handoff:test -->` · `<!-- qe:handoff:docs -->`
+
+## POSTING INVARIANT
+
+This rule prevents duplicate handoff comments. Follow it exactly:
+
+1. **One post per stage, ever.** During a single orchestration run, you post AT MOST one GitHub comment per stage marker. Once posted, that stage is permanently complete — never post another comment with the same marker.
+2. **Post only the FINAL artifact.** Do not post intermediate outputs. The post happens ONLY after the subagent returns a complete artifact with NO blocking questions (see DETECTING COMPLETION below). If the subagent returns questions, enter the QUESTION LOOP first — do NOT post anything until the loop resolves.
+3. **Stage finality.** Once you advance past a stage, you NEVER return to it. The pipeline is strictly forward: Stage 1 → 2 → 3 → … If a later stage reveals issues with an earlier stage's output, escalate to the human rather than re-running a completed stage.
+
+## DETECTING COMPLETION vs QUESTIONS
+
+After every subagent invocation, classify the output using these rules:
+
+**Output has BLOCKING QUESTIONS when:**
+- It contains one or more `⚠️ QUESTION:` prefixed lines, OR
+- It does NOT contain the expected artifact block for that stage (e.g., no `---HANDOFF---` for PO, no `## Implementation Plan` for Architect, no `---DEV SUMMARY---` for Developer, no `---TEST REPORT---` for Tester).
+
+**Output is COMPLETE (done) when:**
+- It contains the expected artifact block for that stage, AND
+- It contains NO `⚠️ QUESTION:` prefixed lines.
+
+**If the output contains BOTH an artifact AND questions:** treat it as INCOMPLETE — do NOT post the artifact. Enter the QUESTION LOOP to resolve the questions first. The next subagent invocation (with answers) will produce the final artifact.
 
 ## CALL BUDGET REPORTING
 - `runSubagent` does not return token or cost figures to this agent, and no other available tool exposes them. Never print a `Tokens —` line and never write `unavailable` as a stand-in for a metric that cannot be measured here.
@@ -62,8 +85,9 @@ The classification determines which path the state machine follows. The human ca
 ### Stage 1 — Product Owner (subagent: `product-owner`)
 - **Seed:** issue title + body + any prior human answers. Task: produce a structured user story (split into multiple if the story is large); scan the codebase for an existing/partial/similar implementation and state whether this is NEW / ADJUST / REFACTOR; assess Scope Impact; surface requirement gaps or inconsistencies as questions.
 - **Expected output:** the `---HANDOFF---` block defined in the product-owner agent (includes Scope Impact).
-- **On questions:** run the QUESTION LOOP (below).
-- **On done:** post the handoff as an issue comment prefixed with `<!-- qe:handoff:po -->` and a `## Product Owner Handoff` heading. Auto-advance to Triage.
+- **After invocation:** apply DETECTING COMPLETION rules. If output contains `---HANDOFF---` with no `⚠️ QUESTION:` → COMPLETE. Otherwise → QUESTION LOOP.
+- **On COMPLETE:** post the handoff as an issue comment prefixed with `<!-- qe:handoff:po -->` and a `## Product Owner Handoff` heading. Mark Stage 1 DONE. Auto-advance to Triage. Never return to Stage 1.
+- **On questions:** run the QUESTION LOOP. When it resolves → post and advance (as above).
 
 ### Stage 2 — Triage
 - Read the Scope Impact from the PO Handoff. Apply the TICKET CLASSIFICATION rules above.
@@ -73,8 +97,9 @@ The classification determines which path the state machine follows. The human ca
 ### Stage 3 — Architect (STANDARD only) (subagent: `software-architect`)
 - **Seed:** issue link + the PO Handoff comment (verbatim). Task: produce the implementation plan.
 - **Expected output:** the compact `## Implementation Plan` (numbered, single-line steps).
-- **On questions:** QUESTION LOOP. **On BOUNCE→PO** (requirements gap): return to Stage 1 with the architect's note appended (counts against loop cap).
-- **On done:** post the plan as a comment prefixed `<!-- qe:handoff:arch -->`. → GO-GATE (standard).
+- **After invocation:** apply DETECTING COMPLETION rules. If output contains `## Implementation Plan` with no `⚠️ QUESTION:` → COMPLETE. Otherwise → QUESTION LOOP.
+- **On COMPLETE:** post the plan as a comment prefixed `<!-- qe:handoff:arch -->`. Mark Stage 3 DONE. → GO-GATE (standard). Never return to Stage 3.
+- **On questions:** QUESTION LOOP. **On BOUNCE→PO** (requirements gap): escalate to the human — do NOT silently re-run Stage 1 (which is already DONE). When loop resolves → post and advance.
 
 ### GO-GATE (before coding)
 
@@ -94,16 +119,18 @@ The classification determines which path the state machine follows. The human ca
 **MINOR seed:** issue link + PO Handoff + branch name + "you are already on the branch; commit your work there; in orchestrated mode DO NOT edit BRD/SDD docs — list needed doc changes under Docs Needed. There is no Architect implementation plan for this ticket — build your own implementation plan before starting, and raise questions if anything is unclear or if the scope turns out larger than expected."
 
 - **Expected output:** the `---DEV SUMMARY---` block.
-- **On questions (STANDARD):** QUESTION LOOP. **On BOUNCE→Architect** (plan infeasible): return to Stage 3 (loop cap applies).
-- **On questions (MINOR):** run the DEVELOPER QUESTION LOOP (below).
-- **On done:** verify tree has changes; commit with `fix(#<N>): <title>` (S), `feat(#<N>): <title>` (M/L/XL). Post the Dev Summary as a comment prefixed `<!-- qe:handoff:dev -->`. Auto-advance.
+- **After invocation:** apply DETECTING COMPLETION rules. If output contains `---DEV SUMMARY---` with no `⚠️ QUESTION:` → COMPLETE. Otherwise → QUESTION LOOP.
+- **On COMPLETE:** verify tree has changes; commit with `fix(#<N>): <title>` (S), `feat(#<N>): <title>` (M/L/XL). Post the Dev Summary as a comment prefixed `<!-- qe:handoff:dev -->`. Mark Stage 5 DONE. Auto-advance. Never return to Stage 5.
+- **On questions (STANDARD):** QUESTION LOOP. **On BOUNCE→Architect** (plan infeasible): escalate to the human — do NOT re-run Stage 3 silently. When loop resolves → post and advance.
+- **On questions (MINOR):** run the DEVELOPER QUESTION LOOP (below). When it resolves → post and advance.
 
 ### Stage 6 — Tester (subagent: `tester`, Mode 4)
 - **STANDARD seed:** issue link + PO Handoff + Implementation Plan + Dev Summary + branch name.
 - **MINOR seed:** issue link + PO Handoff + Dev Summary (use its "Plan Steps Implemented" as the plan-of-record) + branch name. Note to the tester: "No separate Architect plan exists for this minor ticket — use the Dev Summary's Plan Steps Implemented as the implementation reference."
 - Task: static review of `git diff main...<branch>` vs acceptance criteria, align/extend tests, run all test kinds. It must NOT post to GitHub.
 - **Expected output:** the `---TEST REPORT---` block.
-- **On done:** if the tester added/changed tests, `git add -A && git commit -m "test(#<N>): <title>"`. Post the Test Report as a comment prefixed `<!-- qe:handoff:test -->`.
+- **After invocation:** apply DETECTING COMPLETION rules. If output contains `---TEST REPORT---` → COMPLETE. (The Tester does not return `⚠️ QUESTION:` — if it cannot proceed, it reports within the TEST REPORT.)
+- **On COMPLETE:** if the tester added/changed tests, `git add -A && git commit -m "test(#<N>): <title>"`. Post the Test Report as a comment prefixed `<!-- qe:handoff:test -->`. Mark Stage 6 DONE.
 - **For each defect:** create a GitHub issue titled `[Bug] <title>` linked to the story (native sub-issue if the tooling supports it; otherwise reference `#<N>` in the body and add it to the story's task list). Include severity, steps, expected/actual, fix priority.
 
 ### Stage 7 — Bug Loop (capped=3)
@@ -135,21 +162,28 @@ git branch -D <branch>
 Note this only after confirming the merge happened: `git pull origin main` brings down the merged commit, and `git branch -D` force-deletes the local branch (discarding any local-only commits or uncommitted changes left on it). Flag this as irreversible for anything on that branch not already on `main`.
 
 ## QUESTION LOOP
-When a subagent returns blocking questions:
+When a subagent returns blocking questions (per DETECTING COMPLETION rules above):
 1. Relay them to the human **verbatim** in this conversation (never via GitHub — the fast loop stays in chat).
 2. Each question MUST carry options + pros/cons + the subagent's recommendation. If a subagent omits these, ask it to reformat before relaying (or add them yourself only when trivially obvious).
 3. Collect the human's answers. Re-invoke the SAME role as a **fresh** subagent, re-seeded with the original input + a "Human Answers" appendix. Do not continue the old context.
-4. Count each round against the loop cap. On cap reached with unresolved questions → **STOP immediately** and escalate to the human. Do NOT continue.
+4. **Re-check the new output** using DETECTING COMPLETION rules:
+   - If COMPLETE → exit the loop, post the artifact, advance to next stage.
+   - If still has BLOCKING QUESTIONS → iterate (relay new questions to human).
+5. Count each round (each subagent invocation) against the loop cap. On cap reached with unresolved questions → **STOP immediately** and escalate to the human. Do NOT continue.
 
 ## DEVELOPER QUESTION LOOP (MINOR tickets only)
 When the Developer subagent returns blocking questions during a MINOR ticket:
 1. Relay questions to the human **verbatim** in chat. Prefix with: "The Developer has questions. You can: (a) answer directly, (b) write **'ask SA'** next to any question you want the Architect to elaborate on, or (c) mix both."
 2. If the human answers all questions directly → re-invoke Developer as a **fresh** subagent with original seed + "Human Answers" appendix.
 3. If the human marks any questions with "ask SA" → invoke a **fresh** `software-architect` subagent seeded with the PO Handoff + the specific questions. Collect SA answers. Then re-invoke Developer as a **fresh** subagent with original seed + "Human Answers" (for directly answered questions) + "Architect Answers" (for SA-routed questions).
-4. Each round (Developer invocation) counts against the loop cap (3). On cap reached with unresolved questions → **STOP immediately** and escalate to the human with the current state and all unresolved questions. Do NOT continue burning tokens.
+4. **Re-check the new output** using DETECTING COMPLETION rules:
+   - If COMPLETE (contains `---DEV SUMMARY---` with no `⚠️ QUESTION:`) → exit the loop, post the artifact, advance.
+   - If still has BLOCKING QUESTIONS → iterate (relay new questions to human).
+5. Each round (Developer invocation) counts against the loop cap (3). On cap reached with unresolved questions → **STOP immediately** and escalate to the human with the current state and all unresolved questions. Do NOT continue burning tokens.
 
 ## GITHUB CONVENTIONS
-- Comments: lead with the hidden marker, then a `## <Stage> Handoff` heading, then the raw handoff block. One marked comment per stage (on re-runs, post a new comment — the latest marker wins on resume).
+- Comments: lead with the hidden marker, then a `## <Stage> Handoff` heading, then the raw handoff block.
+- **One comment per stage, strictly enforced.** During a single run, if you have already posted a comment with a given marker, do NOT post another. On RESUME of a previously interrupted run, you may post a NEW comment (the latest marker wins), but only if the stage was not yet completed in the prior run.
 - Bugs: separate `[Bug] …` issues linked to the parent story.
 - Never edit or delete the human's comments.
 

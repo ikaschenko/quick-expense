@@ -102,6 +102,10 @@ Used when invoked as a subagent by the `ticket-implementation-orchestrator`. Inp
 4. **Defects** — for every issue found, capture: title, severity (blocker/major/minor/trivial), steps to reproduce, expected vs actual, and recommended fix priority.
 5. Do NOT post to GitHub or create issues — return the report to the orchestrator, which persists it.
 
+## Output Exclusivity Rule (Mode 4)
+
+**Always output the complete `---TEST REPORT---` block.** If you cannot proceed (e.g., branch doesn't exist, diff is empty, build fails fatally), still output the `---TEST REPORT---` block with the issue noted in the Defects section — do NOT output bare `⚠️ QUESTION:` lines. The orchestrator expects exactly one artifact type from you.
+
 ## Handoff Artifact
 
 In Mode 4, always output a **Test Report** as the last message, formatted exactly as:
