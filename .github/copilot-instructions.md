@@ -118,6 +118,8 @@ For multi-step tasks, state a brief plan:
 - Types in `src/types/expense.ts`. Constants in `src/constants/`.
 - `src/utils/` must be side-effect-free and testable.
 - Backend routes in `server/index.js`. Protected routes use `requireAuthenticatedUser`, plus `requireOwner` (config mutations) or `requireEditAccess` (expense data mutations) as required — see [server.instructions.md](instructions/server.instructions.md) for the full guard matrix.
+- Setup-sharing CRUD (grant/list/update/revoke guest access) goes through `server/sharing.js` — never query `setup_shares` directly from routes.
+- Transactional email goes through `server/email.js`. Sends are **fire-and-forget** (`void send(...)`, never `await`ed by callers) and are silently skipped when `RESEND_API_KEY`/`EMAIL_FROM` are not configured.
 - Backend is **plain JS with ES modules** — no `.ts` files under `server/`.
 - Mutating endpoints require `X-Requested-With: fetch` header (CSRF).
 - Styling: plain CSS in `src/index.css` with design tokens (`--color-*`, `--space-*`, `--font-size-*`, `--radius-*`, `--shadow-*`). No CSS-in-JS or utility frameworks.

@@ -10,4 +10,4 @@ description: "Frontend conventions for React/TypeScript files (components, pages
 - Shared expense types live in `src/types/expense.ts` — extend there, don't redeclare shapes locally.
 - Constants live in `src/constants/` (e.g. `expenses.ts`, `feedback.ts`).
 - `src/utils/` must stay side-effect-free and pure (no API calls, no context access) — keep it unit-testable.
-- Styling uses plain CSS classes/tokens from `src/index.css` — no CSS-in-JS or utility frameworks (see [css.instructions.md](css.instructions.md)).
+- Styling uses plain CSS classes/tokens from `src/index.css` — no CSS-in-JS, no inline `style={{}}` props, and no utility frameworks. Add/extend classes in `src/index.css` using existing design tokens (see [css.instructions.md](css.instructions.md)).
