@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ExpenseTable } from "../src/components/ExpenseTable";
 import { ExpenseRecord } from "../src/types/expense";
 import { DayTotal } from "../src/utils/currencyTotals";
@@ -145,6 +145,10 @@ describe("ExpenseCard — expand/collapse vs. text selection", () => {
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("toggles expand/collapse on a plain click with no active selection", async () => {
     const user = userEvent.setup();
     const { container } = render(<ExpenseTable records={[record]} sheetCurrencies={[]} />);
@@ -167,6 +171,41 @@ describe("ExpenseCard — expand/collapse vs. text selection", () => {
 
     vi.spyOn(window, "getSelection").mockReturnValue({ toString: () => "Lunch" } as Selection);
     await user.click(card);
+    expect(screen.getByText("Comment:")).toBeTruthy();
+  });
+
+  it("collapses normally once a prior selection is cleared before the next click", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<ExpenseTable records={[record]} sheetCurrencies={[]} />);
+    const card = container.querySelector(".expense-card") as HTMLElement;
+
+    await user.click(card);
+    expect(screen.getByText("Comment:")).toBeTruthy();
+
+    const getSelectionSpy = vi.spyOn(window, "getSelection").mockReturnValue({ toString: () => "Lunch" } as Selection);
+    await user.click(card);
+    expect(screen.getByText("Comment:")).toBeTruthy();
+
+    getSelectionSpy.mockReturnValue({ toString: () => "" } as Selection);
+    await user.click(card);
+    expect(screen.queryByText("Comment:")).toBeNull();
+  });
+
+  it("still invokes the Edit action and does not toggle the card when clicked during an active selection", async () => {
+    const user = userEvent.setup();
+    const onEditRequest = vi.fn();
+    const { container } = render(
+      <ExpenseTable records={[record]} sheetCurrencies={[]} onEditRequest={onEditRequest} />,
+    );
+    const card = container.querySelector(".expense-card") as HTMLElement;
+
+    await user.click(card);
+    expect(screen.getByText("Comment:")).toBeTruthy();
+
+    vi.spyOn(window, "getSelection").mockReturnValue({ toString: () => "Lunch" } as Selection);
+    await user.click(screen.getByRole("button", { name: /edit this expense/i }));
+
+    expect(onEditRequest).toHaveBeenCalledWith(record);
     expect(screen.getByText("Comment:")).toBeTruthy();
   });
 });
