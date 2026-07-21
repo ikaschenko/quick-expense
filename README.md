@@ -43,8 +43,8 @@ If the `Expenses` sheet exists and the first row is empty, the app creates the h
 
 This repository pins Node via `.nvmrc` and `package.json > engines`.
 
-- Preferred Node version: `20.19.0`
-- Supported range: `^20.19.0 || ^22.12.0`
+- Preferred Node version: `22.12.0`
+- Supported range: `^22.12.0`
 
 If you use nvm:
 

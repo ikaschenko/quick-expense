@@ -185,8 +185,8 @@ quick-expense/
 
 ### Runtime Version Baseline
 
-- Development baseline: Node.js `20.19.0` (pinned in `.nvmrc`)
-- Supported local range: `^20.19.0 || ^22.12.0`
+- Development baseline: Node.js `22.12.0` (pinned in `.nvmrc`)
+- Supported local range: `^22.12.0`
 - Goal: keep test and build behavior consistent across Windows PowerShell and Command Prompt
 
 ---
