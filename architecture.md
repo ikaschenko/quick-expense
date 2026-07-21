@@ -141,10 +141,12 @@ quick-expense/
 │   ├── types/
 │   │   └── expense.ts         ← all shared types and AppError class
 │   └── utils/                 ← pure utility functions
+│       ├── currencyTotals.ts  ← raw number parsing (US/EU formats) + per-day dual-currency totals
 │       ├── dashboardStats.ts  ← TODAY / MTD / YTD aggregations, ISO normalizer, chart data
 │       ├── date.ts            ← local date formatting + sheet date-format detection
 │       ├── expenseTable.ts    ← expense card helpers: preview length, display amount, detail detection
 │       ├── search.ts          ← client-side expense filtering
+│       ├── setupStatus.ts     ← resolves Setup status banner state (loading/configured/needs-setup/invalid/load-error)
 │       ├── spreadsheet.ts     ← header validation, row mapping, distinct values
 │       ├── storage.ts         ← safe JSON localStorage helpers
 │       └── validation.ts      ← expense draft validation, decimal parsing
