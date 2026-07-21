@@ -203,7 +203,7 @@ export function Layout({ children, title, onBack }: LayoutProps): JSX.Element {
             onClick={() => alert("You don't have permission for this action. Contact the setup owner to request access.")}
           >
             <Plus size={22} />
-            <Lock size={14} className="bottom-nav-add-lock" aria-hidden />
+            <Lock size={24} className="bottom-nav-add-lock" aria-hidden />
             <span>Add</span>
           </button>
         ) : (
