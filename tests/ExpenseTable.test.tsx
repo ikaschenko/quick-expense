@@ -138,6 +138,39 @@ describe("ExpenseTable — isViewOnly", () => {
   });
 });
 
+describe("ExpenseCard — expand/collapse vs. text selection", () => {
+  const record = makeRecord({ rowNumber: 1 });
+
+  beforeEach(() => {
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+  });
+
+  it("toggles expand/collapse on a plain click with no active selection", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<ExpenseTable records={[record]} sheetCurrencies={[]} />);
+    const card = container.querySelector(".expense-card") as HTMLElement;
+
+    expect(screen.queryByText("Comment:")).toBeNull();
+    await user.click(card);
+    expect(screen.getByText("Comment:")).toBeTruthy();
+    await user.click(card);
+    expect(screen.queryByText("Comment:")).toBeNull();
+  });
+
+  it("does not collapse the card when the click follows a text selection", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<ExpenseTable records={[record]} sheetCurrencies={[]} />);
+    const card = container.querySelector(".expense-card") as HTMLElement;
+
+    await user.click(card);
+    expect(screen.getByText("Comment:")).toBeTruthy();
+
+    vi.spyOn(window, "getSelection").mockReturnValue({ toString: () => "Lunch" } as Selection);
+    await user.click(card);
+    expect(screen.getByText("Comment:")).toBeTruthy();
+  });
+});
+
 describe("ExpenseTable — per-day total badges", () => {
   const record = makeRecord({ Date: "2026-06-09", rowNumber: 1 });
 

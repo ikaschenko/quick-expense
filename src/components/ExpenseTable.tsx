@@ -162,7 +162,7 @@ export function ExpenseCard({ record, sheetCurrencies, customColumns, isLastReco
     <div
       ref={cardRef}
       className={`expense-card${cardHasDetails ? " expense-card--interactive" : ""}`}
-      onClick={() => { if (cardHasDetails) setIsOpen((prev) => !prev); }}
+      onClick={() => { if (cardHasDetails && !window.getSelection()?.toString()) setIsOpen((prev) => !prev); }}
     >
       <div className="expense-card-icon">
         <Icon size={18} />
