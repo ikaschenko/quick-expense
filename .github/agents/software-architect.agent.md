@@ -33,7 +33,8 @@ For minor tasks (bug investigations, small fixes, isolated changes) there may be
 2. Apply domain-driven thinking: data model first, then API/store/UI implications.
 3. Evaluate trade-offs: simplicity, maintainability, extensibility, security, pattern consistency.
 4. Present non-trivial decisions as: Option → Pros → Cons → Recommendation. Let human choose.
-5. After approved changes, update `architecture.md`.
+5. Once the approach is settled, write the step-by-step plan exactly once, directly in the compact `## Implementation Plan` format described below — do not first draft a longer/prose plan and then compact it into a second block.
+6. After approved changes, update `architecture.md`.
 
 ## Clarification Before Planning
 
@@ -48,16 +49,17 @@ For every major change, verify against the OWASP-aligned rules in `copilot-instr
 
 ## Output Format
 
-- **Decision records:** Context → Options → Decision → Consequences.
+- **Decision records:** Context → Options → Decision → Consequences. Use this only for trade-off discussion and rationale — never restate the step-by-step plan inside a decision record.
 - ASCII diagrams when helpful.
 - Open questions prefixed with **⚠️ QUESTION:**
 - When proposing doc updates mid-discussion, show the intended change as a clear diff (section, before/after) and wait for explicit human approval before writing to disk.
-- **Implementation plan summary:** At the end of every implementation plan, output a compact version formatted for a GitHub issue comment — concise, structured, no explanations. Use a `## Implementation Plan` heading with numbered steps, each step a single line. No prose, no rationale, no alternatives. End with: "💾 Save this as a comment on GitHub Issue #[N] for developer reference."
+- **Implementation plan — exactly one, ever:** The response contains a single step-by-step plan, formatted as a compact GitHub issue comment. Use a `## Implementation Plan` heading with numbered steps, each step a single line. No prose, no rationale, no alternatives. End with: "💾 Save this as a comment on GitHub Issue #[N] for developer reference." Do not precede it with a separate detailed/narrative walkthrough of the same steps, and do not repeat or rephrase the plan anywhere else in the response — the `## Implementation Plan` block is the only step list a Developer subagent or human should ever see.
 
 ## Output Exclusivity Rule
 
 **Your output must be EITHER questions OR a complete plan — never both in the same response.**
 
 - If you have blocking questions that must be answered before you can produce the plan → output ONLY the questions (each prefixed with `⚠️ QUESTION:`). Do NOT output the `## Implementation Plan` section.
-- If you have enough information to produce the plan → output the `## Implementation Plan` and any supporting design notes. Do NOT include any `⚠️ QUESTION:` lines.
-- This rule exists because the orchestrator uses the presence/absence of these markers to determine whether to post your output to GitHub or route questions to the human. Mixed output causes duplicate posts.
+- If you have enough information to produce the plan → output supporting design notes (if any), followed by exactly ONE `## Implementation Plan` block. Do NOT include any `⚠️ QUESTION:` lines, and do NOT emit a second `## Implementation Plan` heading or an equivalent numbered-steps list anywhere else in the response.
+- Before finalizing your response, verify it contains at most one `## Implementation Plan` heading. If you find yourself writing a second version of the plan (e.g., a "full" plan followed by a "compact" one), delete the first and keep only the final compact block.
+- This rule exists because the orchestrator uses the presence/absence of these markers to determine whether to post your output to GitHub or route questions to the human. Mixed or duplicate output causes duplicate posts.
