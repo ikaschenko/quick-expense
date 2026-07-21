@@ -525,11 +525,13 @@ function detectDateOrderIssue(dateValues, parser) {
  * Binary-search the date column of the Expenses sheet to find the first spreadsheet row
  * whose date is >= (today − recentMonths months).
  *
- * Returns { startRow, totalRows, isSplit, dateOrderIssueRows }:
+ * Returns { startRow, totalRows, isSplit, dateOrderIssueRows, dateValues }:
  *   startRow            — 1-based spreadsheet row of the first "recent" record (≥ 2).
  *   totalRows           — total data rows (excluding header).
  *   isSplit             — true when a meaningful split was found (enough historical rows to justify it).
  *   dateOrderIssueRows  — 1-based sheet row numbers (up to 3) of out-of-order entries; empty when ordered.
+ *   dateValues          — column A data values (index i = spreadsheet row i + 2); pass through to
+ *                         loadExpenses() so it doesn't have to re-fetch column A.
  *
  * Falls back to { startRow: 2, totalRows, isSplit: false, dateOrderIssueRows: [] } when:
  *   - All data is within the recent window (no historical rows).
@@ -541,11 +543,11 @@ export async function findExpenseStartRow(accessToken, spreadsheetId, recentMont
   const dateRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A:A`);
   const totalRows = Math.max(0, dateRows.length - 1); // exclude header
 
-  if (totalRows === 0) return { startRow: 2, totalRows: 0, isSplit: false, dateOrderIssueRows: [] };
+  if (totalRows === 0) return { startRow: 2, totalRows: 0, isSplit: false, dateOrderIssueRows: [], dateValues: [] };
 
   const dateValues = dateRows.slice(1).map((r) => r[0] ?? "");
   const parser = buildDateParser(dateValues.filter(Boolean).slice(0, 30));
-  if (!parser) return { startRow: 2, totalRows, isSplit: false, dateOrderIssueRows: [] };
+  if (!parser) return { startRow: 2, totalRows, isSplit: false, dateOrderIssueRows: [], dateValues };
 
   const dateOrderIssueRows = detectDateOrderIssue(dateValues, parser);
 
@@ -568,10 +570,10 @@ export async function findExpenseStartRow(accessToken, spreadsheetId, recentMont
   }
 
   const historicalRows = lo;
-  if (historicalRows < MIN_HISTORY_ROWS) return { startRow: 2, totalRows, isSplit: false, dateOrderIssueRows };
+  if (historicalRows < MIN_HISTORY_ROWS) return { startRow: 2, totalRows, isSplit: false, dateOrderIssueRows, dateValues };
 
   // startRow: lo is 0-based index in dateValues; spreadsheet row = lo + 2 (header=1, data starts at 2)
-  return { startRow: lo + 2, totalRows, isSplit: true, dateOrderIssueRows };
+  return { startRow: lo + 2, totalRows, isSplit: true, dateOrderIssueRows, dateValues };
 }
 
 /**
@@ -1287,7 +1289,7 @@ function columnLetter(n) {
 }
 
 export async function loadExpenses(accessToken, spreadsheetId, mapping = null, options = {}) {
-  const { startRow = null, endRow = null, precomputedReport = null } = options;
+  const { startRow = null, endRow = null, precomputedReport = null, dateValues = null } = options;
   const report = precomputedReport ?? await validateSpreadsheet(accessToken, spreadsheetId, mapping);
   const { sheetCurrencies, customColumns } = report;
   const headers = buildExpenseHeaders(sheetCurrencies, customColumns);
@@ -1297,7 +1299,16 @@ export async function loadExpenses(accessToken, spreadsheetId, mapping = null, o
   let actualHeaderRow;
   let rowOffset;
 
-  if (startRow === null) {
+  if (dateValues) {
+    // Caller already fetched column A (e.g. findExpenseStartRow) — fetch B: onward and
+    // splice the cached dates back in, instead of re-reading column A from the sheet.
+    const fetchFromRow = startRow ?? 2;
+    const rangeEnd = endRow !== null ? `${endCol}${endRow}` : endCol;
+    const dataRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!B${fetchFromRow}:${rangeEnd}`);
+    rowOffset = fetchFromRow - 2;
+    rows = dataRows.map((row, i) => [dateValues[rowOffset + i] ?? "", ...row]);
+    actualHeaderRow = report.headerRow;
+  } else if (startRow === null) {
     // Default path (full load, backward-compatible): fetch from A1 including header row
     rows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A:${endCol}`);
     actualHeaderRow = rows[0];

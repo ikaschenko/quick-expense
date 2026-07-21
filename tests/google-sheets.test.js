@@ -300,6 +300,29 @@ describe("loadExpenses", () => {
     expect(result.records[0].spentBy).toBe("ivan@x.com");
     expect(result.records[0].Comment).toBe("samsung galaxy");
   });
+
+  it("skips re-fetching column A and reuses the given dateValues when provided", async () => {
+    const header = ["Date", "USD", "Category", "Spent By", "Comment"];
+    const report = { headerRow: header, sheetCurrencies: [], customColumns: [] };
+    const dateValues = ["2026-01-01", "2026-01-02"];
+    // Only the B:endCol data rows are fetched — no header, no column A.
+    setupFetchSequence([
+      valuesResponse([
+        ["25", "Food", "ivan@x.com", "lunch"],
+        ["10", "Travel", "ivan@x.com", "bus"],
+      ]),
+    ]);
+
+    const result = await loadExpenses(TOKEN, SHEET_ID, null, { precomputedReport: report, dateValues });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch.mock.calls[0][0]).toContain(encodeURIComponent(`${SHEET_NAME}!B2:E`));
+    expect(result.records).toHaveLength(2);
+    expect(result.records[0].Date).toBe("2026-01-01");
+    expect(result.records[0].USD).toBe("25");
+    expect(result.records[1].Date).toBe("2026-01-02");
+    expect(result.records[1].Comment).toBe("bus");
+  });
 });
 
 describe("isStructuredHeader", () => {
@@ -1399,7 +1422,7 @@ describe("findExpenseStartRow", () => {
   it("returns isSplit:false for an empty sheet", async () => {
     setupFetchSequence([jsonResponse({ values: [["Date"]] })]);
     const result = await findExpenseStartRow(TOKEN, SHEET_ID, 24);
-    expect(result).toEqual({ startRow: 2, totalRows: 0, isSplit: false, dateOrderIssueRows: [] });
+    expect(result).toEqual({ startRow: 2, totalRows: 0, isSplit: false, dateOrderIssueRows: [], dateValues: [] });
   });
 
   it("returns isSplit:false when all records are within the recent window", async () => {

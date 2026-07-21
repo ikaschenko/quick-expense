@@ -708,11 +708,15 @@ app.get("/api/expenses", requireAuthenticatedUser, async (req, res) => {
     const accessToken = await getAuthorizedAccessToken(req.configRecord);
     const { mode, mapping: configMapping = null, metadata } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
     const mapping = mode === "config-driven" ? configMapping : null;
-    const report = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping, metadata);
-    const { startRow, totalRows, isSplit, dateOrderIssueRows } = await findExpenseStartRow(accessToken, req.configRecord.spreadsheetId, RECENT_MONTHS);
+    // validateSpreadsheet and findExpenseStartRow don't depend on each other's result — run concurrently.
+    const [report, { startRow, totalRows, isSplit, dateOrderIssueRows, dateValues }] = await Promise.all([
+      validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping, metadata),
+      findExpenseStartRow(accessToken, req.configRecord.spreadsheetId, RECENT_MONTHS),
+    ]);
     const snapshot = await loadExpenses(accessToken, req.configRecord.spreadsheetId, mapping, {
       startRow: isSplit ? startRow : null,
       precomputedReport: report,
+      dateValues,
     });
     res.json({
       ...snapshot,
