@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { defineConfig } from "vitest/config";
 
 function loadDotenv(): Record<string, string> {
@@ -21,6 +21,7 @@ function loadDotenv(): Record<string, string> {
 const dotenvVars = loadDotenv();
 
 export default defineConfig({
+  root: realpathSync.native(process.cwd()),
   test: {
     globals: true,
     pool: "forks",

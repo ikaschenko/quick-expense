@@ -1,15 +1,11 @@
 // @vitest-environment node
 const mockQuery = vi.fn();
-const mockConnect = vi.fn();
-const mockClient = {
-  query: vi.fn(),
-  release: vi.fn(),
-};
 
-vi.mock("../server/db.js", () => ({
+vi.mock("pg", () => ({
   default: {
-    query: (...args) => mockQuery(...args),
-    connect: () => mockConnect(),
+    Pool: class MockPool {
+      query = (...args) => mockQuery(...args);
+    },
   },
 }));
 
@@ -35,10 +31,6 @@ beforeAll(async () => {
 
 beforeEach(() => {
   mockQuery.mockReset();
-  mockConnect.mockReset();
-  mockClient.query.mockReset();
-  mockClient.release.mockReset();
-  mockConnect.mockResolvedValue(mockClient);
 });
 
 describe("getUserRecord", () => {

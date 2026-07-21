@@ -1,7 +1,9 @@
+import { realpathSync } from "node:fs";
 import { configDefaults, defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
+  root: realpathSync.native(process.cwd()),
   plugins: [react()],
   server: {
     proxy: {
@@ -15,6 +17,7 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     pool: "forks",
+    server: { deps: { inline: ["pg"] } },
     exclude: [...configDefaults.exclude, "tests/*.integration.test.*"],
     coverage: {
       provider: "v8",

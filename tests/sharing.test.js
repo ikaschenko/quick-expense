@@ -1,9 +1,11 @@
 // @vitest-environment node
 const mockQuery = vi.fn();
 
-vi.mock("../server/db.js", () => ({
+vi.mock("pg", () => ({
   default: {
-    query: (...args) => mockQuery(...args),
+    Pool: class MockPool {
+      query = (...args) => mockQuery(...args);
+    },
   },
 }));
 
