@@ -73,19 +73,21 @@ function DeviationLine({ deviation }: DeviationProps): JSX.Element {
       <span className={isGrowing ? "yoy-up" : "yoy-down"}>
         {arrow} {sign}{deviation.pctChange}% ({sign}${Math.round(deviation.absChange)})
       </span>{" "}
-      <button
-        type="button"
-        className="prior-period-label"
-        onClick={() => setShowTooltip((v) => !v)}
-        aria-label={`Show ${deviation.priorLabel} total`}
-      >
-        vs {deviation.priorLabel}
-      </button>
-      {showTooltip && (
-        <span className="prior-tooltip" role="tooltip">
-          <FormattedAmount prefix="$" value={deviation.priorTotal} />
-        </span>
-      )}
+      <span className="prior-period-wrapper">
+        <button
+          type="button"
+          className="prior-period-label"
+          onClick={() => setShowTooltip((v) => !v)}
+          aria-label={`Show ${deviation.priorLabel} total`}
+        >
+          vs {deviation.priorLabel}
+        </button>
+        {showTooltip && (
+          <span className="prior-tooltip" role="tooltip">
+            <FormattedAmount prefix="$" value={deviation.priorTotal} />
+          </span>
+        )}
+      </span>
     </p>
   );
 }
