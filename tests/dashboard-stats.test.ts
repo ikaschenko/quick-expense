@@ -356,6 +356,71 @@ describe("getYtdForecast", () => {
   });
 });
 
+// ─── getYtdForecast deviation ─────────────────────────────────────────────────
+
+describe("getYtdForecast deviation", () => {
+  it("compares the forecast to the prior full calendar year's actual total", () => {
+    const records = [
+      makeRecord("2025-01-01", "500"),
+      makeRecord("2025-06-15", "500"),
+      makeRecord("2026-01-01", "100"),
+      makeRecord("2026-01-02", "100"),
+      makeRecord("2026-01-03", "100"),
+    ];
+    const forecast = getYtdForecast(records, "2026-06-09", iso);
+    expect(forecast.deviation).not.toBeNull();
+    expect(forecast.deviation!.priorLabel).toBe("2025");
+    expect(forecast.deviation!.priorTotal).toBeCloseTo(1000);
+  });
+
+  it("returns a null deviation when the prior year has no expense data", () => {
+    const records = [
+      makeRecord("2026-01-01", "100"),
+      makeRecord("2026-01-02", "100"),
+      makeRecord("2026-01-03", "100"),
+    ];
+    const forecast = getYtdForecast(records, "2026-06-09", iso);
+    expect(forecast.amountUsd).not.toBeNull();
+    expect(forecast.deviation).toBeNull();
+  });
+
+  it("returns a null deviation when the forecast itself is not computable", () => {
+    const records = [makeRecord("2026-01-01", "100"), makeRecord("2025-01-01", "100")];
+    const forecast = getYtdForecast(records, "2026-06-09", iso);
+    expect(forecast.amountUsd).toBeNull();
+    expect(forecast.deviation).toBeNull();
+  });
+
+  it("treats an exactly-equal forecast and prior-year total as a zero-change 'up' deviation", () => {
+    // buildDeviation's `up: absChange >= 0` convention treats a tie as "up" (red),
+    // matching the existing app-wide behavior for other cards.
+    const currentYearRecords = [
+      makeRecord("2026-01-01", "100"),
+      makeRecord("2026-01-02", "100"),
+      makeRecord("2026-01-03", "100"),
+    ];
+    const { amountUsd } = getYtdForecast(currentYearRecords, "2026-06-09", iso);
+    const records = [...currentYearRecords, makeRecord("2025-06-15", String(amountUsd))];
+    const forecast = getYtdForecast(records, "2026-06-09", iso);
+    expect(forecast.deviation).not.toBeNull();
+    expect(forecast.deviation!.absChange).toBeCloseTo(0);
+    expect(forecast.deviation!.up).toBe(true);
+  });
+
+  it("marks the deviation 'up' (spend growing) for a large forecast far above the prior year total", () => {
+    const records = [
+      makeRecord("2025-01-01", "1000"),
+      makeRecord("2026-01-01", "100000"),
+      makeRecord("2026-01-02", "100000"),
+      makeRecord("2026-01-03", "100000"),
+    ];
+    const forecast = getYtdForecast(records, "2026-06-09", iso);
+    expect(forecast.deviation).not.toBeNull();
+    expect(forecast.deviation!.up).toBe(true);
+    expect(forecast.deviation!.priorTotal).toBeCloseTo(1000);
+  });
+});
+
 // ─── getMtdDailyAmounts ───────────────────────────────────────────────────────
 
 describe("getMtdDailyAmounts", () => {

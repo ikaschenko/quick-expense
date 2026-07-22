@@ -511,7 +511,7 @@ Frontend services in `src/services/` are thin wrappers around `fetch`:
 - **`googleSheets.ts`** — config CRUD, expense load/append, FX rate backup, column visibility toggle.
 - **`googlePicker.ts`** — loads Google Picker script, opens file picker dialog.
 - **`currency.ts`** — manual FX rate parsing and USD conversion logic.
-- **`metricsCache.ts`** — `localStorage` cache for Home dashboard metrics (`qe_metrics_{email}`). Stores pre-computed `TodayStats`, `PeriodStats` (MTD/YTD/Rolling12M), chart daily amounts, and `sheetLastModifiedTime`. Automatically expires at midnight (date rollover on `load()`), cleared on sign-out and config clear.
+- **`metricsCache.ts`** — `localStorage` cache for Home dashboard metrics (`qe_metrics_{email}`). Stores pre-computed `TodayStats`, `PeriodStats` (MTD/YTD/Rolling12M), chart daily amounts, `sheetLastModifiedTime`, and a `ytdForecast` (now including a `deviation` field comparing the forecast to last year's actual full-year total, same shape as the other `PeriodStats.deviation` fields). Automatically expires at midnight (date rollover on `load()`), cleared on sign-out and config clear; entries also carry a `schemaVersion` (currently `6`) and are discarded as a cache miss on mismatch, safely invalidating stale shapes without a migration.
 - **`sharingApi.ts`** — `/api/sharing/*` calls: list/add/update/remove shared users (owner); guest reset.
 
 ### 8.4 Key Front-End Conventions

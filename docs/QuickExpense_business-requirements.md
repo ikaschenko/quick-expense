@@ -312,12 +312,17 @@ Dashboard data is loaded via the same mechanism as History (shared in-memory dat
 - **Year-over-year deviation** (shown only when prior-year data exists in the dataset for the same calendar-month period): `▲ +X% · +$Y vs Jun '25` or `▼ -X%...`. Omitted entirely when no prior-year data is present.
 - **Mini area chart:** daily USD totals for each day in the current month (past days filled, future days empty). Gray vertical lines mark week boundaries (each Monday). Tapping a data point shows a tooltip `{date} · ${amount}`.
 
-### 2.7.4 YEAR SO FAR (YTD) card
+### 2.7.4 YEARLY VIEW widget (issue #81)
 
-- Header: **"{YEAR} SO FAR"** (e.g. "2026 SO FAR")
-- Right side: **"Details"** link (inline, not navigating) — tapping shows *"This feature is in development — coming soon."* inline; tapping anywhere else dismisses it
-- Body: USD total for Jan 1 – today of the current year
-- **Year-over-year deviation:** same logic as MTD, scaled to year-to-date comparison
+- Header: **"YEARLY VIEW"** with a single info icon (see 2.7.8 for tooltip behavior)
+- Body: two columns, stacking vertically below 480px viewport width
+- **Left column — "{YEAR} SO FAR"** (e.g. "2026 SO FAR"):
+  - USD total for Jan 1 – today of the current year
+  - **Year-over-year deviation:** same logic as MTD, scaled to year-to-date comparison
+- **Right column — "Full year FORECAST"**:
+  - Projected full-year USD total, based on the recent daily spending rate
+  - Shows *"Not enough data"* instead of an amount when the forecast cannot be computed (insufficient recent baseline data)
+  - **Year-over-year deviation:** compares the forecast to last year's actual full-year total; shown as muted *"No data"* when the prior year has no recorded expenses at all
 
 ### 2.7.5 Aggregation rules
 
@@ -353,12 +358,12 @@ To eliminate the 5–8 second reload on repeated Home visits, the dashboard pers
 
 ### 2.7.8 Widget info tooltips (issue #63)
 
-Each of the 4 dashboard metric cards (TODAY, MTD, YTD, ROLLING 12M) shows a small **info icon (ⓘ)** next to its header. Tapping the icon toggles an inline explanatory tooltip below the header; tapping again (or re-tapping the same icon) hides it. Each widget's tooltip state is independent — opening one does not close the others. All tooltips start collapsed. The icon is keyboard-accessible (button element, `aria-expanded` reflects open state).
+Each of the 4 dashboard metric cards (TODAY, MTD, YEARLY VIEW, ROLLING 12M) shows a small **info icon (ⓘ)** next to its header. Tapping the icon toggles an inline explanatory tooltip below the header; tapping again (or re-tapping the same icon) hides it. Each widget's tooltip state is independent — opening one does not close the others. All tooltips start collapsed. The icon is keyboard-accessible (button element, `aria-expanded` reflects open state).
 
 Tooltip copy per widget:
 - **TODAY:** "Total amount of expenses for today."
 - **MTD:** "Total amount of expenses for the ongoing month, compared to the same date range for the previous month (shown only when comparable prior-month data exists)."
-- **YTD:** "Total amount of expenses for the ongoing year, compared to the same date range for the previous year (if enough data). The forecast projects your full-year total from your recent daily spending rate." (This also covers the YTD forecast line — there is no separate help icon for it.)
+- **YEARLY VIEW:** "Total amount of expenses for the ongoing year, compared to the same date range for the previous year (if enough data). The forecast projects your full-year total from your recent daily spending rate." (This also covers the YTD forecast line — there is no separate help icon for it.)
 - **ROLLING 12M:** "Total amount of expenses over the trailing 12 months (up to yesterday), compared to the preceding 12-month period (shown when that data exists)."
 
 ## 2.8 Share Setup with Another User

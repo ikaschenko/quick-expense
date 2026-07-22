@@ -2,7 +2,7 @@ import { type TodayStats, type PeriodStats, type YtdForecast } from "../utils/da
 import { readJsonStorage, writeJsonStorage } from "../utils/storage";
 import { getTodayLocalDate } from "../utils/date";
 
-const CURRENT_SCHEMA_VERSION = 5;
+const CURRENT_SCHEMA_VERSION = 6;
 
 export interface MetricsCacheEntry {
   schemaVersion?: number;

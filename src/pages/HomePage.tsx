@@ -18,7 +18,6 @@ import {
   getRolling12mStats,
   getMtdDailyAmounts,
   getMtdWeekBoundaryPositions,
-  type YtdForecast,
 } from "../utils/dashboardStats";
 import { metricsCache, type MetricsCacheEntry } from "../services/metricsCache";
 import { googleSheetsService } from "../services/googleSheets";
@@ -87,18 +86,6 @@ function DeviationLine({ deviation }: DeviationProps): JSX.Element {
           <FormattedAmount prefix="$" value={deviation.priorTotal} />
         </span>
       )}
-    </p>
-  );
-}
-
-interface ForecastLineProps {
-  forecast: YtdForecast;
-}
-
-function ForecastLine({ forecast }: ForecastLineProps): JSX.Element {
-  return (
-    <p className="home-metric-forecast">
-      Forecasted full year: {forecast.amountUsd === null ? "Not enough data" : `$${Math.round(forecast.amountUsd)}`}
     </p>
   );
 }
@@ -345,49 +332,68 @@ export function HomePage(): JSX.Element {
               )}
             </div>
 
-            {/* YTD + ROLLING 12M */}
-            <div className="home-metric-row">
-              <div className="home-metric-card">
-                <div className="home-metric-header">
-                  <span className="home-metric-title">
-                    {year} SO FAR
-                    <WidgetHelpButton label={`${year} SO FAR`} open={ytdHelpOpen} onToggle={() => setYtdHelpOpen((v) => !v)} />
-                  </span>
-                </div>
-                {ytdHelpOpen && <p className="section-help-popover">{YTD_HELP_TEXT}</p>}
-                {displayYtdStats.count === 0 ? (
-                  <p className="home-metric-empty">No expense entries</p>
-                ) : (
-                  <>
-                    <p className="home-metric-amount"><FormattedAmount prefix="$" value={displayYtdStats.usdTotal} /></p>
-                    {displayYtdStats.deviation && <DeviationLine deviation={displayYtdStats.deviation} />}
-                    <ForecastLine forecast={displayYtdForecast} />
-                  </>
-                )}
+            {/* YEARLY VIEW (merged YTD + full-year forecast) */}
+            <div className="home-metric-card">
+              <div className="home-metric-header">
+                <span className="home-metric-title">
+                  YEARLY VIEW
+                  <WidgetHelpButton label="YEARLY VIEW" open={ytdHelpOpen} onToggle={() => setYtdHelpOpen((v) => !v)} />
+                </span>
               </div>
+              {ytdHelpOpen && <p className="section-help-popover">{YTD_HELP_TEXT}</p>}
+              <div className="home-yearly-columns">
+                <div className="home-yearly-col">
+                  <p className="home-yearly-label">{year} SO FAR</p>
+                  {displayYtdStats.count === 0 ? (
+                    <p className="home-metric-empty">No expense entries</p>
+                  ) : (
+                    <>
+                      <p className="home-metric-amount"><FormattedAmount prefix="$" value={displayYtdStats.usdTotal} /></p>
+                      {displayYtdStats.deviation && <DeviationLine deviation={displayYtdStats.deviation} />}
+                    </>
+                  )}
+                </div>
+                <div className="home-yearly-col">
+                  <p className="home-yearly-label">Full year FORECAST</p>
+                  {displayYtdForecast.amountUsd === null ? (
+                    <p className="home-metric-empty">Not enough data</p>
+                  ) : (
+                    <>
+                      <p className="home-metric-amount">
+                        <FormattedAmount prefix="$" value={displayYtdForecast.amountUsd} />
+                      </p>
+                      {displayYtdForecast.deviation ? (
+                        <DeviationLine deviation={displayYtdForecast.deviation} />
+                      ) : (
+                        <p className="home-metric-forecast">No data</p>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
 
-              {/* ROLLING 12M */}
-              <div className="home-metric-card">
-                <div className="home-metric-header">
-                  <span className="home-metric-title">
-                    ROLLING 12M EXPENSES
-                    <WidgetHelpButton
-                      label="ROLLING 12M EXPENSES"
-                      open={rolling12mHelpOpen}
-                      onToggle={() => setRolling12mHelpOpen((v) => !v)}
-                    />
-                  </span>
-                </div>
-                {rolling12mHelpOpen && <p className="section-help-popover">{ROLLING_12M_HELP_TEXT}</p>}
-                {displayRolling12mStats.count === 0 ? (
-                  <p className="home-metric-empty">No expense entries</p>
-                ) : (
-                  <>
-                    <p className="home-metric-amount"><FormattedAmount prefix="$" value={displayRolling12mStats.usdTotal} /></p>
-                    {displayRolling12mStats.deviation && <DeviationLine deviation={displayRolling12mStats.deviation} />}
-                  </>
-                )}
+            {/* ROLLING 12M */}
+            <div className="home-metric-card">
+              <div className="home-metric-header">
+                <span className="home-metric-title">
+                  ROLLING 12M EXPENSES
+                  <WidgetHelpButton
+                    label="ROLLING 12M EXPENSES"
+                    open={rolling12mHelpOpen}
+                    onToggle={() => setRolling12mHelpOpen((v) => !v)}
+                  />
+                </span>
               </div>
+              {rolling12mHelpOpen && <p className="section-help-popover">{ROLLING_12M_HELP_TEXT}</p>}
+              {displayRolling12mStats.count === 0 ? (
+                <p className="home-metric-empty">No expense entries</p>
+              ) : (
+                <>
+                  <p className="home-metric-amount"><FormattedAmount prefix="$" value={displayRolling12mStats.usdTotal} /></p>
+                  {displayRolling12mStats.deviation && <DeviationLine deviation={displayRolling12mStats.deviation} />}
+                </>
+              )}
             </div>
           </div>
         ) : null}

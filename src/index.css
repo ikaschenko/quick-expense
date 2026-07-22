@@ -680,6 +680,35 @@ button { cursor: pointer; }
   }
 }
 
+.home-yearly-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.home-yearly-col {
+  /* Basis kept well below half of the narrowest non-mobile card width
+     (~416px) so the two columns never wrap side-by-side into a stacked
+     layout — only the <=480px media query below does that intentionally. */
+  flex: 1 1 160px;
+  min-width: 160px;
+}
+
+@media (max-width: 480px) {
+  .home-yearly-columns {
+    flex-direction: column;
+  }
+}
+
+.home-yearly-label {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  margin: 0 0 var(--space-1);
+}
+
 .home-metric-card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);

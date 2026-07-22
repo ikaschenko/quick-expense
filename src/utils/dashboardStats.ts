@@ -105,6 +105,7 @@ export function getYtdStats(
 
 export interface YtdForecast {
   amountUsd: number | null;
+  deviation: PeriodStats["deviation"];
 }
 
 /**
@@ -120,6 +121,9 @@ export interface YtdForecast {
  *
  * Returns `amountUsd: null` ("not enough data") when the baseline window contains
  * fewer than 3 distinct calendar days with at least one recorded expense.
+ *
+ * `deviation` compares the forecast to the prior full calendar year's actual USD
+ * total (null when the forecast itself is null, or when the prior year has no data).
  */
 export function getYtdForecast(
   records: ExpenseRecord[],
@@ -162,7 +166,7 @@ export function getYtdForecast(
   const distinctDays = new Set(
     baselineRecords.map((r) => toIso(r.Date)).filter((iso): iso is string => iso !== null),
   ).size;
-  if (distinctDays < 3) return { amountUsd: null };
+  if (distinctDays < 3) return { amountUsd: null, deviation: null };
 
   const msPerDay = 24 * 60 * 60 * 1000;
   const daysInBaselineWindow = Math.round((windowEndDate.getTime() - baselineStartDate.getTime()) / msPerDay) + 1;
@@ -172,7 +176,11 @@ export function getYtdForecast(
   const baselineTotalUsd = sumUsd(baselineRecords);
   const amountUsd = (baselineTotalUsd * totalDaysInProjectionPeriod) / daysInBaselineWindow;
 
-  return { amountUsd };
+  const priorYear = year - 1;
+  const priorYearRecords = filterPeriod(records, `${priorYear}-01-01`, `${priorYear}-12-31`, toIso);
+  const deviation = buildDeviation(amountUsd, sumUsd(priorYearRecords), priorYearRecords.length, String(priorYear));
+
+  return { amountUsd, deviation };
 }
 
 /** Rolling 12-month card stats. Window: [same calendar date 1 year ago, yesterday]. */
