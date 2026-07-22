@@ -136,8 +136,7 @@ describe("HomePage — widget info tooltips", () => {
       ),
     ).toBeTruthy();
 
-    const year = new Date().getFullYear();
-    await user.click(screen.getByRole("button", { name: `Show info about ${year} SO FAR` }));
+    await user.click(screen.getByRole("button", { name: "Show info about YEARLY VIEW" }));
     expect(
       screen.getByText(
         "Total amount of expenses for the ongoing year, compared to the same date range for the previous year (if enough data). The forecast projects your full-year total from your recent daily spending rate.",
@@ -229,7 +228,7 @@ describe("HomePage — widget info tooltips", () => {
     expect(title?.firstChild?.textContent?.trim()).toBe("ROLLING 12M EXPENSES");
   });
 
-  it("does not render a separate help icon for the YTD forecast line — it is folded into the YTD widget tooltip", () => {
+  it("does not render a separate help icon for the YTD forecast column — it is folded into the merged YEARLY VIEW widget tooltip", () => {
     const today = formatLocalDate(new Date());
     mockDataset({
       snapshot: {
@@ -242,13 +241,13 @@ describe("HomePage — widget info tooltips", () => {
     });
     const { container } = renderHome();
 
-    // YTD now has data, so ForecastLine renders alongside the amount.
-    expect(screen.getByText(/Forecasted full year/)).toBeTruthy();
+    // YTD now has data, so the Full year FORECAST column renders alongside the YTD amount.
+    expect(screen.getByText("Full year FORECAST")).toBeTruthy();
 
-    const ytdCard = Array.from(container.querySelectorAll(".home-metric-card")).find((el) =>
-      el.textContent?.includes("SO FAR") && el.textContent?.includes("Forecasted full year"),
+    const yearlyCard = Array.from(container.querySelectorAll(".home-metric-card")).find((el) =>
+      el.textContent?.includes("YEARLY VIEW") && el.textContent?.includes("Full year FORECAST"),
     );
-    expect(ytdCard).toBeTruthy();
-    expect(ytdCard?.querySelectorAll(".section-help-btn")).toHaveLength(1);
+    expect(yearlyCard).toBeTruthy();
+    expect(yearlyCard?.querySelectorAll(".section-help-btn")).toHaveLength(1);
   });
 });

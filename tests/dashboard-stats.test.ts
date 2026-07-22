@@ -356,6 +356,42 @@ describe("getYtdForecast", () => {
   });
 });
 
+// ─── getYtdForecast deviation ─────────────────────────────────────────────────
+
+describe("getYtdForecast deviation", () => {
+  it("compares the forecast to the prior full calendar year's actual total", () => {
+    const records = [
+      makeRecord("2025-01-01", "500"),
+      makeRecord("2025-06-15", "500"),
+      makeRecord("2026-01-01", "100"),
+      makeRecord("2026-01-02", "100"),
+      makeRecord("2026-01-03", "100"),
+    ];
+    const forecast = getYtdForecast(records, "2026-06-09", iso);
+    expect(forecast.deviation).not.toBeNull();
+    expect(forecast.deviation!.priorLabel).toBe("2025");
+    expect(forecast.deviation!.priorTotal).toBeCloseTo(1000);
+  });
+
+  it("returns a null deviation when the prior year has no expense data", () => {
+    const records = [
+      makeRecord("2026-01-01", "100"),
+      makeRecord("2026-01-02", "100"),
+      makeRecord("2026-01-03", "100"),
+    ];
+    const forecast = getYtdForecast(records, "2026-06-09", iso);
+    expect(forecast.amountUsd).not.toBeNull();
+    expect(forecast.deviation).toBeNull();
+  });
+
+  it("returns a null deviation when the forecast itself is not computable", () => {
+    const records = [makeRecord("2026-01-01", "100"), makeRecord("2025-01-01", "100")];
+    const forecast = getYtdForecast(records, "2026-06-09", iso);
+    expect(forecast.amountUsd).toBeNull();
+    expect(forecast.deviation).toBeNull();
+  });
+});
+
 // ─── getMtdDailyAmounts ───────────────────────────────────────────────────────
 
 describe("getMtdDailyAmounts", () => {
