@@ -687,8 +687,11 @@ button { cursor: pointer; }
 }
 
 .home-yearly-col {
-  flex: 1 1 200px;
-  min-width: 200px;
+  /* Basis kept well below half of the narrowest non-mobile card width
+     (~416px) so the two columns never wrap side-by-side into a stacked
+     layout — only the <=480px media query below does that intentionally. */
+  flex: 1 1 160px;
+  min-width: 160px;
 }
 
 @media (max-width: 480px) {
