@@ -342,7 +342,7 @@ The badge is visible on all pages (rendered by `Layout`). The "Connected · {she
 
 To eliminate the 5–8 second reload on repeated Home visits, the dashboard persists pre-computed metrics in browser `localStorage` under the key `qe_metrics_{userEmail}`.
 
-**Cache content:** TODAY totals, MTD totals + YoY deviation + daily chart amounts, YTD totals + YoY deviation, Rolling 12M totals, week-boundary positions, `cacheDate` (YYYY-MM-DD), and `sheetLastModifiedTime` (ISO 8601 Drive timestamp, or `null`).
+**Cache content:** TODAY totals, MTD totals + YoY deviation + daily chart amounts, YTD totals + YoY deviation, full-year forecast + YoY deviation, Rolling 12M totals, week-boundary positions, `cacheDate` (YYYY-MM-DD), and `sheetLastModifiedTime` (ISO 8601 Drive timestamp, or `null`).
 
 **Cache invalidation rules:**
 - Invalidated at midnight — `cacheDate` ≠ today on next page load.
