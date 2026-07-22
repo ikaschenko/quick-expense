@@ -689,10 +689,13 @@ button { cursor: pointer; }
   gap: var(--space-4);
 }
 
-@media (max-width: 480px) {
+@container (max-width: 340px) {
   .home-yearly-columns {
-    /* Stack on narrow screens. Each column sizes to its own content
-       height here (no leftover flex-basis-as-height side effect). */
+    /* Stack only when the card itself is genuinely too narrow for 2
+       columns (not just because the device viewport is narrow — a
+       portrait phone's card is usually still wide enough). Each column
+       sizes to its own content height here (no leftover
+       flex-basis-as-height side effect). */
     grid-template-columns: 1fr;
   }
 }
@@ -712,6 +715,11 @@ button { cursor: pointer; }
   border-radius: var(--radius-lg);
   padding: var(--space-4);
   box-shadow: var(--shadow-sm);
+  /* Lets .home-yearly-columns below react to this card's own rendered
+     width instead of the device viewport width — portrait phones have
+     plenty of card width for 2 columns even though the viewport itself
+     is narrow. */
+  container-type: inline-size;
 }
 
 .home-metric-header {
