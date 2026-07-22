@@ -681,22 +681,19 @@ button { cursor: pointer; }
 }
 
 .home-yearly-columns {
-  display: flex;
-  flex-wrap: wrap;
+  /* Grid (not flex-wrap) guarantees the two columns always render
+     side-by-side regardless of exact pixel widths — no min-width vs.
+     available-width arithmetic to get wrong. */
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: var(--space-4);
-}
-
-.home-yearly-col {
-  /* Basis kept well below half of the narrowest non-mobile card width
-     (~416px) so the two columns never wrap side-by-side into a stacked
-     layout — only the <=480px media query below does that intentionally. */
-  flex: 1 1 160px;
-  min-width: 160px;
 }
 
 @media (max-width: 480px) {
   .home-yearly-columns {
-    flex-direction: column;
+    /* Stack on narrow screens. Each column sizes to its own content
+       height here (no leftover flex-basis-as-height side effect). */
+    grid-template-columns: 1fr;
   }
 }
 
