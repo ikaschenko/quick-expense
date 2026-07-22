@@ -250,4 +250,47 @@ describe("HomePage — widget info tooltips", () => {
     expect(yearlyCard).toBeTruthy();
     expect(yearlyCard?.querySelectorAll(".section-help-btn")).toHaveLength(1);
   });
+
+  it("shows a muted 'No data' line in the forecast slot when the forecast is computable but the prior year has no data", () => {
+    mockDataset({
+      snapshot: {
+        // 3 distinct current-year days → forecast is computable; no 2025 records at all.
+        records: [
+          makeRecord(1, "2026-01-01", "100"),
+          makeRecord(2, "2026-01-02", "100"),
+          makeRecord(3, "2026-01-03", "100"),
+        ],
+        distinctValues: { Category: [], spentBy: [], customFields: {} },
+        loadedAt: 0,
+        payloadBytes: 0,
+        loadPhase: "full",
+      },
+    });
+    const { container } = renderHome();
+
+    const yearlyCard = Array.from(container.querySelectorAll(".home-metric-card")).find((el) =>
+      el.textContent?.includes("YEARLY VIEW"),
+    );
+    expect(yearlyCard).toBeTruthy();
+    // Forecast amount still renders (not the "Not enough data" empty state)...
+    expect(yearlyCard?.querySelector(".home-metric-amount")).not.toBeNull();
+    // ...but the deviation slot falls back to a muted "No data" line instead of a DeviationLine.
+    const noDataLine = yearlyCard?.querySelector(".home-metric-forecast");
+    expect(noDataLine?.textContent).toBe("No data");
+    expect(yearlyCard?.querySelector(".prior-period-label")).toBeNull();
+  });
+
+  it("renders ROLLING 12M EXPENSES as its own standalone card, not sharing a row with YEARLY VIEW", () => {
+    mockDataset({});
+    const { container } = renderHome();
+
+    // The old two-column .home-metric-row wrapper is gone from the live dashboard
+    // (it only remains in the loading skeleton) — Rolling 12M is a direct sibling card.
+    expect(container.querySelector(".home-dashboard > .home-metric-row")).toBeNull();
+
+    const rollingCard = Array.from(container.querySelectorAll(".home-metric-card")).find((el) =>
+      el.textContent?.includes("ROLLING 12M EXPENSES"),
+    );
+    expect(rollingCard?.parentElement?.className).toBe("home-dashboard");
+  });
 });
