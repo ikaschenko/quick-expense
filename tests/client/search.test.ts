@@ -1,5 +1,5 @@
-import { filterExpenses } from "../src/utils/search";
-import { ExpenseRecord, SearchFilters } from "../src/types/expense";
+import { filterExpenses } from "../../app-web/utils/search";
+import { ExpenseRecord, SearchFilters } from "../../app-web/types/expense";
 
 const records: ExpenseRecord[] = [
   {

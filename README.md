@@ -34,7 +34,7 @@ If the `Expenses` sheet exists and the first row is empty, the app creates the h
 
 ## Prerequisites
 
-- Node.js 20 LTS (pinned for this repo)
+- Node.js 22 LTS (pinned for this repo)
 - npm
 - A Google Cloud OAuth client with Google Sheets access enabled
 - A Google account that can open and edit the target spreadsheet
@@ -88,7 +88,7 @@ npm install
 
 ## Database setup
 
-The backend requires a PostgreSQL database. For initial setup (installing PostgreSQL, creating the database, and running the schema) see [`db/database.md`](db/database.md).
+The backend requires a PostgreSQL database. For initial setup (installing PostgreSQL, creating the database, and running the schema) see [`app-server/db/database.md`](app-server/db/database.md).
 
 ## Run locally
 
@@ -155,13 +155,14 @@ Backend request logs are emitted as JSON lines to stdout. Each request includes:
 Keep integration test variables in `.env` (gitignored):
 
 ```env
-GOOGLE_SERVICE_ACCOUNT_KEY_FILE=config/service-account.json
+GOOGLE_SERVICE_ACCOUNT_KEY_FILE=app-server/config/service-account.json
+GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 TEST_SHEET_BLANK=your-sheet-id
 TEST_SHEET_INVALID=your-sheet-id
 TEST_SHEET_VALID=your-sheet-id
 ```
 
-- `config/service-account.json` must contain the downloaded service account JSON key and stay gitignored.
+- `app-server/config/service-account.json` **is committed to git**. Its `private_key` field holds the `${GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY}` placeholder instead of a real key — set the actual PEM value via this env var and never commit the real key.
 - All three spreadsheets must be shared with the service account `client_email` as `Editor`.
 
 ## Main user flows

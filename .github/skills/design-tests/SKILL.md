@@ -62,14 +62,14 @@ For each function, verify coverage of:
 ## Reference Patterns
 
 Existing tests to follow as examples:
-- `tests/validation.test.ts` — uses `describe`/`it`/`expect` with inline draft objects.
-- `tests/search.test.ts` — tests pure search/filter functions.
-- `tests/spreadsheet.test.ts` — tests spreadsheet utility functions.
+- `tests/client/validation.test.ts` — uses `describe`/`it`/`expect` with inline draft objects.
+- `tests/client/search.test.ts` — tests pure search/filter functions.
+- `tests/client/spreadsheet.test.ts` — tests spreadsheet utility functions.
 
 ## Rules
 
 - Use Vitest (`describe`/`it`/`expect`), not Jest. Test runner is configured in `vite.config.ts`.
-- Do not mock what you can call directly. Pure functions (`src/utils/`) should be tested with real inputs.
-- DO NOT modify production code in `src/` or `server/` — only test files.
+- Do not mock what you can call directly. Pure functions (`app-web/utils/`) should be tested with real inputs.
+- DO NOT modify production code in `app-web/` or `app-server/` — only test files.
 - Keep test data inline and minimal — only include fields relevant to the assertion.
 - Each test should test one behavior — avoid multi-assertion tests that obscure which behavior failed.

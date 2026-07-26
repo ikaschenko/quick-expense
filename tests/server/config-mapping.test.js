@@ -2,7 +2,7 @@
 let validateMappingRequestBody;
 
 beforeAll(async () => {
-  ({ validateMappingRequestBody } = await import("../server/validation.js"));
+  ({ validateMappingRequestBody } = await import("../../app-server/validation.js"));
 });
 
 describe("validateMappingRequestBody", () => {

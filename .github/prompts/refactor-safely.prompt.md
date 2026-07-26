@@ -5,7 +5,7 @@ mode: agent
 
 ## Parameters
 
-- **REFACTORING_GOAL**: `{{REFACTORING_GOAL}}` — what to refactor and why (e.g. "extract date formatting logic from AddExpensePage into src/utils/date.ts")
+- **REFACTORING_GOAL**: `{{REFACTORING_GOAL}}` — what to refactor and why (e.g. "extract date formatting logic from AddExpensePage into app-web/utils/date.ts")
 
 ---
 

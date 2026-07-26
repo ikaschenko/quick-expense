@@ -1,7 +1,7 @@
 // @vitest-environment node
 
 // Mock google-client.js to avoid reading service-account.json and making real OAuth calls.
-vi.mock("../server/google-client.js", () => ({
+vi.mock("../../app-server/google-client.js", () => ({
   getServiceAccountAccessToken: vi.fn().mockResolvedValue("sa-mock-token"),
   SERVICE_ACCOUNT_EMAIL: "integr-test@quickexpense-490222.iam.gserviceaccount.com",
 }));
@@ -54,7 +54,7 @@ beforeAll(async () => {
     moveExpenseRow,
     isStructuredHeader,
     writeExpenseValues,
-  } = await import("../server/google-sheets.js"));
+  } = await import("../../app-server/google-sheets.js"));
 });
 
 beforeEach(() => {

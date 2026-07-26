@@ -67,7 +67,7 @@ Every task is complete only when tests and docs are current. Apply these checks 
 
 **Tests (`tests/`)**
 - New exported function or module → add a `tests/<module>.test.(ts|js)` block covering happy path, nulls/empty, and boundaries.
-- New API endpoint → add tests in `tests/store.test.js` (store functions) and check route-level validation logic.
+- New API endpoint → add tests in `tests/server/store.test.js` (store functions) and check route-level validation logic.
 - Changed behaviour → update or extend existing tests so they reflect the new contract.
 - Deleted or renamed export → remove or rename its tests.
 

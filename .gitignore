@@ -7,5 +7,5 @@ dist
 coverage
 *.log
 *.tsbuildinfo
-config/runtime-data.json
-config/sessions
+app-server/config/runtime-data.json
+app-server/config/sessions

@@ -1,4 +1,4 @@
-import { parsePositiveDecimal, validateExpenseDraft } from "../src/utils/validation";
+import { parsePositiveDecimal, validateExpenseDraft } from "../../app-web/utils/validation";
 
 const ACTIVE_CURRENCIES = ["PLN", "BYN", "EUR"];
 

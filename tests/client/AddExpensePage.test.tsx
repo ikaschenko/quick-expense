@@ -1,10 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
-import { AddExpensePage } from "../src/pages/AddExpensePage";
+import { AddExpensePage } from "../../app-web/pages/AddExpensePage";
 
 // Mock all context hooks so AddExpensePage can be rendered in isolation.
-vi.mock("../src/contexts/AuthContext", () => ({
+vi.mock("../../app-web/contexts/AuthContext", () => ({
   useAuth: () => ({
     session: { guestAccessLevel: "view", email: "guest@example.com", givenName: "Guest", picture: null },
     error: null,
@@ -17,7 +17,7 @@ vi.mock("../src/contexts/AuthContext", () => ({
   }),
 }));
 
-vi.mock("../src/contexts/ConfigContext", () => ({
+vi.mock("../../app-web/contexts/ConfigContext", () => ({
   useConfig: () => ({
     config: null,
     isConfigLoading: true,
@@ -26,7 +26,7 @@ vi.mock("../src/contexts/ConfigContext", () => ({
   }),
 }));
 
-vi.mock("../src/contexts/DatasetContext", () => ({
+vi.mock("../../app-web/contexts/DatasetContext", () => ({
   useDataset: () => ({
     snapshot: null,
     status: "idle",
@@ -41,18 +41,18 @@ vi.mock("../src/contexts/DatasetContext", () => ({
   }),
 }));
 
-vi.mock("../src/services/analytics", () => ({
+vi.mock("../../app-web/services/analytics", () => ({
   trackEvent: vi.fn(),
 }));
 
-vi.mock("../src/services/googleSheets", () => ({
+vi.mock("../../app-web/services/googleSheets", () => ({
   googleSheetsService: {
     getAvailableCurrencies: vi.fn().mockResolvedValue({ currencies: [] }),
     getLatestFxRateBackup: vi.fn().mockResolvedValue(null),
   },
 }));
 
-vi.mock("../src/services/currency", () => ({
+vi.mock("../../app-web/services/currency", () => ({
   currencyService: {
     fetchLiveRates: vi.fn().mockResolvedValue({}),
     parseManualFxRates: vi.fn().mockReturnValue({}),

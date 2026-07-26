@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { AutosuggestInput } from "../src/components/AutosuggestInput";
+import { AutosuggestInput } from "../../app-web/components/AutosuggestInput";
 
 const SUGGESTIONS = ["Coffee", "Taxi to airport", "Lunch at work", "Coffee shop"];
 

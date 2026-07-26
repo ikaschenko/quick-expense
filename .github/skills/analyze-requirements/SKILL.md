@@ -18,7 +18,7 @@ description: "Use when analyzing feature requirements, finding gaps or inconsist
 2. **Parse the requirement.** Extract:
    - Which layer(s) are involved (React component, context provider, service, backend route, Google Sheets).
    - Which data entities are affected (expenses, categories, spreadsheet config, user settings).
-   - What new API endpoints, types in `src/types/expense.ts`, or constants in `src/constants/` are implied.
+   - What new API endpoints, types in `app-web/types/expense.ts`, or constants in `app-web/constants/` are implied.
    - Which context provider(s) would need changes (Auth, Config, Dataset).
 3. **Gap analysis.** For each extracted element, check:
    - Is the input source specified? (API endpoint, Google Sheets column, user input field)
@@ -27,9 +27,9 @@ description: "Use when analyzing feature requirements, finding gaps or inconsist
    - Are there implicit assumptions about Google Sheets structure or data shape?
 4. **Conflict check.** Verify the requirement does not:
    - Assume multi-sheet support (§12.8 — single sheet named "Expenses").
-   - Require cross-boundary imports (`server/` ↔ `src/`).
-   - Duplicate logic already in `src/utils/` or `src/services/`.
-   - Bypass `src/services/http.ts` for API calls.
+   - Require cross-boundary imports (`app-server/` ↔ `app-web/`).
+   - Duplicate logic already in `app-web/utils/` or `app-web/services/`.
+   - Bypass `app-web/services/http.ts` for API calls.
    - Change context provider nesting order (Auth → Config → Dataset).
    - Introduce a new npm dependency without justification.
 5. **Output.** Present findings as:

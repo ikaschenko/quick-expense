@@ -4,7 +4,7 @@ let validateMappingRequestBody;
 let validateUsdMandatory;
 
 beforeAll(async () => {
-  ({ validateMappingRequestBody, validateUsdMandatory } = await import("../server/validation.js"));
+  ({ validateMappingRequestBody, validateUsdMandatory } = await import("../../app-server/validation.js"));
 });
 
 describe("validateMappingRequestBody", () => {

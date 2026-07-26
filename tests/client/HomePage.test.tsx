@@ -2,12 +2,12 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
-import { HomePage } from "../src/pages/HomePage";
-import { useDataset } from "../src/contexts/DatasetContext";
-import { ExpenseRecord } from "../src/types/expense";
-import { formatLocalDate } from "../src/utils/date";
+import { HomePage } from "../../app-web/pages/HomePage";
+import { useDataset } from "../../app-web/contexts/DatasetContext";
+import { ExpenseRecord } from "../../app-web/types/expense";
+import { formatLocalDate } from "../../app-web/utils/date";
 
-vi.mock("../src/contexts/AuthContext", () => ({
+vi.mock("../../app-web/contexts/AuthContext", () => ({
   useAuth: () => ({
     session: { guestAccessLevel: null, email: "test@example.com", givenName: "Test", picture: null },
     error: null,
@@ -20,7 +20,7 @@ vi.mock("../src/contexts/AuthContext", () => ({
   }),
 }));
 
-vi.mock("../src/contexts/ConfigContext", () => ({
+vi.mock("../../app-web/contexts/ConfigContext", () => ({
   useConfig: () => ({
     config: {
       email: "test@example.com",
@@ -42,11 +42,11 @@ vi.mock("../src/contexts/ConfigContext", () => ({
   }),
 }));
 
-vi.mock("../src/contexts/DatasetContext", () => ({
+vi.mock("../../app-web/contexts/DatasetContext", () => ({
   useDataset: vi.fn(),
 }));
 
-vi.mock("../src/services/googleSheets", () => ({
+vi.mock("../../app-web/services/googleSheets", () => ({
   googleSheetsService: {
     getSheetModifiedTime: vi.fn().mockResolvedValue({ modifiedTime: null }),
   },

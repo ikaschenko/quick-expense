@@ -1,9 +1,9 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { ExpenseTable } from "../src/components/ExpenseTable";
-import { ExpenseRecord } from "../src/types/expense";
-import { DayTotal } from "../src/utils/currencyTotals";
+import { ExpenseTable } from "../../app-web/components/ExpenseTable";
+import { ExpenseRecord } from "../../app-web/types/expense";
+import { DayTotal } from "../../app-web/utils/currencyTotals";
 
 function makeRecord(overrides: Partial<ExpenseRecord> = {}): ExpenseRecord {
   return {

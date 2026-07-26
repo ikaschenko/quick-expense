@@ -26,7 +26,7 @@ beforeAll(async () => {
     getHiddenColumns,
     setColumnVisibility,
     renameVisibilityEntry,
-  } = await import("../server/store.js"));
+  } = await import("../../app-server/store.js"));
 });
 
 beforeEach(() => {

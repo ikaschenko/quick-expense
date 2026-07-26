@@ -17,9 +17,9 @@ This is a solo-built product. The human tests manually and covers happy paths on
 
 ## Constraints
 
-- Test files in `tests/` as `<module>.test.ts` or `<module>.test.js`.
-- Component tests (`*.tsx`) use Vitest + jsdom; follow patterns in `tests/AddExpensePage.test.tsx` and `tests/ExpenseTable.test.tsx`.
-- Do NOT modify production code (`src/`, `server/`) — only test files.
+- Test files in `tests/` as `<module>.test.ts` or `<module>.test.js`, grouped into `tests/client/` (frontend) and `tests/server/` (backend).
+- Component tests (`*.tsx`) use Vitest + jsdom; follow patterns in `tests/client/AddExpensePage.test.tsx` and `tests/client/ExpenseTable.test.tsx`.
+- Do NOT modify production code (`app-web/`, `app-server/`) — only test files.
 - Use Vitest with `describe()` / `it()` conventions.
 
 ## Modes
@@ -71,7 +71,7 @@ When asked to verify readiness before a production release:
 
 ## Component Test Approach (React)
 
-Component tests use Vitest + jsdom. Follow patterns in `tests/AddExpensePage.test.tsx`.
+Component tests use Vitest + jsdom. Follow patterns in `tests/client/AddExpensePage.test.tsx`.
 
 - Use `@testing-library/react` (`render`, `screen`, `fireEvent`, `waitFor`).
 - Wrap components in required context providers — see existing component tests for setup patterns.

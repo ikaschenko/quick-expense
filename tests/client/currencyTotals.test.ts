@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { ExpenseRecord } from "../src/types/expense";
-import { computeDualCurrency, computeDayTotal, parseUsd, parseAmount, parseRawNumber } from "../src/utils/currencyTotals";
+import { ExpenseRecord } from "../../app-web/types/expense";
+import { computeDualCurrency, computeDayTotal, parseUsd, parseAmount, parseRawNumber } from "../../app-web/utils/currencyTotals";
 
 function makeRecord(date: string, usd: string, extras: Partial<ExpenseRecord> = {}): ExpenseRecord {
   return {

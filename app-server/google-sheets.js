@@ -6,7 +6,7 @@ import { getServiceAccountAccessToken, SERVICE_ACCOUNT_EMAIL } from "./google-cl
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const currencyDictionary = JSON.parse(
-  readFileSync(join(__dirname, "..", "config", "currencies.json"), "utf-8"),
+  readFileSync(join(__dirname, "config", "currencies.json"), "utf-8"),
 );
 export const VALID_CURRENCY_CODES = new Set(currencyDictionary.currencies.map((c) => c.code));
 

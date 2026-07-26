@@ -1,4 +1,4 @@
-import { resolveSetupBannerState } from "../src/utils/setupStatus";
+import { resolveSetupBannerState } from "../../app-web/utils/setupStatus";
 
 describe("setup status banner resolver", () => {
   it("returns info banner while config status is loading", () => {

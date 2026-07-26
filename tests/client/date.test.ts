@@ -1,4 +1,4 @@
-import { detectDateFormat, formatLocalDate } from "../src/utils/date";
+import { detectDateFormat, formatLocalDate } from "../../app-web/utils/date";
 
 describe("detectDateFormat", () => {
   it("returns null for empty samples", () => {

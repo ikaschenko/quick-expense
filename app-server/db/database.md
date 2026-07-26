@@ -7,7 +7,7 @@ Quick Expense uses PostgreSQL (hosted on Supabase Free tier in production).
 Run the schema script against your database:
 
 ```bash
-psql "$DATABASE_URL" -f db/001_initial_schema.sql
+psql "$DATABASE_URL" -f app-server/db/001_initial_schema.sql
 ```
 
 ## Local Development (Windows 11)
@@ -36,7 +36,7 @@ psql "$DATABASE_URL" -f db/001_initial_schema.sql
 
 5. **Run the schema script:**
    ```powershell
-   psql -U postgres -d quickexpense -f db/001_initial_schema.sql
+   psql -U postgres -d quickexpense -f app-server/db/001_initial_schema.sql
    ```
 
 6. **Set the environment variable** in your `.env` file:
@@ -55,7 +55,7 @@ docker run --name qe-postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=quick
 Then run the schema script:
 
 ```powershell
-psql "postgresql://postgres:postgres@localhost:5432/quickexpense" -f db/001_initial_schema.sql
+psql "postgresql://postgres:postgres@localhost:5432/quickexpense" -f app-server/db/001_initial_schema.sql
 ```
 
 Set in `.env`:
@@ -90,14 +90,14 @@ Schema changes are tracked as numbered SQL files (`001_…`, `002_…`, etc.).
 Apply them in order against the target database:
 
 ```powershell
-psql -U postgres -d quickexpense -f db/001_initial_schema.sql
-psql -U postgres -d quickexpense -f db/002_enable_rls_and_revoke_postgrest_access.sql
-psql -U postgres -d quickexpense -f db/003_user_currencies.sql
-psql -U postgres -d quickexpense -f db/004_rls_user_currencies.sql
-psql -U postgres -d quickexpense -f db/005_user_custom_columns.sql
-psql -U postgres -d quickexpense -f db/006_drop_column_config_tables.sql
-psql -U postgres -d quickexpense -f db/007_user_column_visibility.sql
-psql -U postgres -d quickexpense -f db/008_rls_user_column_visibility.sql
-psql -U postgres -d quickexpense -f db/009_setup_shares.sql
-psql -U postgres -d quickexpense -f db/010_rls_setup_shares.sql
+psql -U postgres -d quickexpense -f app-server/db/001_initial_schema.sql
+psql -U postgres -d quickexpense -f app-server/db/002_enable_rls_and_revoke_postgrest_access.sql
+psql -U postgres -d quickexpense -f app-server/db/003_user_currencies.sql
+psql -U postgres -d quickexpense -f app-server/db/004_rls_user_currencies.sql
+psql -U postgres -d quickexpense -f app-server/db/005_user_custom_columns.sql
+psql -U postgres -d quickexpense -f app-server/db/006_drop_column_config_tables.sql
+psql -U postgres -d quickexpense -f app-server/db/007_user_column_visibility.sql
+psql -U postgres -d quickexpense -f app-server/db/008_rls_user_column_visibility.sql
+psql -U postgres -d quickexpense -f app-server/db/009_setup_shares.sql
+psql -U postgres -d quickexpense -f app-server/db/010_rls_setup_shares.sql
 ```

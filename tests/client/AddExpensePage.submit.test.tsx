@@ -1,9 +1,9 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
-import { AddExpensePage } from "../src/pages/AddExpensePage";
+import { AddExpensePage } from "../../app-web/pages/AddExpensePage";
 
-vi.mock("../src/contexts/AuthContext", () => ({
+vi.mock("../../app-web/contexts/AuthContext", () => ({
   useAuth: vi.fn(() => ({
     session: {
       guestAccessLevel: null,
@@ -22,7 +22,7 @@ vi.mock("../src/contexts/AuthContext", () => ({
   })),
 }));
 
-vi.mock("../src/contexts/ConfigContext", () => ({
+vi.mock("../../app-web/contexts/ConfigContext", () => ({
   useConfig: vi.fn(() => ({
     config: {
       email: "test@example.com",
@@ -44,7 +44,7 @@ vi.mock("../src/contexts/ConfigContext", () => ({
   })),
 }));
 
-vi.mock("../src/contexts/DatasetContext", () => ({
+vi.mock("../../app-web/contexts/DatasetContext", () => ({
   useDataset: vi.fn(() => ({
     snapshot: { records: [], dateOrderIssueRows: [] },
     status: "loaded",
@@ -61,11 +61,11 @@ vi.mock("../src/contexts/DatasetContext", () => ({
   })),
 }));
 
-vi.mock("../src/services/analytics", () => ({
+vi.mock("../../app-web/services/analytics", () => ({
   trackEvent: vi.fn(),
 }));
 
-vi.mock("../src/services/googleSheets", () => ({
+vi.mock("../../app-web/services/googleSheets", () => ({
   googleSheetsService: {
     getAvailableCurrencies: vi.fn().mockResolvedValue({ currencies: [] }),
     getLatestFxRateBackup: vi.fn().mockResolvedValue(null),
@@ -74,7 +74,7 @@ vi.mock("../src/services/googleSheets", () => ({
   },
 }));
 
-vi.mock("../src/services/currency", () => ({
+vi.mock("../../app-web/services/currency", () => ({
   currencyService: {
     fetchLiveRates: vi.fn().mockResolvedValue({}),
     parseManualFxRates: vi.fn().mockReturnValue({}),
@@ -82,10 +82,10 @@ vi.mock("../src/services/currency", () => ({
   },
 }));
 
-import { googleSheetsService } from "../src/services/googleSheets";
-import { useConfig } from "../src/contexts/ConfigContext";
-import { ExpenseRecord } from "../src/types/expense";
-import { getTodayLocalDate } from "../src/utils/date";
+import { googleSheetsService } from "../../app-web/services/googleSheets";
+import { useConfig } from "../../app-web/contexts/ConfigContext";
+import { ExpenseRecord } from "../../app-web/types/expense";
+import { getTodayLocalDate } from "../../app-web/utils/date";
 
 function renderAddPage() {
   return render(

@@ -24,7 +24,7 @@ beforeAll(async () => {
     updateShareAccessLevel,
     removeShare,
     removeShareAsGuest,
-  } = await import("../server/sharing.js"));
+  } = await import("../../app-server/sharing.js"));
 });
 
 beforeEach(() => {

@@ -1,5 +1,5 @@
-import { findDuplicateExpenses, getCustomColumnLabel, getDisplayAmount, getDisplayAmountFull, hasDetails } from "../src/utils/expenseTable";
-import { ExpenseDraft, ExpenseRecord } from "../src/types/expense";
+import { findDuplicateExpenses, getCustomColumnLabel, getDisplayAmount, getDisplayAmountFull, hasDetails } from "../../app-web/utils/expenseTable";
+import { ExpenseDraft, ExpenseRecord } from "../../app-web/types/expense";
 
 function makeRecord(overrides: Partial<ExpenseRecord> = {}): ExpenseRecord {
   return {

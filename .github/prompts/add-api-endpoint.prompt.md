@@ -20,18 +20,18 @@ Add a new API endpoint to the Quick Expense application following all project co
 
 ## Step 1 — Add the backend route
 
-In `server/index.js`, add a new route for `{{HTTP_METHOD}} {{ENDPOINT_PATH}}`.
+In `app-server/index.js`, add a new route for `{{HTTP_METHOD}} {{ENDPOINT_PATH}}`.
 
 - If `{{REQUIRES_AUTH}}` is "yes", apply the `requireAuthenticatedUser` middleware.
 - If the method is POST, PUT, or DELETE (mutating), require the `X-Requested-With: fetch` header — use the existing CSRF check pattern from other mutating routes in the file.
-- Follow the existing route structure and error handling patterns in `server/index.js`.
+- Follow the existing route structure and error handling patterns in `app-server/index.js`.
 
 ---
 
 ## Step 2 — Add or extend types
 
 If the endpoint introduces new request or response shapes:
-- Add the type definitions to `src/types/expense.ts` (the centralized types file).
+- Add the type definitions to `app-web/types/expense.ts` (the centralized types file).
 - Do NOT scatter types across other files.
 
 If the endpoint reuses existing types, skip this step.
@@ -40,7 +40,7 @@ If the endpoint reuses existing types, skip this step.
 
 ## Step 3 — Add the frontend service function
 
-Add a service function in the appropriate `src/services/*.ts` file (or create a new one if no existing file fits).
+Add a service function in the appropriate `app-web/services/*.ts` file (or create a new one if no existing file fits).
 
 - Use the `http.ts` wrappers (`httpGet`, `httpPost`, etc.) — never raw `fetch`.
 - Export the function so components/contexts can import it.

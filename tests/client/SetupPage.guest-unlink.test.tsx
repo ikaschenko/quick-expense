@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
-import { SetupPage } from "../src/pages/SetupPage";
+import { SetupPage } from "../../app-web/pages/SetupPage";
 
 const { mockRefreshSession, mockNavigate, mockResetGuestConfig } = vi.hoisted(() => ({
   mockRefreshSession: vi.fn(),
@@ -14,7 +14,7 @@ vi.mock("react-router-dom", async (importOriginal) => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-vi.mock("../src/contexts/AuthContext", () => ({
+vi.mock("../../app-web/contexts/AuthContext", () => ({
   useAuth: () => ({
     session: { email: "guest@example.com", givenName: "Guest", picture: null, guestAccessLevel: "edit" },
     error: null,
@@ -27,7 +27,7 @@ vi.mock("../src/contexts/AuthContext", () => ({
   }),
 }));
 
-vi.mock("../src/contexts/ConfigContext", () => ({
+vi.mock("../../app-web/contexts/ConfigContext", () => ({
   useConfig: () => ({
     config: {
       spreadsheetId: "sheet123",
@@ -51,7 +51,7 @@ vi.mock("../src/contexts/ConfigContext", () => ({
   }),
 }));
 
-vi.mock("../src/contexts/DatasetContext", () => ({
+vi.mock("../../app-web/contexts/DatasetContext", () => ({
   useDataset: () => ({
     snapshot: null,
     status: "idle",
@@ -59,9 +59,9 @@ vi.mock("../src/contexts/DatasetContext", () => ({
   }),
 }));
 
-vi.mock("../src/services/analytics", () => ({ trackEvent: vi.fn() }));
+vi.mock("../../app-web/services/analytics", () => ({ trackEvent: vi.fn() }));
 
-vi.mock("../src/services/sharingApi", () => ({
+vi.mock("../../app-web/services/sharingApi", () => ({
   sharingApi: {
     resetGuestConfig: mockResetGuestConfig,
     listShares: vi.fn().mockResolvedValue([]),
@@ -71,14 +71,14 @@ vi.mock("../src/services/sharingApi", () => ({
   },
 }));
 
-vi.mock("../src/services/googleSheets", () => ({
+vi.mock("../../app-web/services/googleSheets", () => ({
   googleSheetsService: {
     getAvailableCurrencies: vi.fn().mockResolvedValue({ currencies: [], maxOptional: 0 }),
     getColumnMapping: vi.fn().mockResolvedValue({ mapping: null, mode: "default", detectedColumns: [] }),
   },
 }));
 
-vi.mock("../src/services/googlePicker", () => ({ openSpreadsheetPicker: vi.fn() }));
+vi.mock("../../app-web/services/googlePicker", () => ({ openSpreadsheetPicker: vi.fn() }));
 
 function renderSetupPage() {
   return render(

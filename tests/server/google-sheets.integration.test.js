@@ -201,7 +201,7 @@ describe("validateSpreadsheet — integration", () => {
   const VALID = process.env.TEST_SHEET_VALID;
 
   beforeAll(async () => {
-    ({ validateSpreadsheet } = await import("../server/google-sheets.js"));
+    ({ validateSpreadsheet } = await import("../../app-server/google-sheets.js"));
     accessToken = await getServiceAccountToken(serviceAccountKeyJson);
 
     // Reset all three spreadsheets to their starting conditions

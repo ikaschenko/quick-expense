@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ExpenseRecord } from "../src/types/expense";
+import { ExpenseRecord } from "../../app-web/types/expense";
 import {
   getTodayStats,
   getMtdStats,
@@ -10,7 +10,7 @@ import {
   getMtdWeekBoundaryPositions,
   buildIsoNormalizer,
   type IsoNormalizer,
-} from "../src/utils/dashboardStats";
+} from "../../app-web/utils/dashboardStats";
 
 const iso: IsoNormalizer = (s) => s; // dates already in ISO in tests
 

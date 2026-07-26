@@ -1,5 +1,5 @@
 ---
-applyTo: "src/index.css"
+applyTo: "app-web/index.css"
 description: "CSS styling conventions — design tokens, plain CSS, no frameworks."
 ---
 

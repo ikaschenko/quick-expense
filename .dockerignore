@@ -1,4 +1,4 @@
 node_modules
 dist
-config/sessions/*
+app-server/config/sessions/*
 .env

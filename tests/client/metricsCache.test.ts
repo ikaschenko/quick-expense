@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { metricsCache, type MetricsCacheEntry } from "../src/services/metricsCache";
+import { metricsCache, type MetricsCacheEntry } from "../../app-web/services/metricsCache";
 
 const TODAY = "2026-06-24";
 
-vi.mock("../src/utils/date", () => ({
+vi.mock("../../app-web/utils/date", () => ({
   getTodayLocalDate: () => TODAY,
 }));
 

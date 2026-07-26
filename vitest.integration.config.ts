@@ -25,7 +25,7 @@ export default defineConfig({
   test: {
     globals: true,
     pool: "forks",
-    include: ["tests/*.integration.test.*"],
+    include: ["tests/**/*.integration.test.*"],
     env: dotenvVars,
   },
 });

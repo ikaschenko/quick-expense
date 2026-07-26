@@ -8,7 +8,7 @@ import {
   requireEditAccess,
   requireGuest,
   requireOwner,
-} from "../server/resilience.js";
+} from "../../app-server/resilience.js";
 
 describe("destroySession", () => {
   it("resolves when the session destroy callback succeeds", async () => {

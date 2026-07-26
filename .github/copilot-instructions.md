@@ -10,7 +10,7 @@
 
 ## Project Overview
 
-Quick Expense is a React 18 + Vite SPA with an Express 4 backend for recording personal/family expenses via Google Sheets. Frontend is TypeScript (`src/`), backend is plain JS with ES modules (`server/`). See [architecture.md](../architecture.md) for the full system design, data model, and technology stack.
+Quick Expense is a React 18 + Vite SPA with an Express 4 backend for recording personal/family expenses via Google Sheets. Frontend is TypeScript (`app-web/`), backend is plain JS with ES modules (`app-server/`). See [architecture.md](../architecture.md) for the full system design, data model, and technology stack.
 
 ## Quick Commands
 
@@ -28,7 +28,7 @@ Run `npm run build` after TypeScript changes and `npm test` after any logic chan
 ## Dev Environment
 
 - Copy `.env.example` → `.env` and fill in Google OAuth credentials — see [README.md](../README.md) for details.
-- PostgreSQL is required — see [db/database.md](../db/database.md) for local setup (native or Docker).
+- PostgreSQL is required — see [database.md](../app-server/db/database.md) for local setup (native or Docker).
 - Vite dev server runs on `:5173` and proxies `/api` to the Express backend on `:3001`.
 - Node.js `22.12.0` (pinned in `.nvmrc`). Supported range: `^22.12.0`.
 
@@ -112,16 +112,16 @@ For multi-step tasks, state a brief plan:
 
 ## Project-Specific Conventions
 
-- Frontend API calls go through `src/services/http.ts` — never raw `fetch` in components.
+- Frontend API calls go through `app-web/services/http.ts` — never raw `fetch` in components.
 - State: three nested context providers (Auth → Config → Dataset). No Redux/Zustand without explicit approval.
 - Expense data lives in the user's Google Spreadsheet — backend never stores expense rows.
-- Types in `src/types/expense.ts`. Constants in `src/constants/`.
-- `src/utils/` must be side-effect-free and testable.
-- Backend routes in `server/index.js`. Protected routes use `requireAuthenticatedUser`, plus `requireOwner` (config mutations) or `requireEditAccess` (expense data mutations) as required — see [server.instructions.md](instructions/server.instructions.md) for the full guard matrix.
-- Setup-sharing CRUD (grant/list/update/revoke guest access) goes through `server/sharing.js` — never query `setup_shares` directly from routes.
-- Transactional email goes through `server/email.js`. Sends are **fire-and-forget** (`void send(...)`, never `await`ed by callers) and are silently skipped when `RESEND_API_KEY`/`EMAIL_FROM` are not configured.
-- Backend is **plain JS with ES modules** — no `.ts` files under `server/`.
+- Types in `app-web/types/expense.ts`. Constants in `app-web/constants/`.
+- `app-web/utils/` must be side-effect-free and testable.
+- Backend routes in `app-server/index.js`. Protected routes use `requireAuthenticatedUser`, plus `requireOwner` (config mutations) or `requireEditAccess` (expense data mutations) as required — see [server.instructions.md](instructions/server.instructions.md) for the full guard matrix.
+- Setup-sharing CRUD (grant/list/update/revoke guest access) goes through `app-server/sharing.js` — never query `setup_shares` directly from routes.
+- Transactional email goes through `app-server/email.js`. Sends are **fire-and-forget** (`void send(...)`, never `await`ed by callers) and are silently skipped when `RESEND_API_KEY`/`EMAIL_FROM` are not configured.
+- Backend is **plain JS with ES modules** — no `.ts` files under `app-server/`.
 - Mutating endpoints require `X-Requested-With: fetch` header (CSRF).
-- Styling: plain CSS in `src/index.css` with design tokens (`--color-*`, `--space-*`, `--font-size-*`, `--radius-*`, `--shadow-*`). No CSS-in-JS or utility frameworks.
+- Styling: plain CSS in `app-web/index.css` with design tokens (`--color-*`, `--space-*`, `--font-size-*`, `--radius-*`, `--shadow-*`). No CSS-in-JS or utility frameworks.
 - Deployment: Fly.io via Docker. CI in `.github/workflows/` — deploys on push to `main` (excluding `landing/`).
 

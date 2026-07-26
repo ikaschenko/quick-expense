@@ -2,9 +2,9 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
-import { HistoryPage } from "../src/pages/HistoryPage";
-import { useDataset } from "../src/contexts/DatasetContext";
-import { ExpenseRecord } from "../src/types/expense";
+import { HistoryPage } from "../../app-web/pages/HistoryPage";
+import { useDataset } from "../../app-web/contexts/DatasetContext";
+import { ExpenseRecord } from "../../app-web/types/expense";
 
 const { mockUseAuth, mockNavigate } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
@@ -20,7 +20,7 @@ const { mockUseAuth, mockNavigate } = vi.hoisted(() => ({
   })),
 }));
 
-vi.mock("../src/contexts/AuthContext", () => ({
+vi.mock("../../app-web/contexts/AuthContext", () => ({
   useAuth: mockUseAuth,
 }));
 
@@ -29,7 +29,7 @@ vi.mock("react-router-dom", async (importOriginal) => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-vi.mock("../src/contexts/ConfigContext", () => ({
+vi.mock("../../app-web/contexts/ConfigContext", () => ({
   useConfig: () => ({
     config: {
       email: "test@example.com",
@@ -51,15 +51,15 @@ vi.mock("../src/contexts/ConfigContext", () => ({
   }),
 }));
 
-vi.mock("../src/contexts/DatasetContext", () => ({
+vi.mock("../../app-web/contexts/DatasetContext", () => ({
   useDataset: vi.fn(),
 }));
 
-vi.mock("../src/services/analytics", () => ({
+vi.mock("../../app-web/services/analytics", () => ({
   trackEvent: vi.fn(),
 }));
 
-vi.mock("../src/services/googleSheets", () => ({
+vi.mock("../../app-web/services/googleSheets", () => ({
   googleSheetsService: {
     deleteLastExpenseRow: vi.fn(),
   },

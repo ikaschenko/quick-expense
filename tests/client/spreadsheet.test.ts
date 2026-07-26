@@ -6,7 +6,7 @@ import {
   mergeCategories,
   parseSpreadsheetUrl,
   validateColumnName,
-} from "../src/utils/spreadsheet";
+} from "../../app-web/utils/spreadsheet";
 
 const SAMPLE_CURRENCIES = ["PLN", "BYN", "EUR"];
 const SAMPLE_CUSTOM = ["SpentFor", "Channel", "Theme"];

@@ -1,6 +1,6 @@
 ---
 description: "Inspect the codebase for security, maintainability, performance, documentation, and AI-efficiency issues. Produces a prioritized findings report. Accepts optional scope narrowing via user input."
-argument-hint: "Optional: scope the inspection (e.g. 'security only', 'server/ only', 'changes since last audit'). Leave empty for a full-codebase inspection."
+argument-hint: "Optional: scope the inspection (e.g. 'security only', 'app-server/ only', 'changes since last audit'). Leave empty for a full-codebase inspection."
 tools: [read, search, agent, execute, write, todo]
 ---
 
@@ -22,7 +22,7 @@ Inspect the codebase across these five categories, in this order:
 | 1 | **Security** | OWASP Top 10 surface: auth/session handling, input validation, secrets exposure, CSRF, CORS, SQL/NoSQL injection, dependency vulnerabilities, data leakage in logs/errors |
 | 2 | **Maintainability** | Code duplication (full or partial), dead code, illegal cross-boundary imports, single-responsibility violations, coupling issues, inconsistent patterns |
 | 3 | **Performance** | Redundant API/DB calls, N+1 patterns, missing caching opportunities, unnecessary data fetching, large bundle concerns, algorithm efficiency |
-| 4 | **Documentation** | Gaps in `architecture.md`, `db/database.md`, `docs/QuickExpense_business-requirements.md`, `README.md` — stale sections, undocumented features, missing decision records |
+| 4 | **Documentation** | Gaps in `architecture.md`, `app-server/db/database.md`, `docs/QuickExpense_business-requirements.md`, `README.md` — stale sections, undocumented features, missing decision records |
 | 5 | **AI Efficiency** | `.github/` config improvements (instructions, skills, agents) that reduce token waste; code structure changes that shrink context needed for future AI tasks; missing or overly broad instruction scoping |
 
 ## Workflow
@@ -31,7 +31,7 @@ Inspect the codebase across these five categories, in this order:
 
 1. Read `architecture.md` to understand the documented design.
 2. Read `copilot-instructions.md` for project conventions.
-3. Scan the workspace file tree (`src/`, `server/`, `tests/`, `db/`, `.github/`).
+3. Scan the workspace file tree (`app-web/`, `app-server/`, `tests/`, `.github/`).
 4. If the user provided a **scope constraint**, narrow all subsequent steps to that scope. Otherwise, inspect the full codebase.
 
 ### Step 2 — Delegate Category Deep-Dives
@@ -106,8 +106,8 @@ Write the report to `docs/audit-report-YYYYMMDD.md` (use today's date). Also out
 
 | # | Sev | Cat | Location | Finding | Remediation Hint | Effort | Open Question? |
 |---|-----|-----|----------|---------|-------------------|--------|----------------|
-| 1 | CRITICAL | Security | `server/index.js` L42-48 | ... | ... | M | — |
-| 2 | HIGH | Maintainability | `src/services/` | ... | ... | S | — |
+| 1 | CRITICAL | Security | `app-server/index.js` L42-48 | ... | ... | M | — |
+| 2 | HIGH | Maintainability | `app-web/services/` | ... | ... | S | — |
 | ... | | | | | | | |
 
 ## Questions for Human

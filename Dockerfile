@@ -12,4 +12,4 @@ RUN npm prune --production
 
 EXPOSE 3001
 
-CMD ["node", "server/index.js"]
+CMD ["node", "app-server/index.js"]

@@ -32,7 +32,7 @@ The repository contains **two independently deployable artifacts** that share a 
 │  Main Application  (everything outside landing/)               │
 │                                                                │
 │  ┌─────────────────────┐     ┌──────────────────────────────┐  │
-│  │  React SPA (src/)   │────▶│  Express Backend (server/)   │  │
+│  │  React SPA (app-web/)│────▶│  Express Backend (app-server/)│  │
 │  │  Vite + TypeScript   │     │  Node.js, plain JS           │  │
 │  │  Port 5173 (dev)     │     │  Port 3001                   │  │
 │  └─────────────────────┘     └──────────┬───────────────────┘  │
@@ -55,16 +55,13 @@ In production, the Express server also serves the Vite-built `dist/` directory a
 ```
 quick-expense/
 ├── architecture.md            ← this file
-├── Dockerfile                 ← production image for main app (Node 20 + npm build)
+├── Dockerfile                 ← production image for main app (Node 22 + npm build)
 ├── fly.toml                   ← Fly.io config for q-expense-app
 ├── index.html                 ← Vite entry HTML (SPA shell)
 ├── encrypt-tool.html          ← standalone utility page (encryption helper)
 ├── package.json               ← single package.json for both front-end and back-end
-├── tsconfig.json              ← TypeScript config (covers src/ and tests/)
+├── tsconfig.json               ← TypeScript config (covers app-web/ and tests/)
 ├── vite.config.ts             ← Vite + Vitest config, dev proxy /api → :3001
-│
-├── config/                    ← runtime data directory (local dev only, not used in production)
-│   └── .gitkeep
 │
 ├── docs/
 │   └── QuickExpense_business-requirements.md
@@ -82,15 +79,7 @@ quick-expense/
 │   ├── privacy-policy.html    ← required for Google OAuth app verification
 │   └── terms-of-service.html  ← required for Google OAuth app verification
 │
-├── config/
-│   └── currencies.json        ← currency dictionary (25 codes) + maxOptional limit
-│
-├── db/                        ← database schema and migration scripts
-│   ├── 001_initial_schema.sql ← initial PostgreSQL schema (users, fx_rate_backups, sessions)
-│   ├── 003_user_currencies.sql ← user_currencies table (configurable currencies per user)
-│   └── README.md              ← database setup instructions
-│
-├── server/                    ← Express back-end (plain JS, ES modules)
+├── app-server/                ← Express back-end (plain JS, ES modules)
 │   ├── index.js               ← app entry: routes, middleware, session setup
 │   ├── db.js                  ← PostgreSQL connection pool (pg.Pool)
 │   ├── google-client.js       ← Google OAuth helpers (PKCE, token exchange, refresh)
@@ -101,9 +90,18 @@ quick-expense/
 │   ├── email-templates.js     ← HTML + plain-text email templates for share/revoke notifications
 │   ├── resilience.js          ← auth middleware (createRequireAuthenticatedUser, requireOwner, requireGuest, requireEditAccess), health check, and graceful shutdown
 │   ├── validation.js          ← server-side expense input validation
-│   └── utils.js               ← shared backend utilities
+│   ├── utils.js               ← shared backend utilities
+│   │
+│   ├── config/                ← currency dictionary + Google service account credentials (used in production)
+│   │   ├── currencies.json    ← currency dictionary (25 codes) + maxOptional limit
+│   │   └── service-account.json ← Google service account credentials; committed to git with `private_key` replaced by the `${GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY}` placeholder (see README.md)
+│   │
+│   └── db/                    ← database schema and migration scripts
+│       ├── 001_initial_schema.sql ← initial PostgreSQL schema (users, fx_rate_backups, sessions)
+│       ├── 003_user_currencies.sql ← user_currencies table (configurable currencies per user)
+│       └── database.md        ← database setup instructions
 │
-├── src/                       ← React SPA (TypeScript)
+├── app-web/                    ← React SPA (TypeScript)
 │   ├── main.tsx               ← ReactDOM entry, BrowserRouter
 │   ├── App.tsx                ← top-level routes + context provider nesting
 │   ├── index.css              ← global styles
@@ -152,13 +150,15 @@ quick-expense/
 │       └── validation.ts      ← expense draft validation, decimal parsing
 │
 └── tests/                     ← Vitest test files
-    ├── dashboard-stats.test.ts
-    ├── metricsCache.test.ts
-    ├── search.test.ts
-    ├── server-validation.test.js
-    ├── spreadsheet.test.ts
-    ├── store.test.js
-    └── validation.test.ts
+    ├── client/                ← frontend tests (mirrors app-web/)
+    │   ├── dashboard-stats.test.ts
+    │   ├── metricsCache.test.ts
+    │   ├── search.test.ts
+    │   ├── spreadsheet.test.ts
+    │   └── validation.test.ts
+    └── server/                ← backend tests (mirrors app-server/)
+        ├── server-validation.test.js
+        └── store.test.js
 ```
 
 ---
@@ -172,7 +172,7 @@ quick-expense/
 | Test runner | Vitest 4 + jsdom | `npm test` runs `vitest run` |
 | Charts | chart.js + react-chartjs-2 | MTD area chart on Home dashboard (tree-shakeable, MIT) |
 | Icons | lucide-react | |
-| Back-end runtime | Node.js 20, Express 4 | ES modules (`"type": "module"` in package.json) |
+| Back-end runtime | Node.js 22, Express 4 | ES modules (`"type": "module"` in package.json) |
 | Session management | express-session + connect-pg-simple | PostgreSQL-backed sessions |
 | Data persistence | PostgreSQL (Supabase Free) | `users`, `fx_rate_backups`, `sessions` tables — see §7 |
 | Database driver | pg (node-postgres) | Connection via `DATABASE_URL` env var |
@@ -228,7 +228,7 @@ Browser                          Express Backend               Google
 - **PKCE (S256):** Code verifier stored in server session, never exposed to the browser.
 - **Tokens never sent to the browser:** Access tokens and refresh tokens are stored server-side in the PostgreSQL `users` table. The browser receives only an `httpOnly` session cookie.
 - **CSRF protection:** All mutating requests require an `X-Requested-With: fetch` header, checked by middleware.
-- **Token refresh:** `getAuthorizedAccessToken()` in `server/index.js` transparently refreshes expired access tokens using the stored refresh token before any Google API call.
+- **Token refresh:** `getAuthorizedAccessToken()` in `app-server/index.js` transparently refreshes expired access tokens using the stored refresh token before any Google API call.
 - **Session cookie:** `httpOnly`, `sameSite: lax`, `secure` when HTTPS, 30-day expiry.
 
 ### 5.3 OAuth Scopes Requested
@@ -247,7 +247,7 @@ Browser                          Express Backend               Google
 
 ## 6. API Endpoints
 
-All API routes are defined in `server/index.js`.
+All API routes are defined in `app-server/index.js`.
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
@@ -289,7 +289,7 @@ All API routes are defined in `server/index.js`.
 
 ### 7.1 PostgreSQL Database (Supabase Free)
 
-The backend uses **PostgreSQL** (hosted on Supabase Free tier) for all server-side state. Schema scripts live in `db/`. The connection is managed via `server/db.js` using `pg.Pool` configured from the `DATABASE_URL` environment variable.
+The backend uses **PostgreSQL** (hosted on Supabase Free tier) for all server-side state. Schema scripts live in `app-server/db/`. The connection is managed via `app-server/db.js` using `pg.Pool` configured from the `DATABASE_URL` environment variable.
 
 #### a) `users` Table
 
@@ -437,7 +437,7 @@ The system detects the Config sheet state via `detectConfigSheet()` and operates
 
 ### 7.3 Database Schema Management
 
-Schema scripts are stored in `db/` as numbered SQL files (`001_initial_schema.sql`, etc.). Apply them in order against the target PostgreSQL instance. See `db/database.md` for setup instructions.
+Schema scripts are stored in `app-server/db/` as numbered SQL files (`001_initial_schema.sql`, etc.). Apply them in order against the target PostgreSQL instance. See `app-server/db/database.md` for setup instructions.
 
 Current migrations:
 
@@ -504,7 +504,7 @@ The SPA uses three nested context providers (wrapped in `App.tsx`):
 
 ### 8.3 Service Layer
 
-Frontend services in `src/services/` are thin wrappers around `fetch`:
+Frontend services in `app-web/services/` are thin wrappers around `fetch`:
 
 - **`http.ts`** — `requestJson<T>()` and `requestNoContent()`: attach credentials, `X-Requested-With` header, parse errors into typed `AppError`.
 - **`authApi.ts`** — session check, login redirect, logout.
@@ -517,10 +517,10 @@ Frontend services in `src/services/` are thin wrappers around `fetch`:
 ### 8.4 Key Front-End Conventions
 
 - **TypeScript strict mode** with `moduleResolution: Bundler`.
-- Types are centralized in `src/types/expense.ts` — includes `ExpenseDraft`, `ExpenseRecord`, `SpreadsheetConfig`, `CurrencyDictionary`, `AuthSession`, `SearchFilters`, `DatasetSnapshot`, `AppError`.
-- Constants (fixed header names, `buildExpenseHeaders()`, limits) are in `src/constants/expenses.ts`.
-- Pure utility functions are in `src/utils/` — validation, search filtering, spreadsheet helpers, date formatting.
-- No CSS framework — global styles in `src/index.css`.
+- Types are centralized in `app-web/types/expense.ts` — includes `ExpenseDraft`, `ExpenseRecord`, `SpreadsheetConfig`, `CurrencyDictionary`, `AuthSession`, `SearchFilters`, `DatasetSnapshot`, `AppError`.
+- Constants (fixed header names, `buildExpenseHeaders()`, limits) are in `app-web/constants/expenses.ts`.
+- Pure utility functions are in `app-web/utils/` — validation, search filtering, spreadsheet helpers, date formatting.
+- No CSS framework — global styles in `app-web/index.css`.
 - Icons via `lucide-react`.
 
 ---
@@ -542,7 +542,7 @@ The `landing/` directory is a **completely independent static site** — no buil
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | Starts backend (`node server/index.js`) and Vite dev server concurrently |
+| `npm run dev` | Starts backend (`node app-server/index.js`) and Vite dev server concurrently |
 | `npm run dev:client` | Vite dev server only (port 5173) |
 | `npm run dev:server` | Express backend only (port 3001) |
 | `npm run build` | `tsc -b && vite build` → outputs to `dist/` |
@@ -575,7 +575,7 @@ The backend validates all required env vars at startup and fails fast if any are
 
 ### Main App (`q-expense-app`)
 
-- **Dockerfile:** Multi-stage: install all deps → `npm run build` → prune to production deps → run `node server/index.js`.
+- **Dockerfile:** Multi-stage: install all deps → `npm run build` → prune to production deps → run `node app-server/index.js`.
 - **Fly.io config (`fly.toml`):**
   - Region: `fra` (Frankfurt)
   - No persistent volume — all state is in the PostgreSQL database (Supabase).
@@ -598,7 +598,7 @@ The backend validates all required env vars at startup and fails fast if any are
 3. **Client-side search** — the full dataset is loaded into the browser. Capped at 10 MB JSON payload.
 4. **Edit of existing records** — supported via `PUT /api/expenses/:rowNumber`. Returns `{ record, moveMode }`. When the date change keeps the row in chronological order, an in-place cell update is performed (`moveMode: false`). When the date change would break order, `moveExpenseRow` calls the existing `addExpenseRow` (insert/append decision fully reused), then deletes the original row (`moveMode: true`). The client performs a full dataset reload on `moveMode: true`, identical to the add insert-mode flow. Delete is scoped to the **last row only**, available from Tail view. Protected by a row-count conflict check: the client passes the expected row count; the backend rejects with HTTP 409 if the sheet was updated concurrently.
 5. **No duplicate detection** — each Save appends a new row unconditionally.
-6. **Currency:** Users configure up to 3 non-USD currencies from a dictionary of 25 (stored in `config/currencies.json` and `user_currencies` DB table). At most one non-USD currency at a time per expense, optionally alongside USD. Manual FX rate entry is primary; when the form date is today, a live market rate hint is fetched via `GET /api/fx/rates` (proxied from `fawazahmed0/currency-api` — free, key-less, daily rates) and displayed as a tappable *"Market: X.XX"* hint. Silent fallback to fully manual entry on any upstream failure. Archived currency columns remain in the sheet.
+6. **Currency:** Users configure up to 3 non-USD currencies from a dictionary of 25 (stored in `app-server/config/currencies.json` and `user_currencies` DB table). At most one non-USD currency at a time per expense, optionally alongside USD. Manual FX rate entry is primary; when the form date is today, a live market rate hint is fetched via `GET /api/fx/rates` (proxied from `fawazahmed0/currency-api` — free, key-less, daily rates) and displayed as a tappable *"Market: X.XX"* hint. Silent fallback to fully manual entry on any upstream failure. Archived currency columns remain in the sheet.
 7. **No pagination** — search results capped at 100.
 8. **Single sheet named "Expenses"** — no multi-sheet support.
 9. **Concurrency** — relies on Google Sheets API atomic append; no manual row indexing.
@@ -606,18 +606,18 @@ The backend validates all required env vars at startup and fails fast if any are
 11. **No auto-creation of Config sheet** — the Config sheet is created only when the user explicitly saves a column mapping via `POST /api/config/mapping`. It is never auto-created during setup or validation flows.
 12. **Explicit consent gate for column mapping** — `POST /api/config/mapping` requires `confirmed: true` in the request body. This prevents accidental overwrites of existing Config sheet data from programmatic or double-submit scenarios.
 13. **Two-path setup model** — users choose between (a) creating a fresh spreadsheet from a template (default mode, no Config sheet) or (b) connecting an existing spreadsheet and optionally configuring a column mapping (config-driven mode). This design separates simple onboarding from advanced customization.
-14. **Home screen is a spending dashboard** — when a user is authenticated and has expense data, `/home` renders three metric cards: TODAY (today's entries + dual-currency display), JUNE SO FAR (MTD total + YoY deviation + mini area chart), and YEAR SO FAR (YTD total + YoY deviation). Dashboard data comes from `DatasetContext.loadDataset()` — no extra API call; in-memory cache is reused if valid. All aggregations cover all rows (all `WhoSpent` values). Implemented in `src/utils/dashboardStats.ts` and `src/components/MtdSpendChart.tsx`.
+14. **Home screen is a spending dashboard** — when a user is authenticated and has expense data, `/home` renders three metric cards: TODAY (today's entries + dual-currency display), JUNE SO FAR (MTD total + YoY deviation + mini area chart), and YEAR SO FAR (YTD total + YoY deviation). Dashboard data comes from `DatasetContext.loadDataset()` — no extra API call; in-memory cache is reused if valid. All aggregations cover all rows (all `WhoSpent` values). Implemented in `app-web/utils/dashboardStats.ts` and `app-web/components/MtdSpendChart.tsx`.
 15. **Setup status badge** — `Layout.tsx` overlays a green ✓ (`CheckCircle`) or red ⚠ (`AlertCircle`) badge on the Setup gear icon in the global bottom nav. Badge is computed from `ConfigContext.config.configMode`: green = sheet connected and valid; red = no sheet, or `configMode === 'config-invalid'`.
 16. **Two-phase progressive dataset load** — `GET /api/expenses` performs a date-column binary search (`findExpenseStartRow`) to determine whether the sheet has enough historical rows (≥ 20) to justify splitting. When a split is warranted, only records within the last `EXPENSE_RECENT_MONTHS` months (default: 24) are returned in Phase 1. The client's `DatasetContext` immediately presents this data to the user, then fetches the remainder via `GET /api/expenses/history?endRow=N` in the background. `DatasetSnapshot.loadPhase` (`"recent"` | `"full"`) tracks completion. The `detectConfigSheet` → `validateSpreadsheet` call chain now passes the already-fetched metadata object to eliminate a duplicate `getMetadata` round-trip per load.
 
-17. **USD is mandatory when a non-USD amount is provided** — at submission time, if any non-USD currency amount is entered but USD is empty (and no FX rate is provided to auto-derive it), the Add Expense form shows a single combined error on the FX rate field: "USD amount is required — enter an exchange rate here or fill the USD field directly." The backend enforces the same rule independently via `validateUsdMandatory()` in `server/validation.js` (HTTP 400 on `POST /api/expenses` and `PUT /api/expenses/:rowNumber`).
+17. **USD is mandatory when a non-USD amount is provided** — at submission time, if any non-USD currency amount is entered but USD is empty (and no FX rate is provided to auto-derive it), the Add Expense form shows a single combined error on the FX rate field: "USD amount is required — enter an exchange rate here or fill the USD field directly." The backend enforces the same rule independently via `validateUsdMandatory()` in `app-server/validation.js` (HTTP 400 on `POST /api/expenses` and `PUT /api/expenses/:rowNumber`).
 
 18. **Setup sharing model** — an owner user can share their full configuration (spreadsheet, currencies, column visibility) with any number of Google users via `POST /api/sharing`. Guests store a DB reference to the owner record — no data is duplicated. Guests with `edit` access have full read/write; `view` guests can use Tail and Search but all write actions are blocked at both API (HTTP 403) and UI levels. Guests cannot modify Setup settings. `requireAuthenticatedUser` resolves the shared reference transparently on every authenticated request. Guests whose owner config becomes invalid (owner deleted, spreadsheet removed) are shown a blocking `SharedConfigInvalidModal` prompting them to reset and set up independently.
 
 19. **Append vs. insert mode for new expenses** — `POST /api/expenses` reads the full date column before writing. If the submitted date is ≥ the last row's date (or the sheet has no data, unrecognisable date format, or out-of-order dates), the existing `appendExpenseRow` path is used unchanged. If the submitted date is earlier than the last row's date on a well-ordered sheet, `addExpenseRow` inserts the new row at the correct chronological position using Google Sheets API `batchUpdate insertDimension` followed by `values.update`. The client performs a full dataset reload after an insert-mode write. The shared `alignValuesToHeaders()` helper is used by both append and insert paths to handle legacy column ordering and column mapping.
 
-20. **Row repositioning on edit** — `PUT /api/expenses/:rowNumber` delegates to `moveExpenseRow` in `server/google-sheets.js`. The function reads the date column, checks if the new date keeps the row between its immediate neighbors, and falls back to `updateExpenseRow` (in-place) if so. When repositioning is required, `addExpenseRow` is called (reusing 100% of the insert/append decision logic), then the original row is deleted via `deleteDimension`. Insert-before-delete guarantees no data loss on partial failure. The client triggers the same `isInsertingHistorical` overlay and `reloadDataset()` call as the add insert-mode flow when `moveMode: true` is returned.
+20. **Row repositioning on edit** — `PUT /api/expenses/:rowNumber` delegates to `moveExpenseRow` in `app-server/google-sheets.js`. The function reads the date column, checks if the new date keeps the row between its immediate neighbors, and falls back to `updateExpenseRow` (in-place) if so. When repositioning is required, `addExpenseRow` is called (reusing 100% of the insert/append decision logic), then the original row is deleted via `deleteDimension`. Insert-before-delete guarantees no data loss on partial failure. The client triggers the same `isInsertingHistorical` overlay and `reloadDataset()` call as the add insert-mode flow when `moveMode: true` is returned.
 
 21. **Home screen metrics cache (`localStorage`)** — Pre-computed dashboard metrics (TODAY/MTD/YTD/Rolling12M totals, chart data) are persisted in `localStorage` under `qe_metrics_{email}` to enable instant Home screen rendering on repeated visits. Freshness is validated on each explicit page load via a lightweight `GET /api/sheet/modifiedtime` Drive API call (within the existing `drive.file` scope, no scope change). Cache is invalidated at midnight, on sign-out, on config clear, and when the Drive `modifiedTime` exceeds the stored timestamp. After CRUD operations that use surgical in-memory mutations, the cache is rewritten immediately with an optimistic `sheetLastModifiedTime` (`Date.now()` ISO string), ensuring instant Home display after Add/Edit/Delete. Shared-setup guests and users with URL-pasted spreadsheets (not opened via Picker) receive `modifiedTime: null` from the Drive check and fall back to a full reload on every Home visit — no caching benefit for those users. Cache is written after Phase 1 of the two-phase load; Phase 2 completion may rewrite the cache a second time with updated YoY stats (acceptable).
 
-22. **Transactional email for share/revoke events** — share and revoke events dispatch a transactional email via Resend after the HTTP response is returned. Delivery failure is logged server-side and never surfaced to the UI. Templates live in `server/email-templates.js` (no external template storage). Sending is silently skipped if `RESEND_API_KEY` is absent, so the feature degrades gracefully in environments without email configuration.
+22. **Transactional email for share/revoke events** — share and revoke events dispatch a transactional email via Resend after the HTTP response is returned. Delivery failure is logged server-side and never surfaced to the UI. Templates live in `app-server/email-templates.js` (no external template storage). Sending is silently skipped if `RESEND_API_KEY` is absent, so the feature degrades gracefully in environments without email configuration.

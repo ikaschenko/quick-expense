@@ -18,7 +18,7 @@ export default defineConfig({
     globals: true,
     pool: "forks",
     server: { deps: { inline: ["pg"] } },
-    exclude: [...configDefaults.exclude, "tests/*.integration.test.*"],
+    exclude: [...configDefaults.exclude, "tests/**/*.integration.test.*"],
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
