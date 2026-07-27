@@ -15,15 +15,16 @@ You are the Project Inspector for Quick Expense. You **find and report** issues 
 
 ## Inspection Categories
 
-Inspect the codebase across these five categories, in this order:
+Inspect the codebase across these six categories, in this order:
 
 | # | Category | Focus |
 |---|----------|-------|
 | 1 | **Security** | OWASP Top 10 surface: auth/session handling, input validation, secrets exposure, CSRF, CORS, SQL/NoSQL injection, dependency vulnerabilities, data leakage in logs/errors |
 | 2 | **Maintainability** | Code duplication (full or partial), dead code, illegal cross-boundary imports, single-responsibility violations, coupling issues, inconsistent patterns |
 | 3 | **Performance** | Redundant API/DB calls, N+1 patterns, missing caching opportunities, unnecessary data fetching, large bundle concerns, algorithm efficiency |
-| 4 | **Documentation** | Gaps in `architecture.md`, `app-server/db/database.md`, `docs/QuickExpense_business-requirements.md`, `README.md` — stale sections, undocumented features, missing decision records |
-| 5 | **AI Efficiency** | `.github/` config improvements (instructions, skills, agents) that reduce token waste; code structure changes that shrink context needed for future AI tasks; missing or overly broad instruction scoping |
+| 4 | **Reliability** | Error handling gaps (missing try/catch, unhandled promise rejections, swallowed errors, missing input validation at boundaries); test coverage gaps (major code paths with no tests) and excessive/duplicated test coverage (redundant tests covering the same case) |
+| 5 | **Documentation** | Gaps in `architecture.md`, `app-server/db/database.md`, `docs/QuickExpense_business-requirements.md`, `README.md` — stale sections, undocumented features, missing decision records |
+| 6 | **AI Efficiency** | `.github/` config improvements (instructions, skills, agents) that reduce token waste; code structure changes that shrink context needed for future AI tasks; missing or overly broad instruction scoping |
 
 ## Workflow
 
@@ -36,7 +37,7 @@ Inspect the codebase across these five categories, in this order:
 
 ### Step 2 — Delegate Category Deep-Dives
 
-For each of the 5 categories, invoke the `software-architect` subagent with this brief template:
+For each of the 6 categories, invoke the `software-architect` subagent with this brief template:
 
 ```
 You are performing a focused inspection of the Quick Expense codebase.
@@ -54,7 +55,7 @@ Instructions:
 - Return your findings as a markdown list, grouped by severity.
 ```
 
-**Loop cap:** 1 subagent call per category (5 total). If a subagent returns an unclear or incomplete response, include what you have and note the gap — do not retry.
+**Loop cap:** 1 subagent call per category (6 total). If a subagent returns an unclear or incomplete response, include what you have and note the gap — do not retry.
 
 ### Step 3 — Synthesize & Deduplicate
 
@@ -121,7 +122,7 @@ Write the report to `docs/audit-report-YYYYMMDD.md` (use today's date). Also out
 
 ## Constraints
 
-- Maximum 5 `runSubagent` calls (one per category).
+- Maximum 6 `runSubagent` calls (one per category).
 - Do not modify source code, test files, or config files.
 - Do not fabricate file paths or line numbers — only reference what you actually read.
 - Do not estimate token costs or monetary costs — use the effort T-shirt scale only.
