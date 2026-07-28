@@ -2,13 +2,13 @@
 
 QuickExpense is a small web app for recording personal or family expenses into a shared Google Sheets spreadsheet.
 
-The app is optimized for quick entry from a phone or desktop browser and supports five main flows:
+The app is optimized for quick entry from a phone or desktop browser and supports main flows like:
 
 - Google sign-in
-- spreadsheet setup and validation (one-time action)
-- adding a new expense row
-- viewing the latest records or searching the loaded dataset
-- repeating a past expense from History (pre-fills the Add form with today's date)
+- Google sheets spreadsheet setup and validation (one-time action), with ability to set up custom currencies and optional columns
+- adding new expenses, edititing/deleting entered expenses
+- searching through the history of submitted expenses 
+- sharing the setup to other users (e.g. family members) so they don't need to setup anything, only sign in
 
 ## Tech stack
 
@@ -122,7 +122,7 @@ The current repository does not include a single packaged production server. The
 1. Start the backend:
 
 ```bash
-npm run dev:server
+npm run dev
 ```
 
 2. Serve the built frontend:
@@ -171,6 +171,15 @@ TEST_SHEET_VALID=your-sheet-id
 - `Add`: append a new expense row
 - `Tail`: show up to the last 20 rows
 - `Search`: filter loaded expenses by category and comment text
+
+## Contributing
+
+QuickExpense is a solo-maintained project, so external pull requests aren't accepted right now. Here's how you can help instead:
+
+1. **Report bugs / suggest ideas** — open an [issue](../../issues) with as much detail as possible (steps to reproduce, screenshots, expected vs. actual behavior, or a clear description of the feature you'd like to see).
+2. **Support the project** — if QuickExpense is useful to you, consider [buying me a coffee](https://buymeacoffee.com/qexpensesux) via the link on the [project landing page](https://q-expense.com).
+
+Every report and contribution — even just an idea — genuinely helps shape where the project goes next. Thank you!
 
 ## Notes for publishing
 
