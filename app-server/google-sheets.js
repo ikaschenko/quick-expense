@@ -461,7 +461,7 @@ export function buildDateParser(dateSamples) {
     return (s) => {
       if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
       const ms = Date.parse(s);
-      return isNaN(ms) ? null : ms;
+      return Number.isNaN(ms) ? null : ms;
     };
   }
 
@@ -481,8 +481,8 @@ export function buildDateParser(dateSamples) {
     // Identify year part (4 digits)
     const yIdx = parts.findIndex((p) => p.length === 4);
     if (yIdx !== 2) continue; // year must be last for MM/DD/YYYY or DD/MM/YYYY
-    const a = parseInt(parts[0], 10);
-    const b = parseInt(parts[1], 10);
+    const a = Number.parseInt(parts[0], 10);
+    const b = Number.parseInt(parts[1], 10);
     if (a > 12) { dayFirst = true; break; }
     if (b > 12) { dayFirst = false; break; }
   }
@@ -496,10 +496,10 @@ export function buildDateParser(dateSamples) {
     if (parts.length !== 3) return null;
     const [p0, p1, p2] = parts;
     if (p2.length !== 4) return null;
-    const year = parseInt(p2, 10);
-    const month = isoDayFirst ? parseInt(p1, 10) : parseInt(p0, 10);
-    const day   = isoDayFirst ? parseInt(p0, 10) : parseInt(p1, 10);
-    if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
+    const year = Number.parseInt(p2, 10);
+    const month = isoDayFirst ? Number.parseInt(p1, 10) : Number.parseInt(p0, 10);
+    const day   = isoDayFirst ? Number.parseInt(p0, 10) : Number.parseInt(p1, 10);
+    if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) return null;
     if (month < 1 || month > 12 || day < 1 || day > 31) return null;
     return Date.UTC(year, month - 1, day);
   };
@@ -1395,7 +1395,7 @@ export async function appendExpenseRow(accessToken, spreadsheetId, values, mappi
   );
 
   const updatedRange = appendResult?.updates?.updatedRange ?? "";
-  const rowNumber = parseInt(/([0-9]+)$/.exec(updatedRange)?.[1] ?? "0", 10);
+  const rowNumber = Number.parseInt(/([0-9]+)$/.exec(updatedRange)?.[1] ?? "0", 10);
 
   // Write actual free-text values with RAW (structured fields also re-affirmed idempotently).
   if (rowNumber > 0) {

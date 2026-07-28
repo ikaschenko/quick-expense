@@ -24,15 +24,15 @@ export function validateUsdMandatory(values, sheetCurrencies) {
 
   const usdIndex = 1 + sheetCurrencies.length;
   const usdRaw = String(values[usdIndex] ?? "").replace(",", ".").trim();
-  const usdValue = parseFloat(usdRaw);
+  const usdValue = Number.parseFloat(usdRaw);
 
   const hasNonUsdAmount = sheetCurrencies.some((_, i) => {
     const raw = String(values[1 + i] ?? "").replace(",", ".").trim();
-    const n = parseFloat(raw);
-    return raw !== "" && !isNaN(n) && n !== 0;
+    const n = Number.parseFloat(raw);
+    return raw !== "" && !Number.isNaN(n) && n !== 0;
   });
 
-  if (hasNonUsdAmount && (!usdRaw || isNaN(usdValue) || usdValue === 0)) {
+  if (hasNonUsdAmount && (!usdRaw || Number.isNaN(usdValue) || usdValue === 0)) {
     return "USD amount is required when a non-USD currency amount is provided.";
   }
 

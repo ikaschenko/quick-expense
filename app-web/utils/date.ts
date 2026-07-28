@@ -27,7 +27,7 @@ export function detectDateFormat(samples: string[]): { toSheet: (date: Date) => 
     if (!foundSep) continue;
     const parts = sample.split(foundSep);
     if (parts.some((p) => !/^\d+$/.test(p))) continue;
-    const yIdx = parts.findIndex((p) => p.length === 4 && parseInt(p, 10) > 1000);
+    const yIdx = parts.findIndex((p) => p.length === 4 && Number.parseInt(p, 10) > 1000);
     if (yIdx === -1) continue;
 
     if (sep === null) {
@@ -39,8 +39,8 @@ export function detectDateFormat(samples: string[]): { toSheet: (date: Date) => 
 
     if (dayFirst === null) {
       const [ai, bi] = [0, 1, 2].filter((i) => i !== yIdx);
-      const a = parseInt(parts[ai], 10);
-      const b = parseInt(parts[bi], 10);
+      const a = Number.parseInt(parts[ai], 10);
+      const b = Number.parseInt(parts[bi], 10);
       if (a > 12) dayFirst = true;
       else if (b > 12) dayFirst = false;
     }
@@ -49,7 +49,7 @@ export function detectDateFormat(samples: string[]): { toSheet: (date: Date) => 
     if (zeroPadded === null) {
       for (const i of [0, 1, 2]) {
         if (i === yIdx) continue;
-        const v = parseInt(parts[i], 10);
+        const v = Number.parseInt(parts[i], 10);
         if (v < 10) {
           zeroPadded = parts[i].length === 2; // "06" → padded, "6" → unpadded
           break;

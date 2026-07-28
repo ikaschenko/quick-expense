@@ -37,7 +37,7 @@ export function parseRawNumber(raw: string): number {
   }
   // else: only dot or no separator — already correct
 
-  return parseFloat(s) || 0;
+  return Number.parseFloat(s) || 0;
 }
 
 export function parseUsd(record: ExpenseRecord): number {
@@ -63,7 +63,7 @@ export function computeDualCurrency(records: ExpenseRecord[]): DualCurrency | nu
 
     const nonUsdEntries = Object.entries(r.currencyAmounts).filter(([, v]) => {
       const n = parseAmount(v);
-      return !isNaN(n) && n !== 0;
+      return !Number.isNaN(n) && n !== 0;
     });
 
     if (nonUsdEntries.length !== 1) return null;

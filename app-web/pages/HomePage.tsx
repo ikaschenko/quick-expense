@@ -219,7 +219,7 @@ export function HomePage(): JSX.Element {
   }, [dataset.status, todayStats, mtdStats, ytdStats, ytdForecast, rolling12mStats]);
 
   const monthName = new Date(year, month - 1, 1).toLocaleString("en", { month: "long" }).toUpperCase();
-  const dayLabel = new Date(year, month - 1, parseInt(today.split("-")[2], 10))
+  const dayLabel = new Date(year, month - 1, Number.parseInt(today.split("-")[2], 10))
     .toLocaleString("en", { month: "short", day: "numeric" });
 
   const isDatasetLoading = dataset.status === "idle" || dataset.status === "loading";

@@ -108,8 +108,8 @@ function getCommentPreview(record: ExpenseRecord): string {
 
 function parseAmountValue(raw: string | undefined): number | null {
   if (!raw?.trim()) return null;
-  const num = parseFloat(raw.trim().replace(/^\$/, "").replace(/,/g, ""));
-  return isNaN(num) ? null : num;
+  const num = Number.parseFloat(raw.trim().replace(/^\$/, "").replace(/,/g, ""));
+  return Number.isNaN(num) ? null : num;
 }
 
 function renderCardAmount(record: ExpenseRecord, sheetCurrencies: string[]): React.ReactNode {

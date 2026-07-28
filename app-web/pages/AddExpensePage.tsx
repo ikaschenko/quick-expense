@@ -79,10 +79,10 @@ function createDraftFromRecord(record: ExpenseRecord, currencies: string[], cust
 
 function deriveInitialFxRates(record: ExpenseRecord, currencies: string[]): ManualFxRates {
   const rates: ManualFxRates = {};
-  const usdValue = parseFloat(record.USD);
+  const usdValue = Number.parseFloat(record.USD);
   for (const code of currencies) {
-    const amount = parseFloat(record.currencyAmounts[code] ?? "");
-    if (!isNaN(usdValue) && usdValue !== 0 && !isNaN(amount) && amount !== 0) {
+    const amount = Number.parseFloat(record.currencyAmounts[code] ?? "");
+    if (!Number.isNaN(usdValue) && usdValue !== 0 && !Number.isNaN(amount) && amount !== 0) {
       rates[code] = (Math.abs(amount) / Math.abs(usdValue)).toFixed(2);
     } else {
       rates[code] = "";
@@ -150,7 +150,7 @@ export function AddExpensePage(): JSX.Element {
   const location = useLocation();
 
   const isEditMode = !!rowNumberParam;
-  const editRowNumber = rowNumberParam ? parseInt(rowNumberParam, 10) : null;
+  const editRowNumber = rowNumberParam ? Number.parseInt(rowNumberParam, 10) : null;
   const editState = (location.state as { record?: ExpenseRecord; origin?: string; repeatRecord?: ExpenseRecord } | null);
   const editRecord = editState?.record ?? null;
   const editOrigin = editState?.origin ?? "/history";

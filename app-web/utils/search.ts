@@ -14,8 +14,8 @@ export function filterExpenses(records: ExpenseRecord[], filters: SearchFilters)
   const parts = normalizedComment.split(/\s+/).filter((p) => p.length > 0);
   const meaningfulChars = parts.join("");
 
-  const amountFromNum = filters.amountFrom !== "" ? parseFloat(filters.amountFrom) : null;
-  const amountToNum = filters.amountTo !== "" ? parseFloat(filters.amountTo) : null;
+  const amountFromNum = filters.amountFrom !== "" ? Number.parseFloat(filters.amountFrom) : null;
+  const amountToNum = filters.amountTo !== "" ? Number.parseFloat(filters.amountTo) : null;
 
   const customFieldEntries = Object.entries(filters.customFields).filter(([, v]) => v.trim() !== "");
 
@@ -28,8 +28,8 @@ export function filterExpenses(records: ExpenseRecord[], filters: SearchFilters)
 
     // Amount range filter
     if (amountFromNum !== null || amountToNum !== null) {
-      const recordUSD = parseFloat(record.USD.replace(/[$,]/g, ""));
-      if (isNaN(recordUSD)) return false;
+      const recordUSD = Number.parseFloat(record.USD.replace(/[$,]/g, ""));
+      if (Number.isNaN(recordUSD)) return false;
       if (amountFromNum !== null && recordUSD < amountFromNum) return false;
       if (amountToNum !== null && recordUSD > amountToNum) return false;
     }

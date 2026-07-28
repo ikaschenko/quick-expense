@@ -69,11 +69,11 @@ export function findDuplicateExpenses(
   // Prefer non-USD currency amounts (user-entered) over USD (derived via FX).
   // Two expenses with the same local amount but different FX rates should still be flagged.
   const hasNonUsdAmount = currencies.some((code) => {
-    const amt = parseFloat((draft.currencyAmounts[code] ?? "").replace(",", "."));
-    return !isNaN(amt) && amt !== 0;
+    const amt = Number.parseFloat((draft.currencyAmounts[code] ?? "").replace(",", "."));
+    return !Number.isNaN(amt) && amt !== 0;
   });
 
-  const draftUsd = parseFloat(draft.USD.replace(",", ".").replace(/^\$/, ""));
+  const draftUsd = Number.parseFloat(draft.USD.replace(",", ".").replace(/^\$/, ""));
 
   return records.filter((r) => {
     if (r.Date.trim() !== draftDate) return false;
@@ -81,16 +81,16 @@ export function findDuplicateExpenses(
 
     if (hasNonUsdAmount) {
       return currencies.some((code) => {
-        const draftAmt = parseFloat((draft.currencyAmounts[code] ?? "").replace(",", "."));
-        const recAmt = parseFloat(String(r.currencyAmounts[code] ?? "").replace(",", "."));
-        return !isNaN(draftAmt) && draftAmt !== 0 && !isNaN(recAmt) && Math.abs(draftAmt - recAmt) <= 0.005;
+        const draftAmt = Number.parseFloat((draft.currencyAmounts[code] ?? "").replace(",", "."));
+        const recAmt = Number.parseFloat(String(r.currencyAmounts[code] ?? "").replace(",", "."));
+        return !Number.isNaN(draftAmt) && draftAmt !== 0 && !Number.isNaN(recAmt) && Math.abs(draftAmt - recAmt) <= 0.005;
       });
     }
 
     // No non-USD amount — fall back to USD
-    if (!isNaN(draftUsd) && draftUsd !== 0) {
-      const recUsd = parseFloat(String(r.USD ?? "").replace(",", ".").replace(/^\$/, ""));
-      return !isNaN(recUsd) && Math.abs(draftUsd - recUsd) <= 0.005;
+    if (!Number.isNaN(draftUsd) && draftUsd !== 0) {
+      const recUsd = Number.parseFloat(String(r.USD ?? "").replace(",", ".").replace(/^\$/, ""));
+      return !Number.isNaN(recUsd) && Math.abs(draftUsd - recUsd) <= 0.005;
     }
 
     return false;

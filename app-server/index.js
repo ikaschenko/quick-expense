@@ -138,7 +138,7 @@ validateStartupEnv();
 // Number of months of recent expense data loaded in Phase 1 (blocking).
 // Older data is fetched in the background after the UI is ready (Phase 2).
 // Override via EXPENSE_RECENT_MONTHS env var if needed.
-const RECENT_MONTHS = parseInt(process.env.EXPENSE_RECENT_MONTHS ?? "24", 10);
+const RECENT_MONTHS = Number.parseInt(process.env.EXPENSE_RECENT_MONTHS ?? "24", 10);
 
 app.use("/api", express.json({ limit: maxApiJsonBodySize }));
 
@@ -677,8 +677,8 @@ app.get("/api/expenses/history", requireAuthenticatedUser, async (req, res) => {
       return;
     }
 
-    const endRow = parseInt(req.query.endRow, 10);
-    if (isNaN(endRow) || endRow < 2 || endRow > 500_000) {
+    const endRow = Number.parseInt(req.query.endRow, 10);
+    if (Number.isNaN(endRow) || endRow < 2 || endRow > 500_000) {
       res.status(400).json({ message: "endRow must be an integer between 2 and 500000." });
       return;
     }
@@ -824,8 +824,8 @@ app.put("/api/expenses/:rowNumber", requireAuthenticatedUser, requireEditAccess,
       return;
     }
 
-    const rowNumber = parseInt(req.params.rowNumber, 10);
-    if (isNaN(rowNumber) || rowNumber < 2) {
+    const rowNumber = Number.parseInt(req.params.rowNumber, 10);
+    if (Number.isNaN(rowNumber) || rowNumber < 2) {
       res.status(400).json({ message: "rowNumber must be an integer >= 2." });
       return;
     }
