@@ -1206,6 +1206,15 @@ describe("createSpreadsheet", () => {
     await expect(createSpreadsheet(TOKEN, "Fail")).rejects.toThrow("Insufficient permissions");
   });
 
+  it("throws Invalid spreadsheetId when the API returns a path-traversal id, without calling any downstream fetch", async () => {
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse(mockTemplateSheets))
+      .mockResolvedValueOnce(jsonResponse({ ...createdSpreadsheet, spreadsheetId: "../evil/path" }));
+    const callCountBefore = mockFetch.mock.calls.length;
+    await expect(createSpreadsheet(TOKEN, "Fail")).rejects.toThrow("Invalid spreadsheetId");
+    expect(mockFetch.mock.calls.length).toBe(callCountBefore + 2); // only the two setup calls, nothing downstream
+  });
+
   describe("named ranges", () => {
     const templateWithNamedRanges = {
       sheets: [

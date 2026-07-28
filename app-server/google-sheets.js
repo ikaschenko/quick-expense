@@ -38,6 +38,12 @@ const MAX_DATASET_BYTES = 10 * 1024 * 1024;
 const MAX_CUSTOM_COLUMNS = 10;
 const MAX_OPTIONAL_CURRENCIES = 10;
 
+function assertValidSpreadsheetId(id) {
+  if (typeof id !== "string" || !/^[A-Za-z0-9_-]+$/.test(id)) {
+    throw new Error("Invalid spreadsheetId");
+  }
+}
+
 function buildExpenseHeaders(sheetCurrencies, customColumns = []) {
   return ["Date", ...sheetCurrencies, ...POST_CURRENCY_FIXED, ...customColumns];
 }
@@ -289,6 +295,7 @@ async function batchUpdateValues(accessToken, spreadsheetId, valueInputOption, d
 }
 
 export async function writeExpenseValues(accessToken, spreadsheetId, rowNumber, alignedValues, targetHeaders) {
+  assertValidSpreadsheetId(spreadsheetId);
   const structuredData = [];
   const freeTextData = [];
 
@@ -540,6 +547,7 @@ function detectDateOrderIssue(dateValues, parser) {
  *   - Any unexpected error.
  */
 export async function findExpenseStartRow(accessToken, spreadsheetId, recentMonths) {
+  assertValidSpreadsheetId(spreadsheetId);
   const dateRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A:A`);
   const totalRows = Math.max(0, dateRows.length - 1); // exclude header
 
@@ -607,6 +615,7 @@ export async function createSpreadsheet(accessToken, title) {
   ]);
 
   const spreadsheetId = created.spreadsheetId;
+  assertValidSpreadsheetId(spreadsheetId);
   const defaultSheetId = created.sheets?.[0]?.properties?.sheetId ?? 0;
   const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
   const batchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
@@ -696,6 +705,7 @@ export function parseSpreadsheetUrl(url) {
  * Returns { fileName } or throws on API error.
  */
 export async function getSpreadsheetFileMeta(accessToken, spreadsheetId) {
+  assertValidSpreadsheetId(spreadsheetId);
   const data = await requestJson(
     accessToken,
     `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(spreadsheetId)}?fields=name`,
@@ -712,6 +722,7 @@ export async function getSpreadsheetFileMeta(accessToken, spreadsheetId) {
  * Throws on unexpected API errors.
  */
 export async function getSpreadsheetModifiedTime(accessToken, spreadsheetId) {
+  assertValidSpreadsheetId(spreadsheetId);
   try {
     const data = await requestJson(
       accessToken,
@@ -730,6 +741,7 @@ export async function getSpreadsheetModifiedTime(accessToken, spreadsheetId) {
  * Returns 0 if the sheet has no rows, no header, or does not exist yet.
  */
 export async function getExpenseRowCount(accessToken, spreadsheetId) {
+  assertValidSpreadsheetId(spreadsheetId);
   try {
     const rows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A:A`);
     return Math.max(0, rows.length - 1);
@@ -764,6 +776,7 @@ function applyMappingToHeader(normalizedHeader, mapping) {
  * Never throws — callers receive a safe fallback result on any error.
  */
 export async function detectConfigSheet(accessToken, spreadsheetId) {
+  assertValidSpreadsheetId(spreadsheetId);
   try {
     const metadata = await getMetadata(accessToken, spreadsheetId);
     const configSheet = metadata.sheets?.find((s) => s.properties?.title === "Config");
@@ -811,6 +824,7 @@ export async function detectConfigSheet(accessToken, spreadsheetId) {
  * after the last data row — preserving any existing categories_list block.
  */
 export async function writeConfigSheetMapping(accessToken, spreadsheetId, mapping) {
+  assertValidSpreadsheetId(spreadsheetId);
   const metadata = await getMetadata(accessToken, spreadsheetId);
   const configSheet = metadata.sheets?.find((s) => s.properties?.title === "Config");
   if (!configSheet) {
@@ -835,6 +849,7 @@ export async function writeConfigSheetMapping(accessToken, spreadsheetId, mappin
  * Never throws — callers receive an empty array on any error.
  */
 export async function readExpensesSheetHeader(accessToken, spreadsheetId) {
+  assertValidSpreadsheetId(spreadsheetId);
   try {
     const rows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!1:1`);
     return rows[0] ?? [];
@@ -844,6 +859,7 @@ export async function readExpensesSheetHeader(accessToken, spreadsheetId) {
 }
 
 export async function validateSpreadsheet(accessToken, spreadsheetId, mapping = null, cachedMetadata = null) {
+  assertValidSpreadsheetId(spreadsheetId);
   const report = { tabAction: "found", headersAction: "valid", sheetCurrencies: [], customColumns: [], headerRow: [] };
 
   const metadata = cachedMetadata ?? await getMetadata(accessToken, spreadsheetId);
@@ -923,6 +939,7 @@ export async function validateSpreadsheet(accessToken, spreadsheetId, mapping = 
  * Returns the updated structure { currencies, customColumns }.
  */
 export async function insertCurrencyColumnInSheet(accessToken, spreadsheetId, currencyCode) {
+  assertValidSpreadsheetId(spreadsheetId);
   const metadata = await getMetadata(accessToken, spreadsheetId);
   const expenseSheet = metadata.sheets?.find(
     (sheet) => sheet.properties?.title === SHEET_NAME,
@@ -994,6 +1011,7 @@ export async function insertCurrencyColumnInSheet(accessToken, spreadsheetId, cu
 
 /** Insert a new custom column at the end of the sheet header. Returns the column index (1-based). */
 export async function insertCustomColumnInSheet(accessToken, spreadsheetId, columnName) {
+  assertValidSpreadsheetId(spreadsheetId);
   const metadata = await getMetadata(accessToken, spreadsheetId);
   const expenseSheet = metadata.sheets?.find((s) => s.properties?.title === SHEET_NAME);
   if (!expenseSheet) throw new Error("Expenses sheet not found.");
@@ -1031,6 +1049,7 @@ export async function insertCustomColumnInSheet(accessToken, spreadsheetId, colu
 
 /** Rename a column header cell by 1-based column index. */
 export async function renameColumnInSheet(accessToken, spreadsheetId, colIndex1Based, newName) {
+  assertValidSpreadsheetId(spreadsheetId);
   const colLetter = columnLetter(colIndex1Based);
   await updateValues(accessToken, spreadsheetId, `${SHEET_NAME}!${colLetter}1`, [[newName]]);
 }
@@ -1040,6 +1059,7 @@ export async function renameColumnInSheet(accessToken, spreadsheetId, colIndex1B
  * Reads the current header, finds current positions, issues moveDimension requests.
  */
 export async function reorderCustomColumnsInSheet(accessToken, spreadsheetId, orderedNames, mapping = null) {
+  assertValidSpreadsheetId(spreadsheetId);
   const metadata = await getMetadata(accessToken, spreadsheetId);
   const expenseSheet = metadata.sheets?.find((s) => s.properties?.title === SHEET_NAME);
   if (!expenseSheet) throw new Error("Expenses sheet not found.");
@@ -1123,6 +1143,7 @@ export async function reorderCustomColumnsInSheet(accessToken, spreadsheetId, or
  * Currency columns live between Date (index 0) and USD.
  */
 export async function reorderCurrencyColumnsInSheet(accessToken, spreadsheetId, orderedCodes, mapping = null) {
+  assertValidSpreadsheetId(spreadsheetId);
   const metadata = await getMetadata(accessToken, spreadsheetId);
   const expenseSheet = metadata.sheets?.find((s) => s.properties?.title === SHEET_NAME);
   if (!expenseSheet) throw new Error("Expenses sheet not found.");
@@ -1194,6 +1215,7 @@ export async function reorderCurrencyColumnsInSheet(accessToken, spreadsheetId, 
  * Returns true if all cells below row 1 are empty.
  */
 export async function isCustomColumnEmpty(accessToken, spreadsheetId, colIndex1Based) {
+  assertValidSpreadsheetId(spreadsheetId);
   const colLetter = columnLetter(colIndex1Based);
   const range = `${SHEET_NAME}!${colLetter}2:${colLetter}`;
   const rows = await getValues(accessToken, spreadsheetId, range);
@@ -1202,6 +1224,7 @@ export async function isCustomColumnEmpty(accessToken, spreadsheetId, colIndex1B
 
 /** Hard-delete a column (1-based index) from the sheet. */
 export async function deleteColumnFromSheet(accessToken, spreadsheetId, colIndex1Based) {
+  assertValidSpreadsheetId(spreadsheetId);
   const metadata = await getMetadata(accessToken, spreadsheetId);
   const expenseSheet = metadata.sheets?.find((s) => s.properties?.title === SHEET_NAME);
   if (!expenseSheet) throw new Error("Expenses sheet not found.");
@@ -1230,6 +1253,7 @@ export async function deleteColumnFromSheet(accessToken, spreadsheetId, colIndex
  * expectedDataRowCount, throws an error with code "CONFLICT" instead of deleting.
  */
 export async function deleteLastExpenseRow(accessToken, spreadsheetId, expectedDataRowCount) {
+  assertValidSpreadsheetId(spreadsheetId);
   // Conflict check: count actual data rows (column A minus header)
   const colA = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A:A`);
   const actualDataRowCount = Math.max(0, colA.length - 1);
@@ -1270,6 +1294,7 @@ export async function deleteLastExpenseRow(accessToken, spreadsheetId, expectedD
 
 /** Find the 1-based column index of a named column in the sheet header (case-insensitive). */
 export async function findColumnIndex(accessToken, spreadsheetId, columnName, mapping = null) {
+  assertValidSpreadsheetId(spreadsheetId);
   const headerRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!1:1`);
   const { effectiveHeader } = parseEffectiveSheetStructure(headerRows[0] ?? [], mapping);
   const idx = effectiveHeader.findIndex((h) => h.toLowerCase() === columnName.toLowerCase());
@@ -1289,6 +1314,7 @@ function columnLetter(n) {
 }
 
 export async function loadExpenses(accessToken, spreadsheetId, mapping = null, options = {}) {
+  assertValidSpreadsheetId(spreadsheetId);
   const { startRow = null, endRow = null, precomputedReport = null, dateValues = null } = options;
   const report = precomputedReport ?? await validateSpreadsheet(accessToken, spreadsheetId, mapping);
   const { sheetCurrencies, customColumns } = report;
@@ -1338,6 +1364,7 @@ export async function loadExpenses(accessToken, spreadsheetId, mapping = null, o
 }
 
 export async function appendExpenseRow(accessToken, spreadsheetId, values, mapping = null) {
+  assertValidSpreadsheetId(spreadsheetId);
   const report = await validateSpreadsheet(accessToken, spreadsheetId, mapping);
   const canonicalHeaders = buildExpenseHeaders(report.sheetCurrencies, report.customColumns);
 
@@ -1427,6 +1454,7 @@ function alignValuesToHeaders(canonicalHeaders, targetHeaders, values, mapping) 
  * Returns { record, insertMode, sheetCurrencies, customColumns }.
  */
 export async function addExpenseRow(accessToken, spreadsheetId, values, mapping = null) {
+  assertValidSpreadsheetId(spreadsheetId);
   // Read date column to decide append vs insert.
   const dateRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A:A`);
   const dateValues = dateRows.slice(1).map((r) => r[0] ?? "");
@@ -1512,6 +1540,7 @@ export async function addExpenseRow(accessToken, spreadsheetId, values, mapping 
 }
 
 export async function updateExpenseRow(accessToken, spreadsheetId, rowNumber, values, mapping = null) {
+  assertValidSpreadsheetId(spreadsheetId);
   const report = await validateSpreadsheet(accessToken, spreadsheetId, mapping);
   const canonicalHeaders = buildExpenseHeaders(report.sheetCurrencies, report.customColumns);
 
@@ -1562,6 +1591,7 @@ async function deleteSheetRowByIndex(accessToken, spreadsheetId, rowIdx0) {
  * Returns { record, moveMode }.
  */
 export async function moveExpenseRow(accessToken, spreadsheetId, originalRowNumber, values, mapping = null) {
+  assertValidSpreadsheetId(spreadsheetId);
   const dateRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A:A`);
   const dateValues = dateRows.slice(1).map((r) => r[0] ?? "");
   const parser = buildDateParser(dateValues.filter(Boolean).slice(0, 30));
