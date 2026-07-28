@@ -18,6 +18,7 @@ import {
   getRolling12mStats,
   getMtdDailyAmounts,
   getMtdWeekBoundaryPositions,
+  formatPctChange,
 } from "../utils/dashboardStats";
 import { metricsCache, type MetricsCacheEntry } from "../services/metricsCache";
 import { googleSheetsService } from "../services/googleSheets";
@@ -71,7 +72,7 @@ function DeviationLine({ deviation }: DeviationProps): JSX.Element {
   return (
     <p className="home-metric-yoy">
       <span className={isGrowing ? "yoy-up" : "yoy-down"}>
-        {arrow} {sign}{deviation.pctChange}% ({sign}${Math.round(deviation.absChange)})
+        {arrow} {sign}{formatPctChange(deviation.pctChange)}% ({sign}${Math.round(deviation.absChange)})
       </span>{" "}
       <span className="prior-period-wrapper">
         <button

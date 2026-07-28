@@ -279,6 +279,11 @@ function buildDeviation(
 ): PeriodStats["deviation"] {
   if (priorCount === 0) return null;
   const absChange = current - prior;
-  const pctChange = prior !== 0 ? Math.round(Math.abs(absChange / prior) * 100) : 0;
+  const pctChange = prior !== 0 ? Math.round(Math.abs(absChange / prior) * 1000) / 10 : 0;
   return { up: absChange >= 0, pctChange, absChange: Math.abs(absChange), priorLabel, priorTotal: prior };
+}
+
+/** Formats a deviation percentage: one decimal digit when < 10%, integer when >= 10%. */
+export function formatPctChange(pct: number): string {
+  return pct >= 10 ? String(Math.round(pct)) : pct.toFixed(1);
 }

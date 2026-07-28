@@ -9,6 +9,7 @@ import {
   getMtdDailyAmounts,
   getMtdWeekBoundaryPositions,
   buildIsoNormalizer,
+  formatPctChange,
   type IsoNormalizer,
 } from "../../app-web/utils/dashboardStats";
 
@@ -607,5 +608,54 @@ describe("buildIsoNormalizer", () => {
     ];
     const normalizer = buildIsoNormalizer(records);
     expect(normalizer("09/06/2026")).toBe("2026-06-09");
+  });
+});
+
+// --- formatPctChange --------------------------------------------------------
+
+describe("formatPctChange", () => {
+  it.each([
+    [15, "15"],
+    [35, "35"],
+    [10, "10"],
+    [100, "100"],
+    [9.9, "9.9"],
+    [2.7, "2.7"],
+    [0.3, "0.3"],
+    [0, "0.0"],
+  ])("formats %d as '%s'", (pct, expected) => {
+    expect(formatPctChange(pct)).toBe(expected);
+  });
+
+  it("uses integer for boundary value 10", () => {
+    expect(formatPctChange(10)).toBe("10");
+  });
+
+  it("uses one decimal for values just below 10", () => {
+    expect(formatPctChange(9.9)).toBe("9.9");
+  });
+});
+
+// --- buildDeviation pctChange precision -----------------------------------
+
+describe("buildDeviation pctChange precision", () => {
+  it("stores one decimal digit of precision for small deviations", () => {
+    // current=103, prior=100 => 3% change — with integer rounding would be 3, with 1-decimal 3.0
+    const records = [
+      makeRecord(TODAY, "103"),
+      makeRecord("2026-05-01", "100"),
+    ];
+    const stats = getMtdStats(records, TODAY, iso);
+    expect(stats.deviation!.pctChange).toBeCloseTo(3.0);
+  });
+
+  it("stores correct 1-decimal pctChange for sub-10% deviation", () => {
+    // current=1027, prior=1000 => 2.7% change
+    const records = [
+      makeRecord(TODAY, "1027"),
+      makeRecord("2026-05-01", "1000"),
+    ];
+    const stats = getMtdStats(records, TODAY, iso);
+    expect(stats.deviation!.pctChange).toBeCloseTo(2.7);
   });
 });
