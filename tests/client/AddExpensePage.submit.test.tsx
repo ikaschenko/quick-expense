@@ -410,3 +410,123 @@ describe("AddExpensePage — repeat mode FX rates", () => {
     expect(fxRateInput.value).toBe("");
   });
 });
+
+describe("AddExpensePage — validation error focus (issue #87)", () => {
+  // A configured non-USD currency is needed so both an invalid-amount error and an
+  // FX-rate error can independently target two different DOM elements (amount vs. rate input) —
+  // "Category"/"Date"/"Spent By" use native `required` and are already blocked/focused by the browser.
+  const eurConfig = {
+    config: {
+      email: "test@example.com",
+      spreadsheetId: "abc123",
+      spreadsheetUrl: "https://docs.google.com/spreadsheets/d/abc123/edit",
+      sheetName: "Expenses" as const,
+      currencies: ["EUR"],
+      customColumns: [],
+      configMode: "default" as const,
+      predefinedCategories: [],
+      hiddenColumns: [],
+      isGuest: false,
+      accessLevel: "edit" as const,
+      ownerEmail: null,
+    },
+    isConfigLoading: false,
+    error: null,
+    fileName: null,
+    isFileNameLoading: false,
+    saveConfig: vi.fn(),
+    clearConfig: vi.fn(),
+    clearError: vi.fn(),
+    refreshConfig: vi.fn(),
+    updateStructure: vi.fn(),
+    toggleColumnVisibility: vi.fn(),
+  };
+
+  const defaultConfig = {
+    config: {
+      email: "test@example.com",
+      spreadsheetId: "abc123",
+      spreadsheetUrl: "https://docs.google.com/spreadsheets/d/abc123/edit",
+      sheetName: "Expenses",
+      currencies: [],
+      customColumns: [],
+      configMode: "default",
+      predefinedCategories: [],
+      hiddenColumns: [],
+      isGuest: false,
+      accessLevel: "edit",
+      ownerEmail: null,
+    },
+    isConfigLoading: false,
+    error: null,
+    fileName: null,
+    isFileNameLoading: false,
+    saveConfig: vi.fn(),
+    clearConfig: vi.fn(),
+    clearError: vi.fn(),
+    refreshConfig: vi.fn(),
+    updateStructure: vi.fn(),
+    toggleColumnVisibility: vi.fn(),
+  };
+
+  beforeEach(() => {
+    vi.mocked(googleSheetsService.appendExpenseRow).mockReset();
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+    vi.mocked(useConfig).mockReturnValue(eurConfig);
+  });
+
+  afterEach(() => {
+    vi.mocked(useConfig).mockReturnValue(defaultConfig);
+  });
+
+  it("scrolls and focuses the first invalid field on validation failure", async () => {
+    renderAddPage();
+    const amountInput = document.getElementById("amount-field") as HTMLInputElement;
+    fireEvent.change(amountInput, { target: { value: "abc" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /Save & Continue/i }));
+
+    await waitFor(() => {
+      expect(amountInput.scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "center" });
+    });
+    expect(document.activeElement).toBe(amountInput);
+  });
+
+  it("re-targets the new first invalid field when a different field fails validation (AC5)", async () => {
+    renderAddPage();
+    const amountInput = document.getElementById("amount-field") as HTMLInputElement;
+
+    // First submit: invalid amount format — Amount is the first invalid field.
+    fireEvent.change(amountInput, { target: { value: "abc" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save & Continue/i }));
+    await waitFor(() => {
+      expect(document.activeElement).toBe(amountInput);
+    });
+
+    // Second submit: Amount is now valid but no FX rate was provided — the rate field is the new first invalid field.
+    fireEvent.change(amountInput, { target: { value: "10.00" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save & Continue/i }));
+
+    const rateInput = await screen.findByRole("textbox", { name: /Exchange rate: EUR per 1 USD/i });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(rateInput);
+    });
+  });
+});
+
+describe("AddExpensePage — submission error toast (issue #87)", () => {
+  beforeEach(() => {
+    vi.mocked(googleSheetsService.appendExpenseRow).mockReset();
+  });
+
+  it("renders a submission-level error as a toast StatusBanner", async () => {
+    vi.mocked(googleSheetsService.appendExpenseRow).mockRejectedValue(new Error("Server exploded"));
+    renderAddPage();
+    fillMinimalForm();
+
+    fireEvent.click(screen.getByRole("button", { name: /Save & Continue/i }));
+
+    const banner = await waitFor(() => screen.getByText("Server exploded").closest(".status-banner"));
+    expect(banner?.className).toContain("status-banner--toast");
+  });
+});

@@ -552,11 +552,24 @@ export function AddExpensePage(): JSX.Element {
     setErrors(validationErrors);
     setFxErrors(nextFxErrors);
 
-    if (
-      Object.keys(validationErrors).length > 0 ||
-      Object.keys(nextFxErrors).length > 0 ||
-      !config
-    ) {
+    if (Object.keys(validationErrors).length > 0 || Object.keys(nextFxErrors).length > 0) {
+      // Defer to the next tick so inputs re-render with data-invalid before we query the DOM.
+      setTimeout(() => {
+        const firstInvalid = document.querySelector<HTMLElement>('form [data-invalid="true"]');
+        if (!firstInvalid) return;
+        firstInvalid.scrollIntoView({ behavior: "smooth", block: "center" });
+        const focusTarget =
+          firstInvalid instanceof HTMLInputElement ||
+          firstInvalid instanceof HTMLTextAreaElement ||
+          firstInvalid instanceof HTMLSelectElement
+            ? firstInvalid
+            : firstInvalid.querySelector<HTMLElement>("input, textarea, select");
+        focusTarget?.focus();
+      }, 0);
+      return;
+    }
+
+    if (!config) {
       return;
     }
 
@@ -631,13 +644,14 @@ export function AddExpensePage(): JSX.Element {
         </div>
       ) : null}
       {success ? <StatusBanner variant="success" message={success} /> : null}
-      {error ? <StatusBanner variant="error" message={error} /> : null}
+      {error ? <StatusBanner variant="error" message={error} toast /> : null}
 
       <form onSubmit={(event) => void onSubmit(event)}>
         {/* Amount — show non-USD input only when currencies are configured */}
         {activeNonUsdCurrency ? (
           <div className="add-amount-field">
             <input
+              id="amount-field"
               ref={amountInputRef}
               className="add-amount-input"
               inputMode="decimal"
@@ -645,6 +659,7 @@ export function AddExpensePage(): JSX.Element {
               onChange={(event) => updateCurrencyAmount(activeNonUsdCurrency, event.target.value)}
               placeholder="0.00"
               aria-label={`Amount in ${activeNonUsdCurrency}`}
+              data-invalid={errors[activeNonUsdCurrency] || errors.USD ? "true" : undefined}
             />
             {errors[activeNonUsdCurrency] ? (
               <div className="field-error">{errors[activeNonUsdCurrency]}</div>
@@ -653,6 +668,7 @@ export function AddExpensePage(): JSX.Element {
         ) : (
           <div className="add-amount-field">
             <input
+              id="amount-field"
               ref={amountInputRef}
               className="add-amount-input"
               inputMode="decimal"
@@ -660,6 +676,7 @@ export function AddExpensePage(): JSX.Element {
               onChange={(event) => updateDraft("USD", event.target.value)}
               placeholder="0.00"
               aria-label="Amount in USD"
+              data-invalid={errors.USD ? "true" : undefined}
             />
             {errors.USD ? (
               <div className="field-error">{errors.USD}</div>
@@ -711,6 +728,7 @@ export function AddExpensePage(): JSX.Element {
                   onChange={(event) => updateFxRate(activeNonUsdCurrency, event.target.value)}
                   placeholder="0.00"
                   aria-label={`Exchange rate: ${activeNonUsdCurrency} per 1 USD`}
+                  data-invalid={fxErrors[activeNonUsdCurrency] ? "true" : undefined}
                 />
               </div>
               <div className="add-fx-card-col--live">
@@ -775,6 +793,7 @@ export function AddExpensePage(): JSX.Element {
             onChange={(event) => updateDraft("Category", event.target.value)}
             placeholder="Or type a new category…"
             required
+            data-invalid={errors.Category ? "true" : undefined}
           />
           <datalist id="category-options">
             {suggestionLists.Category.map((value) => (
@@ -790,7 +809,7 @@ export function AddExpensePage(): JSX.Element {
             <label className="input-label" htmlFor="expense-date-field">
               Date <span className="add-date-label-muted">({exactDateLabel})</span>
             </label>
-            <div className="add-date-picker-row">
+            <div className="add-date-picker-row" data-invalid={errors.Date ? "true" : undefined}>
               <Calendar size={16} aria-hidden />
               <DatePicker
                 id="expense-date-field"
@@ -821,6 +840,7 @@ export function AddExpensePage(): JSX.Element {
               value={draft.spentBy}
               onChange={(event) => updateDraft("spentBy", event.target.value)}
               required
+              data-invalid={errors.spentBy ? "true" : undefined}
             />
             <datalist id="spent-by-options">
               {(suggestionLists.spentBy ?? []).map((value) => (
