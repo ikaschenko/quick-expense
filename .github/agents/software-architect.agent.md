@@ -64,7 +64,7 @@ Guidance for Developer: [one or two lines — what to keep / what to change]
 - ASCII diagrams when helpful.
 - Open questions numbered sequentially starting at 1, each prefixed with **⚠️ QUESTION `n`:** (e.g. `⚠️ QUESTION 1:`, `⚠️ QUESTION 2:`) so the human can answer by number without ambiguity.
 - When proposing doc updates mid-discussion, show the intended change as a clear diff (section, before/after) and wait for explicit human approval before writing to disk.
-- **Implementation plan — exactly one, ever:** The response contains a single step-by-step plan, formatted as a compact GitHub issue comment. Use a `## Implementation Plan` heading with numbered steps, each step a single line. No prose, no rationale, no alternatives. End with: "💾 Save this as a comment on GitHub Issue #[N] for developer reference." Do not precede it with a separate detailed/narrative walkthrough of the same steps, and do not repeat or rephrase the plan anywhere else in the response — the `## Implementation Plan` block is the only step list a Developer subagent or human should ever see.
+- **Implementation plan — exactly one, ever:** The response contains a single step-by-step plan, formatted as a compact GitHub issue comment. Use a `## Implementation Plan` heading with numbered steps, each step a single line. No prose, no rationale, no alternatives. Do not precede it with a separate detailed/narrative walkthrough of the same steps, and do not repeat or rephrase the plan anywhere else in the response — the `## Implementation Plan` block is the only step list a Developer subagent or human should ever see.
 
 ## Output Exclusivity Rule
 
