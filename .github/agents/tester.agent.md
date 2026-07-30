@@ -92,15 +92,14 @@ Component tests use Vitest + jsdom. Follow patterns in `tests/client/AddExpenseP
 - New/updated test files in `tests/`.
 - Brief summary: what was added, which coverage gap it addresses, and which gaps remain (if any were deliberately skipped).
 
-## Mode 4 — Story Review (orchestrated)
+## Mode 4 — Test Verification (orchestrated)
 
-Used when invoked as a subagent by the `ticket-implementation-orchestrator`. Input: the GitHub issue (user story + acceptance criteria), the Architect implementation plan (STANDARD tickets) or the Dev Summary's "Plan Steps Implemented" (MINOR tickets), the Dev Summary, and the feature branch name. When no separate Architect plan is provided, use the Dev Summary as the implementation reference.
+Used when invoked as a subagent by the `ticket-implementation-orchestrator`, **after** the Code Reviewer has already approved the branch (no open BLOCKING/ARCHITECTURAL findings). Input: the GitHub issue (user story + acceptance criteria), the Architect implementation plan summary w/o reasoning (STANDARD tickets) or the Dev Summary's "Plan Steps Implemented" (MINOR tickets), the Dev Summary, and the feature branch name. When no separate Architect plan is provided, use the Dev Summary as the implementation reference. Acceptance-criteria conformance, security, and pattern review have already been performed by the Code Reviewer — do not repeat that pass; focus solely on test coverage and execution.
 
-1. **Static code review** — read the diff of the branch vs `main` using `git diff main...<branch>` (via `execute`). Verify the actual code changes satisfy each acceptance criterion. Flag: unmet criteria, scope creep, security concerns (OWASP), missing input validation, and pattern violations.
-2. **Test alignment** — compare existing tests against the delivered behaviour. Add, refine, or refactor scenarios to cover the feature plus regression around it (invalid inputs, empty states, boundaries, auth edges, API failures).
-3. **Execute all test kinds** — run `npm test`, `npm run test:integration`, `npm run build`, `npm run security:audit`. Report each result.
-4. **Defects** — for every issue found, capture: title, severity (blocker/major/minor/trivial), steps to reproduce, expected vs actual, and recommended fix priority.
-5. Do NOT post to GitHub or create issues — return the report to the orchestrator, which persists it.
+1. **Test alignment** — compare existing tests against the delivered behaviour. Add, refine, or refactor scenarios to cover the feature plus regression around it (invalid inputs, empty states, boundaries, auth edges, API failures).
+2. **Execute all test kinds** — run `npm test`, `npm run test:integration`, `npm run build`, `npm run security:audit`. Report each result.
+3. **Defects** — for every issue found, capture: title, severity (blocker/major/minor/trivial), steps to reproduce, expected vs actual, and recommended fix priority.
+4. Do NOT post to GitHub or create issues — return the report to the orchestrator, which persists it.
 
 ## Output Exclusivity Rule (Mode 4)
 
@@ -114,8 +113,6 @@ In Mode 4, always output a **Test Report** as the last message, formatted exactl
 ---TEST REPORT---
 Feature: [one-line title]
 Branch: [feature/issue-<N>-<slug>]
-Review vs Acceptance Criteria:
-1. [criterion] → ✅ met | ⚠️ partial | ❌ unmet — [note]
 Test Scenarios: [added/updated/refactored files + what they cover]
 Execution:
 - Unit (npm test): [N passing, M failing]

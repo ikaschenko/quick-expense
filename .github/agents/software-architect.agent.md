@@ -47,6 +47,17 @@ For every major change, verify against the OWASP-aligned rules in `copilot-instr
 - No new OAuth scopes requested beyond what is necessary.
 - No user data logged or leaked in error responses.
 
+## Architectural Concern Confirmation (Code Review loop)
+
+When invoked as a subagent by the `ticket-implementation-orchestrator` to address an ARCHITECTURAL finding from the Code Reviewer, you are seeded with the original PO Handoff + Implementation Plan + the specific finding(s) only — not the full chat history. Decide: **CONFIRM** (the implementation is fine as-is; the finding reflects a misunderstanding of the plan) or **REVISE** (the plan needs to change). Output only the compact block below — do not restate the full plan or re-derive requirements:
+
+```
+## Plan Revision
+Finding(s) Addressed: [ID]
+Decision: CONFIRM | REVISE
+Guidance for Developer: [one or two lines — what to keep / what to change]
+```
+
 ## Output Format
 
 - **Decision records:** Context → Options → Decision → Consequences. Use this only for trade-off discussion and rationale — never restate the step-by-step plan inside a decision record.

@@ -81,6 +81,27 @@ Every task is complete only when tests and docs are current. Apply these checks 
 
 > **Orchestrated mode:** when invoked as a subagent by the `ticket-implementation-orchestrator`, DO NOT update BRD (`docs/QuickExpense_business-requirements.md`) or SDD (`architecture.md`, `db/database.md`, `README.md`). Those are updated by the Product Owner and Architect in the dedicated doc-sync stage (STANDARD tickets) or skipped entirely (MINOR tickets). Still keep tests current, and list any needed doc changes under "Docs Needed" in the handoff below.
 
+## Fix Round (Code Review loop)
+
+When invoked as a subagent by the `ticket-implementation-orchestrator` to address Code Reviewer findings, you are seeded with ONLY the specific finding lines (ID + severity + description + suggested fix) and the branch name — not the full story, plan, or prior chat. Treat each finding as the complete spec for that fix; if a finding is ambiguous about intent, ask via `⚠️ QUESTION:` rather than guessing.
+
+1. Fix every BLOCKING finding and any Architect-confirmed guidance included in the seed. Fold in any MINOR findings batched into the same seed.
+2. Stay on the SAME branch — never create a new branch or PR.
+3. Run `npm run build` / `npm test` as relevant to the touched files.
+4. Report a compact **Fix Summary** (below) instead of a full Dev Summary — this round only touches the flagged findings, so re-stating the whole feature is wasted output.
+
+### Fix Summary Artifact
+
+```
+---FIX SUMMARY---
+Findings Addressed: [ID: what changed], ...
+Files Changed: [path — reason]
+Tests: [passing/failing, only if touched]
+Build: [clean | errors | not applicable]
+Deviations: [none | note]
+---END FIX SUMMARY---
+```
+
 ## Handoff Artifact
 
 When implementation is complete (build + tests green), always output a **Dev Summary** as the last message, formatted exactly as:
