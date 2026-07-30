@@ -11,6 +11,8 @@
         "/^git log\\b/": true,
 
         "/^npm test\\b/": true,
-        "/^npx vitest run\\b/": true
+        "/^npx vitest run\\b/": true,
+
+        "/^node --check\\b/": true
     }
 }
