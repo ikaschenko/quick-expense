@@ -484,6 +484,11 @@ describe("AddExpensePage — validation error focus (issue #87)", () => {
     const amountInput = document.getElementById("amount-field") as HTMLInputElement;
     fireEvent.change(amountInput, { target: { value: "abc" } });
 
+    // Category is required natively — fill it so the browser doesn't block submission
+    // before our own validation/focus logic (under test) gets a chance to run.
+    const categoryInput = document.getElementById("category-field") as HTMLInputElement;
+    fireEvent.change(categoryInput, { target: { value: "Food" } });
+
     fireEvent.click(screen.getByRole("button", { name: /Save & Continue/i }));
 
     await waitFor(() => {
@@ -495,6 +500,11 @@ describe("AddExpensePage — validation error focus (issue #87)", () => {
   it("re-targets the new first invalid field when a different field fails validation (AC5)", async () => {
     renderAddPage();
     const amountInput = document.getElementById("amount-field") as HTMLInputElement;
+
+    // Category is required natively — fill it so the browser doesn't block submission
+    // before our own validation/focus logic (under test) gets a chance to run.
+    const categoryInput = document.getElementById("category-field") as HTMLInputElement;
+    fireEvent.change(categoryInput, { target: { value: "Food" } });
 
     // First submit: invalid amount format — Amount is the first invalid field.
     fireEvent.change(amountInput, { target: { value: "abc" } });
