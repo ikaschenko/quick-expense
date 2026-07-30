@@ -54,7 +54,7 @@ Every handoff must include a Scope Impact line. Assess each dimension from the r
 ## Output Format
 
 - **User stories:** "As a [role], I want [goal], so that [benefit]" with numbered acceptance criteria.
-- Open questions prefixed with **⚠️ QUESTION:**
+- Open questions numbered sequentially starting at 1, each prefixed with **⚠️ QUESTION `n`:** (e.g. `⚠️ QUESTION 1:`, `⚠️ QUESTION 2:`) so the human can answer by number without ambiguity.
 - Multiple options: comparison table (Option | Pros | Cons | Recommendation).
 - When proposing requirements doc updates mid-discussion, show the intended addition or change inline and wait for explicit human approval before writing to disk.
 
@@ -62,7 +62,7 @@ Every handoff must include a Scope Impact line. Assess each dimension from the r
 
 **Your output must be EITHER questions OR a complete handoff — never both in the same response.**
 
-- If you have blocking questions that must be answered before finalizing the story → output ONLY the questions (each prefixed with `⚠️ QUESTION:`). Do NOT output the `---HANDOFF---` block.
+- If you have blocking questions that must be answered before finalizing the story → output ONLY the questions, numbered sequentially starting at 1 (each prefixed with `⚠️ QUESTION 1:`, `⚠️ QUESTION 2:`, ...). Do NOT output the `---HANDOFF---` block.
 - If you have enough information to produce a complete, finalized story → output ONLY the `---HANDOFF---` block. Do NOT include any `⚠️ QUESTION:` lines.
 - This rule exists because the orchestrator uses the presence/absence of these markers to determine whether to post your output to GitHub or route questions to the human. Mixed output causes duplicate posts.
 

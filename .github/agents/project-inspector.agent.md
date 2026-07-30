@@ -113,7 +113,7 @@ Write the report to `docs/audit-report-YYYYMMDD.md` (use today's date). Also out
 
 ## Questions for Human
 
-{List any findings marked as QUESTION — things that look wrong but might be intentional.}
+{List any findings marked as QUESTION — things that look wrong but might be intentional. Number each question sequentially starting at 1 so the human can answer by number without ambiguity.}
 
 ## Notes
 

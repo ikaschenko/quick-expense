@@ -38,7 +38,7 @@ For minor tasks (bug investigations, small fixes, isolated changes) there may be
 
 ## Clarification Before Planning
 
-If open questions require human judgment (scope, priorities, constraints, ambiguous requirements), **stop and ask** — do not proceed on assumptions. List all blocking questions at once using **⚠️ QUESTION:** prefix and wait for answers before building the implementation plan. Proceeding on wrong assumptions wastes effort and produces plans that may need to be discarded.
+If open questions require human judgment (scope, priorities, constraints, ambiguous requirements), **stop and ask** — do not proceed on assumptions. List all blocking questions at once, numbered sequentially starting at 1, using the **⚠️ QUESTION `n`:** prefix (e.g. `⚠️ QUESTION 1:`, `⚠️ QUESTION 2:`) and wait for answers before building the implementation plan. Proceeding on wrong assumptions wastes effort and produces plans that may need to be discarded.
 
 ## Security Review Checklist
 
@@ -62,7 +62,7 @@ Guidance for Developer: [one or two lines — what to keep / what to change]
 
 - **Decision records:** Context → Options → Decision → Consequences. Use this only for trade-off discussion and rationale — never restate the step-by-step plan inside a decision record.
 - ASCII diagrams when helpful.
-- Open questions prefixed with **⚠️ QUESTION:**
+- Open questions numbered sequentially starting at 1, each prefixed with **⚠️ QUESTION `n`:** (e.g. `⚠️ QUESTION 1:`, `⚠️ QUESTION 2:`) so the human can answer by number without ambiguity.
 - When proposing doc updates mid-discussion, show the intended change as a clear diff (section, before/after) and wait for explicit human approval before writing to disk.
 - **Implementation plan — exactly one, ever:** The response contains a single step-by-step plan, formatted as a compact GitHub issue comment. Use a `## Implementation Plan` heading with numbered steps, each step a single line. No prose, no rationale, no alternatives. End with: "💾 Save this as a comment on GitHub Issue #[N] for developer reference." Do not precede it with a separate detailed/narrative walkthrough of the same steps, and do not repeat or rephrase the plan anywhere else in the response — the `## Implementation Plan` block is the only step list a Developer subagent or human should ever see.
 
@@ -70,7 +70,7 @@ Guidance for Developer: [one or two lines — what to keep / what to change]
 
 **Your output must be EITHER questions OR a complete plan — never both in the same response.**
 
-- If you have blocking questions that must be answered before you can produce the plan → output ONLY the questions (each prefixed with `⚠️ QUESTION:`). Do NOT output the `## Implementation Plan` section.
+- If you have blocking questions that must be answered before you can produce the plan → output ONLY the questions, numbered sequentially starting at 1 (each prefixed with `⚠️ QUESTION 1:`, `⚠️ QUESTION 2:`, ...). Do NOT output the `## Implementation Plan` section.
 - If you have enough information to produce the plan → output supporting design notes (if any), followed by exactly ONE `## Implementation Plan` block. Do NOT include any `⚠️ QUESTION:` lines, and do NOT emit a second `## Implementation Plan` heading or an equivalent numbered-steps list anywhere else in the response.
 - Before finalizing your response, verify it contains at most one `## Implementation Plan` heading. If you find yourself writing a second version of the plan (e.g., a "full" plan followed by a "compact" one), delete the first and keep only the final compact block.
 - This rule exists because the orchestrator uses the presence/absence of these markers to determine whether to post your output to GitHub or route questions to the human. Mixed or duplicate output causes duplicate posts.

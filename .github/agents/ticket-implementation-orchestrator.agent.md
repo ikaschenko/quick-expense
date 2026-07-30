@@ -35,7 +35,7 @@ This rule prevents duplicate handoff comments. Follow it exactly:
 After every subagent invocation, classify the output using these rules:
 
 **Output has BLOCKING QUESTIONS when:**
-- It contains one or more `⚠️ QUESTION:` prefixed lines, OR
+- It contains one or more `⚠️ QUESTION:` prefixed lines (numbered sequentially starting at 1 when there is more than one, e.g. `⚠️ QUESTION 1:`, `⚠️ QUESTION 2:`), OR
 - It does NOT contain the expected artifact block for that stage (e.g., no `---HANDOFF---` for PO, no `## Implementation Plan` for Architect, no `---DEV SUMMARY---`/`---FIX SUMMARY---` for Developer, no `---REVIEW FINDINGS---` for the Code Reviewer, no `## Plan Revision` for an Architect concern-confirmation, no `---TEST REPORT---` for Tester).
 
 **Output is COMPLETE (done) when:**
@@ -200,8 +200,8 @@ Note this only after confirming the merge happened: `git pull origin main` bring
 
 ## QUESTION LOOP
 When a subagent returns blocking questions (per DETECTING COMPLETION rules above):
-1. Relay them to the human **verbatim** in this conversation (never via GitHub — the fast loop stays in chat).
-2. Each question MUST carry options + pros/cons + the subagent's recommendation. If a subagent omits these, ask it to reformat before relaying (or add them yourself only when trivially obvious).
+1. Relay them to the human **verbatim** in this conversation (never via GitHub — the fast loop stays in chat), preserving each question's number.
+2. Each question MUST carry options + pros/cons + the subagent's recommendation. If a subagent omits these, ask it to reformat before relaying (or add them yourself only when trivially obvious). If a subagent returned unnumbered questions, number them sequentially starting at 1 before relaying.
 3. Collect the human's answers. Re-invoke the SAME role as a **fresh** subagent, re-seeded with the original input + a "Human Answers" appendix. Do not continue the old context.
 4. **Re-check the new output** using DETECTING COMPLETION rules:
    - If COMPLETE → exit the loop, post the artifact, advance to next stage.
@@ -210,7 +210,7 @@ When a subagent returns blocking questions (per DETECTING COMPLETION rules above
 
 ## DEVELOPER QUESTION LOOP (MINOR tickets only)
 When the Developer subagent returns blocking questions during a MINOR ticket:
-1. Relay questions to the human **verbatim** in chat. Prefix with: "The Developer has questions. You can: (a) answer directly, (b) write **'ask SA'** next to any question you want the Architect to elaborate on, or (c) mix both."
+1. Relay questions to the human **verbatim** in chat, preserving each question's number (renumber sequentially starting at 1 first if the Developer returned them unnumbered). Prefix with: "The Developer has questions. You can: (a) answer directly, (b) write **'ask SA'** next to any question you want the Architect to elaborate on, or (c) mix both."
 2. If the human answers all questions directly → re-invoke Developer as a **fresh** subagent with original seed + "Human Answers" appendix.
 3. If the human marks any questions with "ask SA" → invoke a **fresh** `software-architect` subagent seeded with the PO Handoff + the specific questions. Collect SA answers. Then re-invoke Developer as a **fresh** subagent with original seed + "Human Answers" (for directly answered questions) + "Architect Answers" (for SA-routed questions).
 4. **Re-check the new output** using DETECTING COMPLETION rules:

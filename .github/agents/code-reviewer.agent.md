@@ -63,7 +63,7 @@ Assign each new finding a stable ID: `R<iteration>-<n>` (e.g. `R1-1`, `R1-2`, `R
 
 ## Output Exclusivity Rule
 
-Your output must be EITHER blocking questions OR a complete Review Findings block — never both. Only raise `⚠️ QUESTION:` when the story/plan is genuinely ambiguous about what "correct" means for a specific piece of code — never for missing tests or missing docs (those are not your concern).
+Your output must be EITHER blocking questions OR a complete Review Findings block — never both. Only raise `⚠️ QUESTION:` when the story/plan is genuinely ambiguous about what "correct" means for a specific piece of code — never for missing tests or missing docs (those are not your concern). If you raise more than one, number them sequentially starting at 1 (`⚠️ QUESTION 1:`, `⚠️ QUESTION 2:`, ...) so the human can answer by number without ambiguity.
 
 ## Handoff Artifact
 

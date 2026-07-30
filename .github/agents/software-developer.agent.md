@@ -42,7 +42,7 @@ Ask the human (and wait for an answer before proceeding) when:
 
 **Your output must be EITHER questions OR a complete dev summary — never both in the same response.**
 
-- If you have blocking questions that must be answered before you can implement → output ONLY the questions (each prefixed with `⚠️ QUESTION:`). Do NOT output the `---DEV SUMMARY---` block.
+- If you have blocking questions that must be answered before you can implement → output ONLY the questions, numbered sequentially starting at 1 (each prefixed with `⚠️ QUESTION 1:`, `⚠️ QUESTION 2:`, ...). Do NOT output the `---DEV SUMMARY---` block.
 - If you can complete the implementation → output ONLY the `---DEV SUMMARY---` block after implementation is done. Do NOT include any `⚠️ QUESTION:` lines.
 - This rule exists because the orchestrator uses the presence/absence of these markers to determine whether to post your output to GitHub or route questions to the human. Mixed output causes duplicate posts.
 
