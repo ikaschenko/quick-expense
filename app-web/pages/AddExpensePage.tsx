@@ -626,16 +626,6 @@ export function AddExpensePage(): JSX.Element {
     return Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
   }, [draft.Date]);
 
-  const exactDateLabel = useMemo(
-    () =>
-      selectedExpenseDate.toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "2-digit",
-      }),
-    [selectedExpenseDate],
-  );
-
   return (
     <Layout title={isEditMode ? "Edit Expense" : "Add Expense"} onBack={isEditMode ? handleEditBack : undefined}>
       {isInsertingHistorical ? (
@@ -647,42 +637,67 @@ export function AddExpensePage(): JSX.Element {
       {error ? <StatusBanner variant="error" message={error} toast /> : null}
 
       <form onSubmit={(event) => void onSubmit(event)}>
-        {/* Amount — show non-USD input only when currencies are configured */}
-        {activeNonUsdCurrency ? (
-          <div className="add-amount-field">
-            <input
-              id="amount-field"
-              ref={amountInputRef}
-              className="add-amount-input"
-              inputMode="decimal"
-              value={draft.currencyAmounts[activeNonUsdCurrency] ?? ""}
-              onChange={(event) => updateCurrencyAmount(activeNonUsdCurrency, event.target.value)}
-              placeholder="0.00"
-              aria-label={`Amount in ${activeNonUsdCurrency}`}
-              data-invalid={errors[activeNonUsdCurrency] || errors.USD ? "true" : undefined}
-            />
-            {errors[activeNonUsdCurrency] ? (
-              <div className="field-error">{errors[activeNonUsdCurrency]}</div>
-            ) : null}
+        {/* Date + Amount — Date sits compact beside the hero Amount input */}
+        <div className="add-date-amount-row">
+          <div className="add-date-compact-group">
+            <div className="add-date-picker-row" data-invalid={errors.Date ? "true" : undefined}>
+              <Calendar size={16} aria-hidden />
+              <DatePicker
+                id="expense-date-field"
+                className="input add-date-picker-input"
+                selected={selectedExpenseDate}
+                onChange={(date: Date | null) => {
+                  if (!date) {
+                    return;
+                  }
+                  updateDraft("Date", formatLocalDate(date));
+                }}
+                dateFormat="yyyy-MM-dd"
+                popperPlacement="bottom-start"
+                showPopperArrow={false}
+                required
+                aria-label="Expense date"
+              />
+            </div>
+            {errors.Date ? <div className="field-error">{errors.Date}</div> : null}
           </div>
-        ) : (
-          <div className="add-amount-field">
-            <input
-              id="amount-field"
-              ref={amountInputRef}
-              className="add-amount-input"
-              inputMode="decimal"
-              value={draft.USD}
-              onChange={(event) => updateDraft("USD", event.target.value)}
-              placeholder="0.00"
-              aria-label="Amount in USD"
-              data-invalid={errors.USD ? "true" : undefined}
-            />
-            {errors.USD ? (
-              <div className="field-error">{errors.USD}</div>
-            ) : null}
-          </div>
-        )}
+
+          {activeNonUsdCurrency ? (
+            <div className="add-amount-field add-amount-field--inline">
+              <input
+                id="amount-field"
+                ref={amountInputRef}
+                className="add-amount-input"
+                inputMode="decimal"
+                value={draft.currencyAmounts[activeNonUsdCurrency] ?? ""}
+                onChange={(event) => updateCurrencyAmount(activeNonUsdCurrency, event.target.value)}
+                placeholder="0.00"
+                aria-label={`Amount in ${activeNonUsdCurrency}`}
+                data-invalid={errors[activeNonUsdCurrency] || errors.USD ? "true" : undefined}
+              />
+              {errors[activeNonUsdCurrency] ? (
+                <div className="field-error">{errors[activeNonUsdCurrency]}</div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="add-amount-field add-amount-field--inline">
+              <input
+                id="amount-field"
+                ref={amountInputRef}
+                className="add-amount-input"
+                inputMode="decimal"
+                value={draft.USD}
+                onChange={(event) => updateDraft("USD", event.target.value)}
+                placeholder="0.00"
+                aria-label="Amount in USD"
+                data-invalid={errors.USD ? "true" : undefined}
+              />
+              {errors.USD ? (
+                <div className="field-error">{errors.USD}</div>
+              ) : null}
+            </div>
+          )}
+        </div>
 
         {/* Currency pills — only when visible currencies exist */}
         {visibleCurrencies.length > 0 ? (
@@ -803,52 +818,24 @@ export function AddExpensePage(): JSX.Element {
           {errors.Category ? <div className="field-error">{errors.Category}</div> : null}
         </div>
 
-        {/* Date + SpentBy inline row */}
-        <div className="add-fields-row">
-          <div className="input-group">
-            <label className="input-label" htmlFor="expense-date-field">
-              Date <span className="add-date-label-muted">({exactDateLabel})</span>
-            </label>
-            <div className="add-date-picker-row" data-invalid={errors.Date ? "true" : undefined}>
-              <Calendar size={16} aria-hidden />
-              <DatePicker
-                id="expense-date-field"
-                className="input add-date-picker-input"
-                selected={selectedExpenseDate}
-                onChange={(date: Date | null) => {
-                  if (!date) {
-                    return;
-                  }
-                  updateDraft("Date", formatLocalDate(date));
-                }}
-                dateFormat="yyyy-MM-dd"
-                popperPlacement="bottom-start"
-                showPopperArrow={false}
-                required
-                aria-label="Expense date"
-              />
-            </div>
-            {errors.Date ? <div className="field-error">{errors.Date}</div> : null}
-          </div>
-
-          <div className="input-group">
-            <label className="input-label" htmlFor="spent-by-field">Spent By</label>
-            <input
-              id="spent-by-field"
-              className="input"
-              list="spent-by-options"
-              value={draft.spentBy}
-              onChange={(event) => updateDraft("spentBy", event.target.value)}
-              required
-              data-invalid={errors.spentBy ? "true" : undefined}
-            />
-            <datalist id="spent-by-options">
-              {(suggestionLists.spentBy ?? []).map((value) => (
-                <option key={value} value={value} />
-              ))}
-            </datalist>
-            {errors.spentBy ? <div className="field-error">{errors.spentBy}</div> : null}
-          </div>
+        {/* Spent By */}
+        <div className="input-group">
+          <label className="input-label" htmlFor="spent-by-field">Spent By</label>
+          <input
+            id="spent-by-field"
+            className="input"
+            list="spent-by-options"
+            value={draft.spentBy}
+            onChange={(event) => updateDraft("spentBy", event.target.value)}
+            required
+            data-invalid={errors.spentBy ? "true" : undefined}
+          />
+          <datalist id="spent-by-options">
+            {(suggestionLists.spentBy ?? []).map((value) => (
+              <option key={value} value={value} />
+            ))}
+          </datalist>
+          {errors.spentBy ? <div className="field-error">{errors.spentBy}</div> : null}
         </div>
 
         {/* Comment */}

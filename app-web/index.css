@@ -1085,13 +1085,6 @@ button { cursor: pointer; }
   border-color: var(--color-border-strong);
 }
 
-.add-date-label-muted {
-  color: var(--color-text-placeholder);
-  font-weight: 500;
-  letter-spacing: normal;
-  text-transform: none;
-}
-
 .add-date-picker-row {
   display: flex;
   align-items: center;
@@ -1102,13 +1095,21 @@ button { cursor: pointer; }
   width: 100%;
 }
 
-.add-fields-row {
+.add-date-amount-row {
   display: grid;
-  grid-template-columns: minmax(9rem, 1fr) 1fr;
+  grid-template-columns: minmax(8rem, 40%) 1fr;
+  align-items: flex-end;
   gap: var(--space-3);
   margin-bottom: var(--space-5);
 }
-.add-fields-row > .input-group {
+
+.add-date-compact-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.add-amount-field--inline {
   margin-bottom: 0;
 }
 
