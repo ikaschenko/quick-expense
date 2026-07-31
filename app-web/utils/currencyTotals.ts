@@ -26,14 +26,14 @@ export function parseRawNumber(raw: string): number {
   if (lastComma !== -1 && lastDot !== -1) {
     if (lastDot > lastComma) {
       // US format: "1,234.56" — dot is decimal, strip thousands commas
-      s = s.replace(/,/g, "");
+      s = s.replaceAll(",", "");
     } else {
       // European format: "1.234,56" — comma is decimal, strip thousands dots
-      s = s.replace(/\./g, "").replace(",", ".");
+      s = s.replaceAll(".", "").replace(",", ".");
     }
   } else if (lastComma !== -1) {
     // Only comma: thousands separator if digits come in groups of 3 (e.g. "1,234"), else decimal
-    s = /^\d{1,3}(,\d{3})+$/.test(s) ? s.replace(/,/g, "") : s.replace(",", ".");
+    s = /^\d{1,3}(,\d{3})+$/.test(s) ? s.replaceAll(",", "") : s.replace(",", ".");
   }
   // else: only dot or no separator — already correct
 

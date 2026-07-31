@@ -26,7 +26,7 @@ import { ExpenseCard } from "../components/ExpenseTable";
 import { trackEvent } from "../services/analytics";
 
 function formatColumnLabel(name: string): string {
-  return name.replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2");
+  return name.replaceAll("_", " ").replace(/([a-z])([A-Z])/g, "$1 $2");
 }
 
 function createInitialDraft(defaultEmail: string, currencies: string[], customColumns: string[]): ExpenseDraft {

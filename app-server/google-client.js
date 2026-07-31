@@ -42,8 +42,8 @@ function requireEnv(name) {
 function toBase64Url(value) {
   return Buffer.from(value)
     .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
     .replace(/=+$/g, "");
 }
 

@@ -100,7 +100,7 @@ function formatGroupDate(dateStr: string): string {
 function getCommentPreview(record: ExpenseRecord): string {
   const base = record.Comment;
   if (!base) return "";
-  const flat = base.replace(/\n/g, " ");
+  const flat = base.replaceAll("\n", " ");
   return flat.length > COMMENT_PREVIEW_LENGTH
     ? `${flat.slice(0, COMMENT_PREVIEW_LENGTH)}...`
     : flat;
@@ -108,7 +108,7 @@ function getCommentPreview(record: ExpenseRecord): string {
 
 function parseAmountValue(raw: string | undefined): number | null {
   if (!raw?.trim()) return null;
-  const num = Number.parseFloat(raw.trim().replace(/^\$/, "").replace(/,/g, ""));
+  const num = Number.parseFloat(raw.trim().replace(/^\$/, "").replaceAll(",", ""));
   return Number.isNaN(num) ? null : num;
 }
 
