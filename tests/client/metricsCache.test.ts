@@ -24,6 +24,7 @@ function makeEntry(overrides: Partial<MetricsCacheEntry> = {}): MetricsCacheEntr
 }
 
 const EMAIL = "user@example.com";
+const CACHE_KEY = `qe_metrics_${EMAIL}`;
 
 beforeEach(() => {
   localStorage.clear();
@@ -58,21 +59,78 @@ describe("metricsCache.save / load", () => {
 
   it("returns null when schemaVersion is missing or outdated", () => {
     // Simulate stale entry written by old app code (before schema version bump)
-    localStorage.setItem(`qe_metrics_${EMAIL}`, JSON.stringify({ ...makeEntry(), schemaVersion: 1 }));
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ ...makeEntry(), schemaVersion: 1 }));
     expect(metricsCache.load(EMAIL)).toBeNull();
   });
 
   it("returns null for a pre-forecast cache entry (schemaVersion 4, no ytdForecast field)", () => {
     // Simulate an entry written before the schema 4→5 bump that added ytdForecast.
     const { ytdForecast, ...legacyEntry } = makeEntry();
-    localStorage.setItem(`qe_metrics_${EMAIL}`, JSON.stringify({ ...legacyEntry, schemaVersion: 4 }));
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ ...legacyEntry, schemaVersion: 4 }));
     expect(metricsCache.load(EMAIL)).toBeNull();
   });
 
   it("returns null for a pre-forecast-deviation cache entry (schemaVersion 5, ytdForecast without deviation)", () => {
     // Simulate an entry written before the schema 5→6 bump that added ytdForecast.deviation.
     const legacyEntry = { ...makeEntry(), ytdForecast: { amountUsd: 1500 }, schemaVersion: 5 };
-    localStorage.setItem(`qe_metrics_${EMAIL}`, JSON.stringify(legacyEntry));
+    localStorage.setItem(CACHE_KEY, JSON.stringify(legacyEntry));
+    expect(metricsCache.load(EMAIL)).toBeNull();
+  });
+
+  it("evicts cache when payload contains non-finite numbers", () => {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ ...makeEntry(), mtdStats: { count: 5, usdTotal: Infinity, deviation: null } }));
+
+    expect(metricsCache.load(EMAIL)).toBeNull();
+    expect(localStorage.getItem(CACHE_KEY)).toBeNull();
+  });
+
+  it("evicts cache when payload contains oversized arrays", () => {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ ...makeEntry(), mtdDailyAmounts: new Array(40).fill(1) }));
+
+    expect(metricsCache.load(EMAIL)).toBeNull();
+    expect(localStorage.getItem(CACHE_KEY)).toBeNull();
+  });
+
+  it("drops injected strings by nulling invalid nested deviation payloads", () => {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+      ...makeEntry(),
+      ytdStats: {
+        count: 20,
+        usdTotal: 800,
+        deviation: {
+          up: true,
+          pctChange: 12.3,
+          absChange: 100,
+          priorLabel: "<script>alert(1)</script>",
+          priorTotal: 700,
+        },
+      },
+    }));
+
+    const entry = metricsCache.load(EMAIL);
+    expect(entry).not.toBeNull();
+    expect(entry?.ytdStats.deviation).toBeNull();
+  });
+
+  it("removes unknown fields on save", () => {
+    const tainted = {
+      ...makeEntry(),
+      injected: "x",
+    } as MetricsCacheEntry & { injected: string };
+
+    metricsCache.save(EMAIL, tainted);
+
+    const raw = localStorage.getItem(CACHE_KEY);
+    expect(raw).not.toBeNull();
+    expect(raw).not.toContain("injected");
+  });
+
+  it("rejects save payloads with unexpected object prototype", () => {
+    const withBadProto = Object.assign(Object.create({ polluted: true }), makeEntry()) as MetricsCacheEntry;
+
+    metricsCache.save(EMAIL, withBadProto);
+
+    expect(localStorage.getItem(CACHE_KEY)).toBeNull();
     expect(metricsCache.load(EMAIL)).toBeNull();
   });
 
