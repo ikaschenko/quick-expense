@@ -36,21 +36,21 @@
     // Text content: data-i18n="key"
     const els = document.querySelectorAll('[data-i18n]');
     for (let i = 0; i < els.length; i++) {
-      const key = els[i].getAttribute('data-i18n');
+      const key = els[i].dataset.i18n;
       if (bundle[key] !== undefined) els[i].textContent = bundle[key];
     }
 
     // HTML content: data-i18n-html="key"
     const htmlEls = document.querySelectorAll('[data-i18n-html]');
     for (let j = 0; j < htmlEls.length; j++) {
-      const hKey = htmlEls[j].getAttribute('data-i18n-html');
+      const hKey = htmlEls[j].dataset.i18nHtml;
       if (bundle[hKey] !== undefined) htmlEls[j].innerHTML = bundle[hKey];
     }
 
     // Attributes: data-i18n-attr="attr:key" (e.g. "content:meta.description")
     const attrEls = document.querySelectorAll('[data-i18n-attr]');
     for (let k = 0; k < attrEls.length; k++) {
-      const parts = attrEls[k].getAttribute('data-i18n-attr').split(';');
+      const parts = attrEls[k].dataset.i18nAttr.split(';');
       for (let m = 0; m < parts.length; m++) {
         const pair = parts[m].split(':');
         if (pair.length === 2 && bundle[pair[1]] !== undefined) {
@@ -65,7 +65,7 @@
     // Update active state on switcher
     const btns = document.querySelectorAll('.lang-switcher button');
     for (let b = 0; b < btns.length; b++) {
-      if (btns[b].getAttribute('data-lang') === currentLang) {
+      if (btns[b].dataset.lang === currentLang) {
         btns[b].classList.add('active');
       } else {
         btns[b].classList.remove('active');
@@ -91,7 +91,7 @@
     for (let i = 0; i < SUPPORTED_LANGS.length; i++) {
       const lang = SUPPORTED_LANGS[i];
       const btn = document.createElement('button');
-      btn.setAttribute('data-lang', lang);
+      btn.dataset.lang = lang;
       btn.textContent = labels[lang] || lang.toUpperCase();
       btn.setAttribute('aria-label', 'Switch language to ' + lang);
       if (lang === currentLang) btn.classList.add('active');

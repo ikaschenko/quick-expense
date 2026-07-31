@@ -855,7 +855,7 @@
         var facade = document.getElementById('demoVideoFacade');
         if (!facade) return;
         facade.addEventListener('click', function () {
-            var videoId = facade.getAttribute('data-video-id');
+            var videoId = facade.dataset.videoId;
             var iframe = document.createElement('iframe');
             iframe.className = 'video-frame';
             iframe.src = 'https://www.youtube-nocookie.com/embed/' + videoId + '?autoplay=1&rel=0';
