@@ -10,6 +10,8 @@ The app is optimized for quick entry from a phone or desktop browser and support
 - searching through the history of submitted expenses 
 - sharing the setup to other users (e.g. family members) so they don't need to setup anything, only sign in
 
+[![Watch the video demo](https://youtube.com)](https://youtu.be/AfMCwMLJQ0c)
+
 ## Tech stack
 
 - React 18 + TypeScript + Vite
