@@ -1,7 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { HomePage } from "../../app-web/pages/HomePage";
 import { useDataset } from "../../app-web/contexts/DatasetContext";
 import { ExpenseRecord } from "../../app-web/types/expense";
@@ -100,6 +100,32 @@ function renderHome() {
     </MemoryRouter>,
   );
 }
+
+function LocationStateProbe(): JSX.Element {
+  const location = useLocation();
+  return <span data-testid="location-state">{JSON.stringify(location.state)}</span>;
+}
+
+describe("HomePage — saved banner", () => {
+  it("shows the banner once, then clears the history state so a reload won't re-show it", async () => {
+    mockDataset({});
+    render(
+      <MemoryRouter initialEntries={[{ pathname: "/home", state: { expenseSaved: true } }]}>
+        <HomePage />
+        <LocationStateProbe />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Expense saved successfully.")).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId("location-state").textContent).toBe("null"));
+  });
+
+  it("does not show the banner on a plain navigation without expenseSaved state", () => {
+    mockDataset({});
+    renderHome();
+    expect(screen.queryByText("Expense saved successfully.")).toBeNull();
+  });
+});
 
 describe("HomePage — widget info tooltips", () => {
   it("renders an info icon for each of the 4 dashboard widgets", () => {

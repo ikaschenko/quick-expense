@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { FileSpreadsheet, Info, Receipt } from "lucide-react";
 import { FormattedAmount } from "../components/FormattedAmount";
 import { Layout } from "../components/Layout";
@@ -126,6 +126,7 @@ export function HomePage(): JSX.Element {
   const { session } = useAuth();
   const dataset = useDataset();
   const location = useLocation();
+  const navigate = useNavigate();
   const today = useMemo(() => getTodayLocalDate(), []);
 
   const [cachedEntry, setCachedEntry] = useState<MetricsCacheEntry | null>(null);
@@ -139,6 +140,14 @@ export function HomePage(): JSX.Element {
   const [showSavedBanner, setShowSavedBanner] = useState(
     !!(location.state as { expenseSaved?: boolean } | null)?.expenseSaved,
   );
+
+  // Browsers persist history.state across reloads — strip it so a refresh doesn't re-show the banner.
+  useEffect(() => {
+    if ((location.state as { expenseSaved?: boolean } | null)?.expenseSaved) {
+      navigate(location.pathname, { replace: true, state: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!showSavedBanner) return;
