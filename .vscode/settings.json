@@ -11,6 +11,7 @@
         "/^git log\\b/": true,
 
         "/^npm test\\b/": true,
+        "/^npm test --.*/": true,
         "/^npx vitest run\\b/": true,
 
         "/^node --check\\b/": true
