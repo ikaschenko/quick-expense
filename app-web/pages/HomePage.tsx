@@ -163,10 +163,10 @@ export function HomePage(): JSX.Element {
     if (!session?.email || !config?.spreadsheetId || isConfigLoading) return;
     if (dataset.status !== "idle") return; // already loaded this session — nothing to do
 
-    const entry = metricsCache.load(session.email);
+    const entry = metricsCache.load(session.email, config.spreadsheetId);
 
     if (!entry) {
-      // No valid same-day cache — load from the API immediately.
+      // No valid same-day cache for this sheet — load from the API immediately.
       dataset.loadDataset().catch(() => {/* error surfaced via dataset.error */});
       return;
     }
@@ -216,6 +216,7 @@ export function HomePage(): JSX.Element {
     if (!session?.email || dataset.status !== "ready") return;
     metricsCache.save(session.email, {
       cacheDate: today,
+      spreadsheetId: config?.spreadsheetId ?? "",
       sheetLastModifiedTime: driveModifiedTimeRef.current ?? new Date().toISOString(),
       todayStats,
       mtdStats,

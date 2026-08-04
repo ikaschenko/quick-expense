@@ -3,6 +3,7 @@ import {
   createContext,
   PropsWithChildren,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -81,6 +82,26 @@ export function DatasetProvider({ children }: PropsWithChildren): JSX.Element {
   // before writing to state so stale results from cancelled loads are discarded.
   const loadGenerationRef = useRef(0);
 
+  // Tracks the spreadsheet this snapshot belongs to. When the user links a different
+  // sheet on Setup, the provider (mounted above the router) survives navigation, so the
+  // stale snapshot/status must be discarded here or Home/History would keep rendering it.
+  const previousSpreadsheetIdRef = useRef(config?.spreadsheetId ?? null);
+  useEffect(() => {
+    const currentSpreadsheetId = config?.spreadsheetId ?? null;
+    if (previousSpreadsheetIdRef.current !== currentSpreadsheetId) {
+      previousSpreadsheetIdRef.current = currentSpreadsheetId;
+      loadGenerationRef.current += 1; // discard any in-flight load/history fetch for the old sheet
+      inFlightRef.current = null;
+      retryBackoffRef.current.reset();
+      setSnapshot(null);
+      snapshotRef.current = null;
+      setIsInvalidated(false);
+      isInvalidatedRef.current = false;
+      setError(null);
+      setStatus("idle");
+    }
+  }, [config?.spreadsheetId]);
+
   const loadDataset = useCallback(
     async (force = false): Promise<DatasetSnapshot> => {
       if (!configRef.current) {
@@ -130,6 +151,8 @@ export function DatasetProvider({ children }: PropsWithChildren): JSX.Element {
             loadPhase: loaded.loadPhase,
             dateOrderIssueRows: loaded.dateOrderIssueRows ?? [],
           };
+
+          if (loadGenerationRef.current !== generation) return nextSnapshot; // stale — a spreadsheet switch invalidated this load, discard
 
           setSnapshot(nextSnapshot);
           snapshotRef.current = nextSnapshot;

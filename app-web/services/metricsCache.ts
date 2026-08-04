@@ -2,15 +2,17 @@ import { type TodayStats, type PeriodStats, type YtdForecast } from "../utils/da
 import { readJsonStorage, writeJsonStorage } from "../utils/storage";
 import { getTodayLocalDate } from "../utils/date";
 
-const CURRENT_SCHEMA_VERSION = 6;
+const CURRENT_SCHEMA_VERSION = 7;
 const MAX_DAYS_IN_MONTH = 31;
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_DATETIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
 const SAFE_LABEL_RE = /^[A-Za-z0-9 ':-]+$/;
+const SPREADSHEET_ID_RE = /^[A-Za-z0-9_-]+$/;
 
 export interface MetricsCacheEntry {
   schemaVersion?: number;
   cacheDate: string;
+  spreadsheetId: string;
   sheetLastModifiedTime: string | null;
   todayStats: TodayStats;
   mtdStats: PeriodStats;
@@ -73,6 +75,10 @@ function sanitizeCurrencyCode(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim().toUpperCase();
   return /^[A-Z]{3}$/.test(normalized) ? normalized : null;
+}
+
+function sanitizeSpreadsheetId(value: unknown): string | null {
+  return typeof value === "string" && SPREADSHEET_ID_RE.test(value) ? value : null;
 }
 
 function sanitizeDeviation(value: unknown): PeriodStats["deviation"] {
@@ -179,6 +185,7 @@ function sanitizeMetricsCacheEntry(value: unknown, requireStoredSchemaVersion: b
   if (requireStoredSchemaVersion && obj.schemaVersion !== CURRENT_SCHEMA_VERSION) return null;
 
   const cacheDate = sanitizeIsoDate(obj.cacheDate);
+  const spreadsheetId = sanitizeSpreadsheetId(obj.spreadsheetId);
   const sheetLastModifiedTime = obj.sheetLastModifiedTime === null ? null : sanitizeIsoDateTime(obj.sheetLastModifiedTime);
   const todayStats = sanitizeTodayStats(obj.todayStats);
   const mtdStats = sanitizePeriodStats(obj.mtdStats);
@@ -189,6 +196,7 @@ function sanitizeMetricsCacheEntry(value: unknown, requireStoredSchemaVersion: b
   const weekBoundaryPositions = sanitizeWeekBoundaryPositions(obj.weekBoundaryPositions);
   if (
     cacheDate === null ||
+    spreadsheetId === null ||
     sheetLastModifiedTime === null ||
     todayStats === null ||
     mtdStats === null ||
@@ -204,6 +212,7 @@ function sanitizeMetricsCacheEntry(value: unknown, requireStoredSchemaVersion: b
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     cacheDate,
+    spreadsheetId,
     sheetLastModifiedTime,
     todayStats,
     mtdStats,
@@ -216,12 +225,14 @@ function sanitizeMetricsCacheEntry(value: unknown, requireStoredSchemaVersion: b
 }
 
 export const metricsCache = {
-  load(email: string): MetricsCacheEntry | null {
+  // spreadsheetId must match the currently linked sheet — prevents showing stale totals
+  // from a previously linked sheet after the user relinks a different one.
+  load(email: string, spreadsheetId: string): MetricsCacheEntry | null {
     const key = cacheKey(email);
     const entry = readJsonStorage<unknown>(localStorage, key);
     const sanitized = sanitizeMetricsCacheEntry(entry, true);
 
-    if (!sanitized || sanitized.cacheDate !== getTodayLocalDate()) {
+    if (!sanitized || sanitized.cacheDate !== getTodayLocalDate() || sanitized.spreadsheetId !== spreadsheetId) {
       localStorage.removeItem(key);
       return null;
     }
