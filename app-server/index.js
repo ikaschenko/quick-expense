@@ -16,7 +16,7 @@ import {
   createPkcePair,
   refreshAccessToken,
 } from "./google-client.js";
-import { validateMappingRequestBody, validateUsdMandatory } from "./validation.js";
+import { validateMappingRequestBody, validateUsdMandatory, validateRequiredFields } from "./validation.js";
 import {
   createSpreadsheet,
   appendExpenseRow,
@@ -146,6 +146,7 @@ app.use((req, res, next) => {
   const requestId = crypto.randomUUID();
   const startedAt = process.hrtime.bigint();
 
+  req.requestId = requestId;
   res.setHeader("X-Request-Id", requestId);
 
   res.on("finish", () => {
@@ -460,7 +461,7 @@ app.patch("/api/config/column-visibility", requireAuthenticatedUser, requireOwne
     return;
   }
 
-  const nonHideableFields = ["date", "usd", "category", "spent by"];
+  const nonHideableFields = ["date", "usd", "category"];
   if (nonHideableFields.includes(field.toLowerCase())) {
     res.status(400).json({ message: `"${field}" is a mandatory field and cannot be hidden.` });
     return;
@@ -515,6 +516,7 @@ app.post("/api/config", requireAuthenticatedUser, requireOwner, async (req, res)
       setupReport,
     });
   } catch (error) {
+    console.error(`[${req.requestId}] POST /api/config failed:`, error);
     const body = { message: (error).message };
     if (error.headerDetails) {
       body.headerDetails = error.headerDetails;
@@ -553,6 +555,7 @@ app.post("/api/config/create-spreadsheet", requireAuthenticatedUser, requireOwne
       setupReport,
     });
   } catch (error) {
+    console.error(`[${req.requestId}] POST /api/config/create-spreadsheet failed:`, error);
     const body = { message: error.message };
     if (error.templateCopyFailed) {
       body.templateCopyFailed = true;
@@ -804,6 +807,11 @@ app.post("/api/expenses", requireAuthenticatedUser, requireEditAccess, async (re
       res.status(400).json({ message: usdValidationError });
       return;
     }
+    const requiredFieldsError = validateRequiredFields(values, report.sheetCurrencies);
+    if (requiredFieldsError) {
+      res.status(400).json({ message: requiredFieldsError });
+      return;
+    }
 
     const { record, insertMode } = await addExpenseRow(accessToken, req.configRecord.spreadsheetId, values, mapping);
 
@@ -844,6 +852,11 @@ app.put("/api/expenses/:rowNumber", requireAuthenticatedUser, requireEditAccess,
     const usdValidationError = validateUsdMandatory(values, report.sheetCurrencies);
     if (usdValidationError) {
       res.status(400).json({ message: usdValidationError });
+      return;
+    }
+    const requiredFieldsError = validateRequiredFields(values, report.sheetCurrencies);
+    if (requiredFieldsError) {
+      res.status(400).json({ message: requiredFieldsError });
       return;
     }
 
@@ -972,7 +985,7 @@ app.patch("/api/sheet/column/rename", requireAuthenticatedUser, requireOwner, as
     }
 
     // Check that currentName is not a mandatory column
-    const mandatory = ["date", "usd", "category", "spent by", "comment"];
+    const mandatory = ["date", "usd", "category", "spent by", "spent for", "comment"];
     if (mandatory.includes(currentName.toLowerCase())) {
       res.status(400).json({ message: "Mandatory columns cannot be renamed." });
       return;
@@ -1076,7 +1089,7 @@ app.delete("/api/sheet/column", requireAuthenticatedUser, requireOwner, async (r
       return;
     }
 
-    const mandatory = ["date", "usd", "category", "spent by", "comment"];
+    const mandatory = ["date", "usd", "category", "spent by", "spent for", "comment"];
     if (mandatory.includes(name.toLowerCase())) {
       res.status(400).json({ message: "Mandatory columns cannot be removed." });
       return;

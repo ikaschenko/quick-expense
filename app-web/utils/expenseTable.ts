@@ -34,6 +34,7 @@ export function getCustomColumnLabel(name: string): string {
 export function hasDetails(record: ExpenseRecord, customColumns: string[] = []): boolean {
   return (
     record.Comment.trim().length > 0 ||
+    record.spentFor.trim().length > 0 ||
     customColumns.some((col) => Boolean(record.customFields?.[col]?.trim()))
   );
 }

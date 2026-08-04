@@ -43,6 +43,7 @@ function createInitialDraft(defaultEmail: string, currencies: string[], customCo
     USD: "",
     Category: "",
     spentBy: defaultEmail,
+    spentFor: defaultEmail,
     Comment: "",
     currencyAmounts,
     customFields,
@@ -71,6 +72,7 @@ function createDraftFromRecord(record: ExpenseRecord, currencies: string[], cust
     USD: record.USD,
     Category: record.Category,
     spentBy: record.spentBy,
+    spentFor: record.spentFor,
     Comment: record.Comment,
     currencyAmounts,
     customFields,
@@ -168,6 +170,8 @@ export function AddExpensePage(): JSX.Element {
     [activeCurrencies, hiddenColumns],
   );
   const isCommentHidden = hiddenColumns.includes("Comment");
+  const isSpentByHidden = hiddenColumns.includes("Spent By");
+  const isSpentForHidden = hiddenColumns.includes("Spent For");
   const visibleCustomColumns = useMemo(
     () => customColumns.filter((c) => !hiddenColumns.includes(c)),
     [customColumns, hiddenColumns],
@@ -579,6 +583,7 @@ export function AddExpensePage(): JSX.Element {
       USD: draft.USD.trim().replace(",", "."),
       Category: draft.Category.trim(),
       spentBy: draft.spentBy.trim(),
+      spentFor: draft.spentFor.trim(),
       Comment: draft.Comment.trim(),
       currencyAmounts: Object.fromEntries(
         Object.entries(draft.currencyAmounts).map(([k, v]) => [k, v.trim().replace(",", ".")]),
@@ -818,25 +823,52 @@ export function AddExpensePage(): JSX.Element {
           {errors.Category ? <div className="field-error">{errors.Category}</div> : null}
         </div>
 
-        {/* Spent By */}
-        <div className="input-group">
-          <label className="input-label" htmlFor="spent-by-field">Spent By</label>
-          <input
-            id="spent-by-field"
-            className="input"
-            list="spent-by-options"
-            value={draft.spentBy}
-            onChange={(event) => updateDraft("spentBy", event.target.value)}
-            required
-            data-invalid={errors.spentBy ? "true" : undefined}
-          />
-          <datalist id="spent-by-options">
-            {(suggestionLists.spentBy ?? []).map((value) => (
-              <option key={value} value={value} />
-            ))}
-          </datalist>
-          {errors.spentBy ? <div className="field-error">{errors.spentBy}</div> : null}
+        {/* Spent By + Spent For */}
+        {(!isSpentByHidden || !isSpentForHidden) ? (
+        <div className="two-col-row">
+          {!isSpentByHidden ? (
+          <div className="input-group">
+            <label className="input-label" htmlFor="spent-by-field">Spent By</label>
+            <input
+              id="spent-by-field"
+              className="input"
+              list="spent-by-options"
+              value={draft.spentBy}
+              onChange={(event) => updateDraft("spentBy", event.target.value)}
+              required
+              data-invalid={errors.spentBy ? "true" : undefined}
+            />
+            <datalist id="spent-by-options">
+              {(suggestionLists.spentBy ?? []).map((value) => (
+                <option key={value} value={value} />
+              ))}
+            </datalist>
+            {errors.spentBy ? <div className="field-error">{errors.spentBy}</div> : null}
+          </div>
+          ) : null}
+
+          {!isSpentForHidden ? (
+          <div className="input-group">
+            <label className="input-label" htmlFor="spent-for-field">Spent For</label>
+            <input
+              id="spent-for-field"
+              className="input"
+              list="spent-for-options"
+              value={draft.spentFor}
+              onChange={(event) => updateDraft("spentFor", event.target.value)}
+              required
+              data-invalid={errors.spentFor ? "true" : undefined}
+            />
+            <datalist id="spent-for-options">
+              {(suggestionLists.spentFor ?? []).map((value) => (
+                <option key={value} value={value} />
+              ))}
+            </datalist>
+            {errors.spentFor ? <div className="field-error">{errors.spentFor}</div> : null}
+          </div>
+          ) : null}
         </div>
+        ) : null}
 
         {/* Comment */}
         {!isCommentHidden ? (

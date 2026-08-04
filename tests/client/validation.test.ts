@@ -8,6 +8,7 @@ function makeDraft(overrides: Record<string, unknown> = {}) {
     USD: "",
     Category: "",
     spentBy: "",
+    spentFor: "",
     Comment: "",
     currencyAmounts: { PLN: "", BYN: "", EUR: "" },
     customFields: {},
@@ -23,6 +24,7 @@ describe("expense validation", () => {
     expect(errors.USD).toContain("at least one");
     expect(errors.Category).toContain("required");
     expect(errors.spentBy).toContain("required");
+    expect(errors.spentFor).toContain("required");
   });
 
   it("accepts valid decimal currency fields", () => {
@@ -31,7 +33,7 @@ describe("expense validation", () => {
         Date: "2026-03-14",
         USD: "2.50",
         Category: "Misc",
-        spentBy: "ivan@example.com",
+        spentBy: "ivan@example.com",        spentFor: "maria@example.com",
         currencyAmounts: { PLN: "-10.25", BYN: "", EUR: "" },
       }),
       ACTIVE_CURRENCIES,
@@ -45,7 +47,7 @@ describe("expense validation", () => {
       makeDraft({
         Date: "2026-03-14",
         Category: "Misc",
-        spentBy: "ivan@example.com",
+        spentBy: "ivan@example.com",        spentFor: "maria@example.com",
         currencyAmounts: { PLN: "10.25", BYN: "5", EUR: "" },
       }),
       ACTIVE_CURRENCIES,
@@ -62,7 +64,7 @@ describe("expense validation", () => {
         Date: "2026-03-14",
         USD: "2.80",
         Category: "Misc",
-        spentBy: "ivan@example.com",
+        spentBy: "ivan@example.com",        spentFor: "maria@example.com",
         currencyAmounts: { PLN: "10.25", BYN: "", EUR: "" },
       }),
       ACTIVE_CURRENCIES,
@@ -77,7 +79,7 @@ describe("expense validation", () => {
         Date: "2026-03-14",
         USD: "5.00",
         Category: "Misc",
-        spentBy: "ivan@example.com",
+        spentBy: "ivan@example.com",        spentFor: "maria@example.com",
         currencyAmounts: {},
       }),
       [],
@@ -97,7 +99,7 @@ describe("expense validation", () => {
         Date: "2026-03-14",
         USD: "2.50",
         Category: "Misc",
-        spentBy: "ivan@example.com",
+        spentBy: "ivan@example.com",        spentFor: "maria@example.com",
         currencyAmounts: { PLN: "10,25", BYN: "", EUR: "" },
       }),
       ACTIVE_CURRENCIES,
@@ -112,7 +114,7 @@ describe("expense validation", () => {
         Date: "2026-03-14",
         USD: "-2.50",
         Category: "Misc",
-        spentBy: "ivan@example.com",
+        spentBy: "ivan@example.com",        spentFor: "maria@example.com",
         currencyAmounts: { PLN: "-10,25", BYN: "", EUR: "" },
       }),
       ACTIVE_CURRENCIES,
@@ -127,7 +129,7 @@ describe("expense validation", () => {
         Date: "2026-03-14",
         USD: "2,80",
         Category: "Misc",
-        spentBy: "ivan@example.com",
+        spentBy: "ivan@example.com",        spentFor: "maria@example.com",
         currencyAmounts: { PLN: "", BYN: "", EUR: "" },
       }),
       ACTIVE_CURRENCIES,

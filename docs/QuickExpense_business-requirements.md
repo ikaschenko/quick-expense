@@ -116,13 +116,13 @@ Users configure their active currencies via the Setup page. Currency selection i
 
 c) Category, free text, mandatory (with ability to select via quick search from all previously entered values in this field across the database)
 
-d) WhoSpent, text, mandatory. Email of a current user by default, with ability to select via quick search from all previously entered values in this field across the database.
+d) WhoSpent (Spent By), text, mandatory. Email of a current user by default, with ability to select via quick search from all previously entered values in this field across the database.
 
-e) ForWhom, text, optional, with ability to select via quick search from all previously entered values in this field across the database - or enter a new text value.
+e) ForWhom (Spent For), text, mandatory, with ability to select via quick search from all previously entered values in this field across the database - or enter a new text value.
 
 f) Comment, optional, text
 
-g) PaymentChannel, optional, text, with ability to select via quick search from all previously entered values in this field across the database (e.g. "santander", "cash", "pko")
+g) PaymentChannel, optional, text, with ability to select via quick search from all previously entered values in this field across the database (e.g. bank name, or a card name, or cash vs. card differentiation)
 
 h) Theme, optional, text, with ability to select via quick search from all previously entered values in this field across the database
 
@@ -279,6 +279,8 @@ A comment text input (always visible at the top of the page) enables instant sub
 
 - **Category** — chip-based multi-select (exact match, AND logic)
 - **Amount (USD)** — numeric from/to range
+- **SpentBy** — substring match
+- **SpentFor** — substring match
 - **Custom columns** — one substring input per configured custom column
 
 When any filter is active, the full dataset is searched client-side and results are shown instead of the recency view. A badge on the Filter toggle counts active panel filters. **Clear filters** resets all fields. Filter state persists across navigation within the session (stored in `DatasetContext`).

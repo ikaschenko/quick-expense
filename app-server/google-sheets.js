@@ -13,7 +13,7 @@ export const VALID_CURRENCY_CODES = new Set(currencyDictionary.currencies.map((c
 const SHEET_NAME = "Expenses";
 const TEMPLATE_SPREADSHEET_ID = "1uE3OmvxHg03aETXg0msInAVniWZfoadwdpxf1gR2ENg";
 // Fixed columns that always appear after the currency block, in this exact order.
-const POST_CURRENCY_FIXED = ["USD", "Category", "Spent By", "Comment"];
+const POST_CURRENCY_FIXED = ["USD", "Category", "Spent By", "Spent For", "Comment"];
 // Legacy header format (old column names, pre-custom-columns era)
 const LEGACY_EXPENSE_HEADERS = [
   "Date",
@@ -29,9 +29,9 @@ const LEGACY_EXPENSE_HEADERS = [
   "Theme",
 ];
 // Default custom columns written to a brand-new empty sheet
-const DEFAULT_CUSTOM_COLUMNS = ["SpentFor", "Channel", "Theme"];
+const DEFAULT_CUSTOM_COLUMNS = ["Channel", "Theme"];
 // Reserved column names (case-insensitive) that cannot be used for custom columns
-const RESERVED_COLUMN_NAMES = new Set(["date", "usd", "category", "spent by", "comment"]);
+const RESERVED_COLUMN_NAMES = new Set(["date", "usd", "category", "spent by", "spent for", "comment"]);
 const MAX_DATASET_BYTES = 10 * 1024 * 1024;
 // NOTE: intentional cross-boundary duplicate of src/constants/expenses.ts MAX_CUSTOM_COLUMNS.
 // The server cannot import frontend TypeScript sources. Keep both values in sync.
@@ -64,24 +64,26 @@ function parseSheetStructure(headerRow) {
 
   const categoryIdx = usdIdx + 1;
   const spentByIdx = usdIdx + 2;
+  const spentForIdx = usdIdx + 3;
 
   if (
     normalized[categoryIdx]?.toLowerCase() !== "category" ||
-    normalized[spentByIdx]?.toLowerCase() !== "spent by"
+    normalized[spentByIdx]?.toLowerCase() !== "spent by" ||
+    normalized[spentForIdx]?.toLowerCase() !== "spent for"
   ) {
     return null;
   }
 
-  // Comment may not be immediately after SpentBy (e.g. custom columns inserted before it)
+  // Comment may not be immediately after SpentFor (e.g. custom columns inserted before it)
   const commentIdx = normalized.findIndex(
-    (h, i) => i > spentByIdx && h.toLowerCase() === "comment",
+    (h, i) => i > spentForIdx && h.toLowerCase() === "comment",
   );
   if (commentIdx === -1) return null;
 
   const currencies = normalized.slice(1, usdIdx);
-  // Columns between SpentBy and Comment + columns after Comment are all custom columns
+  // Columns between SpentFor and Comment + columns after Comment are all custom columns
   const customColumns = [
-    ...normalized.slice(spentByIdx + 1, commentIdx),
+    ...normalized.slice(spentForIdx + 1, commentIdx),
     ...normalized.slice(commentIdx + 1),
   ];
   return { currencies, customColumns };
@@ -120,9 +122,11 @@ function diagnoseSheetStructure(normalized) {
     return `Expected "Category" after "USD" but found "${normalized[usdIdx + 1] ?? "(missing)"}".`;
   if (normalized[usdIdx + 2]?.toLowerCase() !== "spent by")
     return `Expected "Spent By" after "Category" but found "${normalized[usdIdx + 2] ?? "(missing)"}"`;  
-  const spentByIdx = usdIdx + 2;
-  const hasComment = normalized.some((h, i) => i > spentByIdx && h.toLowerCase() === "comment");
-  if (!hasComment) return "Column \"Comment\" was not found after \"Spent By\".";
+  if (normalized[usdIdx + 3]?.toLowerCase() !== "spent for")
+    return `Expected "Spent For" after "Spent By" but found "${normalized[usdIdx + 3] ?? "(missing)"}"`;
+  const spentForIdx = usdIdx + 3;
+  const hasComment = normalized.some((h, i) => i > spentForIdx && h.toLowerCase() === "comment");
+  if (!hasComment) return "Column \"Comment\" was not found after \"Spent For\".";
   return "Unrecognized structure.";
 }
 
@@ -319,7 +323,7 @@ export async function writeExpenseValues(accessToken, spreadsheetId, rowNumber, 
 
 function remapLegacyRowToCurrent(row = [], customColumnCount) {
   // Legacy: Date,PLN,BYN,USD,EUR,Category,WhoSpent,ForWhom,Comment,PaymentChannel,Theme
-  // New:    Date,PLN,BYN,EUR,USD,Category,Spent By,Comment,[custom...]
+  // New:    Date,PLN,BYN,EUR,USD,Category,Spent By,Spent For,Comment,[custom...]
   const padded = [...row];
   while (padded.length < LEGACY_EXPENSE_HEADERS.length) {
     padded.push("");
@@ -332,13 +336,13 @@ function remapLegacyRowToCurrent(row = [], customColumnCount) {
     padded[3] ?? "", // USD (was at index 3)
     padded[5] ?? "", // Category
     padded[6] ?? "", // SpentBy (was WhoSpent)
+    padded[7] ?? "", // Spent For (was ForWhom)
     padded[8] ?? "", // Comment (was at index 8)
   ];
-  // Custom columns: map ForWhom→SpentFor, PaymentChannel→Channel, Theme→Theme
-  // ForWhom=7, PaymentChannel=9, Theme=10
-  if (customColumnCount > 0) base.push(padded[7] ?? ""); // SpentFor
-  if (customColumnCount > 1) base.push(padded[9] ?? ""); // Channel
-  if (customColumnCount > 2) base.push(padded[10] ?? ""); // Theme
+  // Custom columns: map PaymentChannel→Channel, Theme→Theme
+  // PaymentChannel=9, Theme=10
+  if (customColumnCount > 0) base.push(padded[9] ?? ""); // Channel
+  if (customColumnCount > 1) base.push(padded[10] ?? ""); // Theme
   return base;
 }
 
@@ -385,11 +389,12 @@ function mapRowsToExpenseRecords(rows, sheetCurrencies, customColumns = [], actu
   const usdIdx      = getIdx("usd",      postStart);
   const categoryIdx = getIdx("category", postStart + 1);
   const spentByIdx  = getIdx("spent by",  postStart + 2);
-  const commentIdx  = getIdx("comment",  postStart + 3);
+  const spentForIdx = getIdx("spent for", postStart + 3);
+  const commentIdx  = getIdx("comment",  postStart + 4);
 
   const paddingTarget = actualHeaderRow.length > 0
     ? actualHeaderRow.length
-    : postStart + 4 + customColumns.length;
+    : postStart + 5 + customColumns.length;
 
   return rows.map((row, index) => {
     const padded = [...row];
@@ -416,6 +421,7 @@ function mapRowsToExpenseRecords(rows, sheetCurrencies, customColumns = [], actu
       USD: padded[usdIdx] ?? "",
       Category: padded[categoryIdx] ?? "",
       "spentBy": padded[spentByIdx] ?? "",
+      "spentFor": padded[spentForIdx] ?? "",
       Comment: padded[commentIdx] ?? "",
       customFields,
       rowNumber: index + 2 + rowOffset,
@@ -602,17 +608,36 @@ async function fetchTemplateSheets() {
   return response.json();
 }
 
+// Wraps a caught error with a distinct, stage-specific friendly message and the
+// existing "make a copy manually" fallback, after logging the original cause.
+function stageFailure(stage, message, cause) {
+  console.error(`createSpreadsheet: ${stage} failed:`, cause);
+  const error = new Error(message);
+  error.templateCopyFailed = true;
+  error.templateUrl = `https://docs.google.com/spreadsheets/d/${TEMPLATE_SPREADSHEET_ID}/copy`;
+  return error;
+}
+
 export async function createSpreadsheet(accessToken, title) {
-  // Step 1 [parallel]: SA token + template sheet metadata + blank spreadsheet
-  const [saToken, templateSheets, created] = await Promise.all([
-    getServiceAccountAccessToken(),
-    fetchTemplateSheets(),
-    requestJson(accessToken, "https://sheets.googleapis.com/v4/spreadsheets", {
+  // Step 1 [parallel]: SA token + template sheet metadata
+  let saToken, templateSheets;
+  try {
+    [saToken, templateSheets] = await Promise.all([getServiceAccountAccessToken(), fetchTemplateSheets()]);
+  } catch (err) {
+    throw stageFailure("prepare-template-service", "Couldn't prepare the template service. Please make a copy manually.", err);
+  }
+
+  // Step 2: create the blank spreadsheet (user token)
+  let created;
+  try {
+    created = await requestJson(accessToken, "https://sheets.googleapis.com/v4/spreadsheets", {
       method: "POST",
       headers: createHeaders(accessToken, true),
       body: JSON.stringify({ properties: { title } }),
-    }),
-  ]);
+    });
+  } catch (err) {
+    throw stageFailure("create-spreadsheet", "Couldn't create your spreadsheet file. Please make a copy manually.", err);
+  }
 
   const spreadsheetId = created.spreadsheetId;
   assertValidSpreadsheetId(spreadsheetId);
@@ -620,16 +645,21 @@ export async function createSpreadsheet(accessToken, title) {
   const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
   const batchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
 
-  // Step 2: grant SA editor access to the new spreadsheet so copyTo can write into it
-  const permission = await requestJson(accessToken, `https://www.googleapis.com/drive/v3/files/${spreadsheetId}/permissions`, {
-    method: "POST",
-    headers: createHeaders(accessToken, true),
-    body: JSON.stringify({ role: "writer", type: "user", emailAddress: SERVICE_ACCOUNT_EMAIL }),
-  });
+  // Step 3: grant SA editor access to the new spreadsheet so copyTo can write into it
+  let permission;
+  try {
+    permission = await requestJson(accessToken, `https://www.googleapis.com/drive/v3/files/${spreadsheetId}/permissions`, {
+      method: "POST",
+      headers: createHeaders(accessToken, true),
+      body: JSON.stringify({ role: "writer", type: "user", emailAddress: SERVICE_ACCOUNT_EMAIL }),
+    });
+  } catch (err) {
+    throw stageFailure("grant-sa-permission", "Couldn't grant setup access to your spreadsheet. Please make a copy manually.", err);
+  }
   const permissionId = permission.id;
 
   try {
-    // Step 3: copy each template sheet into the new spreadsheet (SA token)
+    // Step 4: copy each template sheet into the new spreadsheet (SA token)
     // copyTo preserves all cell data, formatting, banding, filters, and validation.
     const copyResults = [];
     for (const sheet of templateSheets.sheets) {
@@ -641,7 +671,7 @@ export async function createSpreadsheet(accessToken, title) {
       copyResults.push({ originalSheetId: sheet.properties.sheetId, title: sheet.properties.title, newSheetId: result.sheetId });
     }
 
-    // Step 4: rename "Copy of X" → "X" + delete the default blank sheet (SA token)
+    // Step 5: rename "Copy of X" → "X" + delete the default blank sheet (SA token)
     await requestJson(saToken, batchUrl, {
       method: "POST",
       headers: createHeaders(saToken, true),
@@ -658,7 +688,7 @@ export async function createSpreadsheet(accessToken, title) {
       }),
     });
 
-    // Step 5: copy spreadsheet-level named ranges (not transferred by copyTo)
+    // Step 6: copy spreadsheet-level named ranges (not transferred by copyTo)
     const namedRanges = templateSheets.namedRanges ?? [];
     if (namedRanges.length > 0) {
       const sheetIdMap = new Map(copyResults.map(({ originalSheetId, newSheetId }) => [originalSheetId, newSheetId]));
@@ -678,16 +708,13 @@ export async function createSpreadsheet(accessToken, title) {
       });
     }
   } catch (err) {
-    const error = new Error("Could not copy the template spreadsheet. Please make a copy manually.");
-    error.templateCopyFailed = true;
-    error.templateUrl = `https://docs.google.com/spreadsheets/d/${TEMPLATE_SPREADSHEET_ID}/copy`;
-    throw error;
+    throw stageFailure("copy-template", "Could not copy the template spreadsheet. Please make a copy manually.", err);
   } finally {
-    // Step 6: remove SA editor permission (best-effort cleanup)
+    // Step 7: remove SA editor permission (best-effort cleanup)
     await fetch(
       `https://www.googleapis.com/drive/v3/files/${spreadsheetId}/permissions/${permissionId}`,
       { method: "DELETE", headers: createHeaders(accessToken) },
-    ).catch(() => {});
+    ).catch((revokeErr) => console.error("createSpreadsheet: revoke-sa-permission failed:", revokeErr));
   }
 
   return { spreadsheetId, spreadsheetUrl };
@@ -882,7 +909,7 @@ export async function validateSpreadsheet(accessToken, spreadsheetId, mapping = 
         `The "${SHEET_NAME}" tab header row is empty. Cannot apply column mapping to a sheet without headers.`,
       );
       error.headerDetails = {
-        expected: ["Date", "(currencies...)", "USD", "Category", "Spent By", "Comment", "(custom columns...)"],
+        expected: ["Date", "(currencies...)", "USD", "Category", "Spent By", "Spent For", "Comment", "(custom columns...)"],
         actual: [],
         detectedColumns: [],
       };
@@ -917,10 +944,10 @@ export async function validateSpreadsheet(accessToken, spreadsheetId, mapping = 
   const structure = parseSheetStructure(effectiveHeader);
   if (structure === null) {
     const error = new Error(
-      `The "${SHEET_NAME}" sheet header must start with "Date", have currency columns, then "USD, Category, Spent By, Comment", followed by any custom columns.`,
+      `The "${SHEET_NAME}" sheet header must start with "Date", have currency columns, then "USD, Category, Spent By, Spent For, Comment", followed by any custom columns.`,
     );
     error.headerDetails = {
-      expected: ["Date", "(currencies...)", "USD", "Category", "Spent By", "Comment", "(custom columns...)"],
+      expected: ["Date", "(currencies...)", "USD", "Category", "Spent By", "Spent For", "Comment", "(custom columns...)"],
       actual: normalizedHeader,
       detectedColumns: normalizedHeader,
     };
@@ -1074,7 +1101,7 @@ export async function reorderCustomColumnsInSheet(accessToken, spreadsheetId, or
   if (!structure) {
     const reason = diagnoseSheetStructure(effectiveHeader);
     throw new Error(
-      `Cannot reorder custom columns: ${reason} Expected header pattern: Date | [currencies] | USD | Category | Spent By | Comment | [custom columns].`,
+      `Cannot reorder custom columns: ${reason} Expected header pattern: Date | [currencies] | USD | Category | Spent By | Spent For | Comment | [custom columns].`,
     );
   }
 
@@ -1155,7 +1182,7 @@ export async function reorderCurrencyColumnsInSheet(accessToken, spreadsheetId, 
   if (!structure) {
     const reason = diagnoseSheetStructure(effectiveHeader);
     throw new Error(
-      `Cannot reorder currency columns: ${reason} Expected header pattern: Date | [currencies] | USD | Category | Spent By | Comment | [custom columns].`,
+      `Cannot reorder currency columns: ${reason} Expected header pattern: Date | [currencies] | USD | Category | Spent By | Spent For | Comment | [custom columns].`,
     );
   }
 
@@ -1639,7 +1666,7 @@ function buildRecordFromCanonicalValues(values, rowNumber, sheetCurrencies, cust
   const fixedStart = 1 + sheetCurrencies.length;
   const customFields = {};
   for (let i = 0; i < customColumns.length; i++) {
-    customFields[customColumns[i]] = values[fixedStart + 4 + i] ?? "";
+    customFields[customColumns[i]] = values[fixedStart + 5 + i] ?? "";
   }
   return {
     Date: values[0] ?? "",
@@ -1647,7 +1674,8 @@ function buildRecordFromCanonicalValues(values, rowNumber, sheetCurrencies, cust
     USD: values[fixedStart] ?? "",
     Category: values[fixedStart + 1] ?? "",
     spentBy: values[fixedStart + 2] ?? "",
-    Comment: values[fixedStart + 3] ?? "",
+    spentFor: values[fixedStart + 3] ?? "",
+    Comment: values[fixedStart + 4] ?? "",
     customFields,
     rowNumber,
   };

@@ -184,6 +184,12 @@ export function ExpenseCard({ record, sheetCurrencies, customColumns, isLastReco
         ) : null}
         {isOpen ? (
           <div className="expense-card-expanded">
+            {record.spentFor.trim() ? (
+              <div className="expense-card-expanded-row">
+                <span className="expense-card-expanded-label">Spent For:</span>
+                <span>{record.spentFor}</span>
+              </div>
+            ) : null}
             {record.Comment.trim() ? (
               <div className="expense-card-expanded-row">
                 <span className="expense-card-expanded-label">Comment:</span>

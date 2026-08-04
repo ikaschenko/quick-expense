@@ -38,3 +38,22 @@ export function validateUsdMandatory(values, sheetCurrencies) {
 
   return null;
 }
+
+/**
+ * Ensures Category, Spent By, and Spent For are non-empty.
+ * @param {string[]} values - Canonical row values array [date, ...currencies, usd, category, spentBy, spentFor, comment, ...].
+ * @param {string[]} sheetCurrencies - Non-USD currency codes in sheet order.
+ * @returns {string | null} Error message, or null if valid.
+ */
+export function validateRequiredFields(values, sheetCurrencies) {
+  const fixedStart = 1 + sheetCurrencies.length;
+  const category = String(values[fixedStart + 1] ?? "").trim();
+  const spentBy = String(values[fixedStart + 2] ?? "").trim();
+  const spentFor = String(values[fixedStart + 3] ?? "").trim();
+
+  if (!category) return "Category is required.";
+  if (!spentBy) return "Spent By is required.";
+  if (!spentFor) return "Spent For is required.";
+
+  return null;
+}

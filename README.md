@@ -157,7 +157,6 @@ Backend request logs are emitted as JSON lines to stdout. Each request includes:
 Keep integration test variables in `.env` (gitignored):
 
 ```env
-GOOGLE_SERVICE_ACCOUNT_KEY_FILE=app-server/config/service-account.json
 GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 TEST_SHEET_BLANK=your-sheet-id
 TEST_SHEET_INVALID=your-sheet-id

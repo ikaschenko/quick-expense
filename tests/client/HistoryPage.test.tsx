@@ -71,6 +71,7 @@ function makeRecord(rowNumber: number, date: string, usd: string): ExpenseRecord
     USD: usd,
     Category: "Misc",
     spentBy: "test",
+    spentFor: "test",
     Comment: "",
     currencyAmounts: {},
     customFields: {},
@@ -78,7 +79,7 @@ function makeRecord(rowNumber: number, date: string, usd: string): ExpenseRecord
   };
 }
 
-const emptyFilters = { comment: "", categories: [] as string[], amountFrom: "", amountTo: "", customFields: {} };
+const emptyFilters = { comment: "", categories: [] as string[], amountFrom: "", amountTo: "", spentBy: "", spentFor: "", customFields: {} };
 
 function mockDataset(overrides: Partial<ReturnType<typeof useDataset>>) {
   vi.mocked(useDataset).mockReturnValue({
@@ -95,7 +96,7 @@ function mockDataset(overrides: Partial<ReturnType<typeof useDataset>>) {
     updateInDataset: vi.fn(),
     removeLastFromDataset: vi.fn(),
     clearError: vi.fn(),
-    distinctValues: { Category: [], spentBy: [], customFields: {} },
+    distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} },
     ...overrides,
   });
 }
@@ -128,7 +129,7 @@ describe("HistoryPage — per-day totals", () => {
   ])("suppresses per-day totals when the %s filter is active", (_label, searchFilters) => {
     const records = [makeRecord(1, "2026-06-09", "45"), makeRecord(2, "2026-06-09", "5")];
     mockDataset({
-      snapshot: { records, distinctValues: { Category: [], spentBy: [], customFields: {} }, loadedAt: 0, payloadBytes: 0, loadPhase: "full" },
+      snapshot: { records, distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} }, loadedAt: 0, payloadBytes: 0, loadPhase: "full" },
       searchFilters,
     });
     const { container } = renderHistory();
@@ -150,7 +151,7 @@ describe("HistoryPage — per-day totals", () => {
       records.push(makeRecord(i, `2026-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`, "1"));
     }
     mockDataset({
-      snapshot: { records, distinctValues: { Category: [], spentBy: [], customFields: {} }, loadedAt: 0, payloadBytes: 0, loadPhase: "full" },
+      snapshot: { records, distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} }, loadedAt: 0, payloadBytes: 0, loadPhase: "full" },
     });
 
     const { container } = renderHistory();
@@ -202,7 +203,7 @@ describe("HistoryPage — Repeat button", () => {
     mockDataset({
       snapshot: {
         records: [makeRecord(1, "2026-07-01", "25")],
-        distinctValues: { Category: [], spentBy: [], customFields: {} },
+        distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} },
         loadedAt: 0,
         payloadBytes: 0,
         loadPhase: "full",
@@ -220,7 +221,7 @@ describe("HistoryPage — Repeat button", () => {
     mockDataset({
       snapshot: {
         records: [record],
-        distinctValues: { Category: [], spentBy: [], customFields: {} },
+        distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} },
         loadedAt: 0,
         payloadBytes: 0,
         loadPhase: "full",
@@ -249,7 +250,7 @@ describe("HistoryPage — Repeat button", () => {
     mockDataset({
       snapshot: {
         records: [makeRecord(1, "2026-07-01", "25")],
-        distinctValues: { Category: [], spentBy: [], customFields: {} },
+        distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} },
         loadedAt: 0,
         payloadBytes: 0,
         loadPhase: "full",

@@ -6,6 +6,7 @@ export const FIXED_HEADERS = [
   "USD",
   "Category",
   "Spent By",
+  "Spent For",
   "Comment",
 ] as const;
 
@@ -14,11 +15,12 @@ export const POST_CURRENCY_HEADERS = [
   "USD",
   "Category",
   "Spent By",
+  "Spent For",
   "Comment",
 ] as const;
 
 /** Reserved column names that cannot be used for custom columns (case-insensitive match). */
-export const RESERVED_COLUMN_NAMES = ["Date", "USD", "Category", "Spent By", "Comment"] as const;
+export const RESERVED_COLUMN_NAMES = ["Date", "USD", "Category", "Spent By", "Spent For", "Comment"] as const;
 
 export const MAX_CUSTOM_COLUMNS = 10;
 
@@ -31,7 +33,7 @@ export function buildExpenseHeaders(sheetCurrencies: string[], customColumns: st
 }
 
 /** QuickExpense fields that must be mapped in the column mapping editor. */
-export const REQUIRED_QE_FIELDS = ["Date", "USD", "Category", "Spent By", "Comment"] as const;
+export const REQUIRED_QE_FIELDS = ["Date", "USD", "Category", "Spent By", "Spent For", "Comment"] as const;
 
 export const HISTORY_PAGE_SIZE = 50;
 export const FILTER_DEBOUNCE_MS = 2500;

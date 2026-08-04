@@ -58,6 +58,7 @@ function makeRecord(rowNumber: number, date: string, usd: string): ExpenseRecord
     USD: usd,
     Category: "Misc",
     spentBy: "test",
+    spentFor: "test",
     Comment: "",
     currencyAmounts: {},
     customFields: {},
@@ -72,14 +73,14 @@ function mockDataset(overrides: Partial<ReturnType<typeof useDataset>>) {
       // Date far outside any current period — keeps every widget in its empty state,
       // while satisfying the "has records" check that renders the dashboard.
       records: [makeRecord(1, "2000-01-01", "10")],
-      distinctValues: { Category: [], spentBy: [], customFields: {} },
+      distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} },
       loadedAt: 0,
       payloadBytes: 0,
       loadPhase: "full",
     },
     error: null,
     isLoadingHistory: false,
-    searchFilters: { comment: "", categories: [], amountFrom: "", amountTo: "", customFields: {} },
+    searchFilters: { comment: "", categories: [], amountFrom: "", amountTo: "", spentBy: "", spentFor: "", customFields: {} },
     setSearchFilters: vi.fn(),
     loadDataset: vi.fn(),
     reloadDataset: vi.fn(),
@@ -88,7 +89,7 @@ function mockDataset(overrides: Partial<ReturnType<typeof useDataset>>) {
     updateInDataset: vi.fn(),
     removeLastFromDataset: vi.fn(),
     clearError: vi.fn(),
-    distinctValues: { Category: [], spentBy: [], customFields: {} },
+    distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} },
     ...overrides,
   });
 }
@@ -259,7 +260,7 @@ describe("HomePage — widget info tooltips", () => {
     mockDataset({
       snapshot: {
         records: [makeRecord(1, today, "25")],
-        distinctValues: { Category: [], spentBy: [], customFields: {} },
+        distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} },
         loadedAt: 0,
         payloadBytes: 0,
         loadPhase: "full",
@@ -286,7 +287,7 @@ describe("HomePage — widget info tooltips", () => {
           makeRecord(2, "2026-01-02", "100"),
           makeRecord(3, "2026-01-03", "100"),
         ],
-        distinctValues: { Category: [], spentBy: [], customFields: {} },
+        distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} },
         loadedAt: 0,
         payloadBytes: 0,
         loadPhase: "full",

@@ -1,11 +1,13 @@
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 
 /**
  * Integration tests for validateSpreadsheet against real Google Sheets.
  *
  * Required env vars (set in .env or shell):
- *   GOOGLE_SERVICE_ACCOUNT_KEY_FILE — path to the service account JSON key file
- *     (or GOOGLE_SERVICE_ACCOUNT_KEY — raw JSON string, used as fallback)
+ *   GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY — PEM private key, substituted into the
+ *     committed app-server/config/service-account.json placeholder (same as google-client.js)
  *   TEST_SHEET_BLANK               — spreadsheet ID with NO "Expenses" tab
  *   TEST_SHEET_INVALID             — spreadsheet ID with "Expenses" tab + wrong headers
  *   TEST_SHEET_VALID               — spreadsheet ID with "Expenses" tab + correct headers
@@ -13,18 +15,19 @@ import { readFileSync } from "node:fs";
  * All spreadsheets must be shared with the service account's client_email as Editor.
  */
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const SA_KEY_FILE = join(__dirname, "../../app-server/config/service-account.json");
+
 function loadServiceAccountKey() {
-  const keyFile = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE;
-  if (keyFile) {
-    return readFileSync(keyFile, "utf-8");
-  }
-  return process.env.GOOGLE_SERVICE_ACCOUNT_KEY ?? "";
+  const key = JSON.parse(readFileSync(SA_KEY_FILE, "utf-8"));
+  key.private_key = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY ?? "";
+  return JSON.stringify(key);
 }
 
 const serviceAccountKeyJson = loadServiceAccountKey();
 
 const REQUIRED_VARS = {
-  "GOOGLE_SERVICE_ACCOUNT_KEY or GOOGLE_SERVICE_ACCOUNT_KEY_FILE": serviceAccountKeyJson,
+  GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY,
   TEST_SHEET_BLANK: process.env.TEST_SHEET_BLANK,
   TEST_SHEET_INVALID: process.env.TEST_SHEET_INVALID,
   TEST_SHEET_VALID: process.env.TEST_SHEET_VALID,

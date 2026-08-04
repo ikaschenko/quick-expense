@@ -21,6 +21,7 @@ function makeRecord(date: string, usd: string, extras: Partial<ExpenseRecord> = 
     USD: usd,
     Category: "Misc",
     spentBy: "test",
+    spentFor: "test",
     Comment: "",
     currencyAmounts: {},
     customFields: {},

@@ -9,6 +9,7 @@ const records: ExpenseRecord[] = [
     currencyAmounts: {},
     Category: "Food",
     spentBy: "ivan@example.com",
+    spentFor: "Family",
     Comment: "Dinner at home",
     customFields: { SpentFor: "Family", Channel: "cash", Theme: "Daily" },
   },
@@ -18,7 +19,8 @@ const records: ExpenseRecord[] = [
     USD: "20.00",
     currencyAmounts: {},
     Category: "Travel",
-    spentBy: "ivan@example.com",
+    spentBy: "maria@example.com",
+    spentFor: "Friends",
     Comment: "Airport taxi",
     customFields: { SpentFor: "", Channel: "card", Theme: "Trip" },
   },
@@ -26,7 +28,16 @@ const records: ExpenseRecord[] = [
 
 /** Build a full SearchFilters with defaults for unspecified fields. */
 function f(overrides: Partial<SearchFilters>): SearchFilters {
-  return { comment: "", categories: [], amountFrom: "", amountTo: "", customFields: {}, ...overrides };
+  return {
+    comment: "",
+    categories: [],
+    amountFrom: "",
+    amountTo: "",
+    spentBy: "",
+    spentFor: "",
+    customFields: {},
+    ...overrides,
+  };
 }
 
 describe("expense search", () => {
@@ -131,7 +142,7 @@ describe("filterExpenses — amount range", () => {
       USD: "n/a",
       currencyAmounts: {},
       Category: "Other",
-      spentBy: "",
+      spentBy: "",      spentFor: "",
       Comment: "",
       customFields: {},
     };
@@ -146,7 +157,7 @@ describe("filterExpenses — amount range", () => {
       USD: "1,234.56",
       currencyAmounts: {},
       Category: "Shopping",
-      spentBy: "ivan@example.com",
+      spentBy: "ivan@example.com",      spentFor: "",
       Comment: "Large purchase",
       customFields: {},
     };
@@ -164,7 +175,7 @@ describe("filterExpenses — amount range", () => {
       USD: usd,
       currencyAmounts: {},
       Category: "Other",
-      spentBy: "",
+      spentBy: "",      spentFor: "",
       Comment: "",
       customFields: {},
     };
@@ -182,12 +193,36 @@ describe("filterExpenses — amount range", () => {
       USD: usd,
       currencyAmounts: {},
       Category: "Other",
-      spentBy: "",
+      spentBy: "",      spentFor: "",
       Comment: "",
       customFields: {},
     };
     const outcome = filterExpenses([record], f({ amountTo }));
     expect(outcome.allMatches).toHaveLength(expected);
+  });
+});
+
+describe("filterExpenses — spent by / spent for", () => {
+  it("matches spentBy substring case-insensitively", () => {
+    const outcome = filterExpenses(records, f({ spentBy: "IVAN" }));
+    expect(outcome.allMatches).toHaveLength(1);
+    expect(outcome.allMatches[0].rowNumber).toBe(2);
+  });
+
+  it("matches spentFor substring case-insensitively", () => {
+    const outcome = filterExpenses(records, f({ spentFor: "friend" }));
+    expect(outcome.allMatches).toHaveLength(1);
+    expect(outcome.allMatches[0].rowNumber).toBe(3);
+  });
+
+  it("does not apply spentBy/spentFor filter when input has fewer than 2 meaningful chars", () => {
+    const outcome = filterExpenses(records, f({ spentBy: "i", spentFor: "f" }));
+    expect(outcome.allMatches).toHaveLength(records.length);
+  });
+
+  it("combines spentBy and spentFor with AND logic", () => {
+    const outcome = filterExpenses(records, f({ spentBy: "maria", spentFor: "family" }));
+    expect(outcome.allMatches).toHaveLength(0);
   });
 });
 
@@ -235,7 +270,7 @@ describe("filterExpenses truncation", () => {
       USD: "1.00",
       currencyAmounts: {},
       Category: "Test",
-      spentBy: "",
+      spentBy: "",      spentFor: "",
       Comment: comment,
       customFields: {},
     };

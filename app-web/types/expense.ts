@@ -17,6 +17,7 @@ export interface ExpenseDraft {
   USD: string;
   Category: string;
   spentBy: string;
+  spentFor: string;
   Comment: string;
   /** Dynamic non-USD currency amounts, keyed by currency code. */
   currencyAmounts: Record<string, string>;
@@ -29,6 +30,7 @@ export interface ExpenseRecord {
   USD: string;
   Category: string;
   spentBy: string;
+  spentFor: string;
   Comment: string;
   /** Dynamic currency amounts (active + archived), keyed by code. */
   currencyAmounts: Record<string, string>;
@@ -40,6 +42,7 @@ export interface ExpenseRecord {
 export interface DistinctValues {
   Category: string[];
   spentBy: string[];
+  spentFor: string[];
   customFields: Record<string, string[]>;
 }
 
@@ -109,6 +112,8 @@ export interface SearchFilters {
   categories: string[];
   amountFrom: string;    // "" = no lower bound
   amountTo: string;      // "" = no upper bound
+  spentBy: string;       // substring match, "" = skip
+  spentFor: string;      // substring match, "" = skip
   customFields: Record<string, string>; // keyed by column name, "" = skip
 }
 

@@ -36,6 +36,7 @@ interface DatasetContextValue {
 const emptyDistinctValues: DistinctValues = {
   Category: [],
   spentBy: [],
+  spentFor: [],
   customFields: {},
 };
 
@@ -54,6 +55,8 @@ export function DatasetProvider({ children }: PropsWithChildren): JSX.Element {
     categories: [],
     amountFrom: "",
     amountTo: "",
+    spentBy: "",
+    spentFor: "",
     customFields: {},
   });
   const retryBackoffRef = useRef(new RetryBackoff());

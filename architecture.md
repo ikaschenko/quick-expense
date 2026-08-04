@@ -372,7 +372,7 @@ Stores per-user, per-spreadsheet column visibility preferences for the Add Expen
 
 - Unique index on `(user_email, spreadsheet_id, canonical_field_name)` prevents duplicate entries.
 - Keyed by canonical QE field name (e.g. `"Comment"`, `"PLN"`) so column renames via the Setup UI automatically migrate the preference via `renameVisibilityEntry()`.
-- Only hideable columns may be toggled: `Date`, `USD`, `Category`, and `Spent By` are never hidden (rejected at the API layer).
+- Only hideable columns may be toggled: `Date`, `USD`, and `Category` are never hidden (rejected at the API layer). `Spent By` and `Spent For` are mandatory fields but may still be hidden as a pair from the Add Expense form — both default to the signed-in user's email so validation still passes without visible input.
 - Tail and Search always show all columns regardless of visibility preferences.
 
 #### f) `setup_shares` Table
@@ -485,7 +485,7 @@ The SPA uses three nested context providers (wrapped in `App.tsx`):
   - After any surgical mutation, `HomePage.tsx` recomputes all dashboard metrics via its `useMemo` hooks and rewrites the `localStorage` metrics cache (`qe_metrics_{email}`) immediately — no reload, no "Refreshing…" indicator.
   - `DatasetSnapshot.hasDateOrderIssue` — boolean set on every load by scanning the date column. When `true`, `Layout.tsx` renders a persistent red banner on all screens prompting the user to sort their sheet. The banner disappears automatically on the next clean reload.
   - Shared between Home and History pages (they reuse the same in-memory dataset).
-  - Holds `searchFilters` state (`SearchFilters`: `comment`, `categories`, `amountFrom`, `amountTo`, `customFields`) so History page filter values persist across navigation.
+  - Holds `searchFilters` state (`SearchFilters`: `comment`, `categories`, `amountFrom`, `amountTo`, `spentBy`, `spentFor`, `customFields`) so History page filter values persist across navigation.
 
 ### 8.2 Routing
 
@@ -621,3 +621,5 @@ The backend validates all required env vars at startup and fails fast if any are
 21. **Home screen metrics cache (`localStorage`)** — Pre-computed dashboard metrics (TODAY/MTD/YTD/Rolling12M totals, chart data) are persisted in `localStorage` under `qe_metrics_{email}` to enable instant Home screen rendering on repeated visits. Freshness is validated on each explicit page load via a lightweight `GET /api/sheet/modifiedtime` Drive API call (within the existing `drive.file` scope, no scope change). Cache is invalidated at midnight, on sign-out, on config clear, and when the Drive `modifiedTime` exceeds the stored timestamp. After CRUD operations that use surgical in-memory mutations, the cache is rewritten immediately with an optimistic `sheetLastModifiedTime` (`Date.now()` ISO string), ensuring instant Home display after Add/Edit/Delete. Shared-setup guests and users with URL-pasted spreadsheets (not opened via Picker) receive `modifiedTime: null` from the Drive check and fall back to a full reload on every Home visit — no caching benefit for those users. Cache is written after Phase 1 of the two-phase load; Phase 2 completion may rewrite the cache a second time with updated YoY stats (acceptable).
 
 22. **Transactional email for share/revoke events** — share and revoke events dispatch a transactional email via Resend after the HTTP response is returned. Delivery failure is logged server-side and never surfaced to the UI. Templates live in `app-server/email-templates.js` (no external template storage). Sending is silently skipped if `RESEND_API_KEY` is absent, so the feature degrades gracefully in environments without email configuration.
+
+23. **"Spent For" promoted to a mandatory fixed column** — `Spent For` (ForWhom) sits between `Spent By` and `Comment` in the canonical header, both server-side (`app-server/google-sheets.js` `parseSheetStructure`) and client-side (`app-web/types/expense.ts`). It is validated as required by `validateRequiredFields()` (server) and the Add Expense form (`app-web/utils/validation.ts`), matching the existing `Spent By`/Category rules. Like `Spent By`, it remains individually hideable from the Add Expense form (`user_column_visibility`) — both default to the signed-in user's email so validation still passes while hidden. History gained matching `Spent By`/`Spent For` substring filters alongside the existing Comment search and Category chips.

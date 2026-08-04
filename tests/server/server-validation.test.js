@@ -2,9 +2,10 @@
 
 let validateMappingRequestBody;
 let validateUsdMandatory;
+let validateRequiredFields;
 
 beforeAll(async () => {
-  ({ validateMappingRequestBody, validateUsdMandatory } = await import("../../app-server/validation.js"));
+  ({ validateMappingRequestBody, validateUsdMandatory, validateRequiredFields } = await import("../../app-server/validation.js"));
 });
 
 describe("validateMappingRequestBody", () => {
@@ -76,5 +77,41 @@ describe("validateUsdMandatory", () => {
     // PLN="400,00" (comma separator), USD=""
     const result = validateUsdMandatory(["2026-06-09", "400,00", "", "Misc", "user", ""], ["PLN"]);
     expect(result).toBeTruthy();
+  });
+});
+
+describe("validateRequiredFields", () => {
+  // Canonical values order: [date, ...currencies, usd, category, spentBy, spentFor, comment, ...]
+  // With sheetCurrencies = [], values are [date, usd, category, spentBy, spentFor, comment]
+
+  it("returns null when Category, Spent By, and Spent For are all present", () => {
+    const result = validateRequiredFields(["2026-06-09", "50", "Food", "ivan", "family", ""], []);
+    expect(result).toBeNull();
+  });
+
+  it("returns an error when Category is missing", () => {
+    const result = validateRequiredFields(["2026-06-09", "50", "", "ivan", "family", ""], []);
+    expect(result).toBe("Category is required.");
+  });
+
+  it("returns an error when Spent By is missing", () => {
+    const result = validateRequiredFields(["2026-06-09", "50", "Food", "", "family", ""], []);
+    expect(result).toBe("Spent By is required.");
+  });
+
+  it("returns an error when Spent For is missing", () => {
+    const result = validateRequiredFields(["2026-06-09", "50", "Food", "ivan", "", ""], []);
+    expect(result).toBe("Spent For is required.");
+  });
+
+  it("treats whitespace-only values as missing", () => {
+    const result = validateRequiredFields(["2026-06-09", "50", "Food", "ivan", "   ", ""], []);
+    expect(result).toBe("Spent For is required.");
+  });
+
+  it("accounts for sheetCurrencies offset when locating fixed columns", () => {
+    // sheetCurrencies = ["PLN", "EUR"] shifts USD/Category/SpentBy/SpentFor by 2
+    const result = validateRequiredFields(["2026-06-09", "400", "", "50", "Food", "ivan", "family", ""], ["PLN", "EUR"]);
+    expect(result).toBeNull();
   });
 });

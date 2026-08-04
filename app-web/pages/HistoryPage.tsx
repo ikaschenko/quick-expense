@@ -21,6 +21,8 @@ const emptyFilters: SearchFilters = {
   categories: [],
   amountFrom: "",
   amountTo: "",
+  spentBy: "",
+  spentFor: "",
   customFields: {},
 };
 
@@ -30,6 +32,8 @@ function isAnyFilterActive(f: SearchFilters): boolean {
     f.categories.length > 0 ||
     f.amountFrom !== "" ||
     f.amountTo !== "" ||
+    f.spentBy !== "" ||
+    f.spentFor !== "" ||
     Object.values(f.customFields).some((v) => v !== "")
   );
 }
@@ -39,6 +43,8 @@ function countPanelFilters(f: SearchFilters): number {
   if (f.categories.length > 0) count++;
   if (f.amountFrom !== "") count++;
   if (f.amountTo !== "") count++;
+  if (f.spentBy !== "") count++;
+  if (f.spentFor !== "") count++;
   count += Object.values(f.customFields).filter((v) => v !== "").length;
   return count;
 }
@@ -67,6 +73,8 @@ export function HistoryPage(): JSX.Element {
       fil.categories.length > 0 ||
       fil.amountFrom !== "" ||
       fil.amountTo !== "" ||
+      fil.spentBy !== "" ||
+      fil.spentFor !== "" ||
       Object.values(fil.customFields).some((v) => v !== "")
     );
   });
@@ -330,6 +338,42 @@ export function HistoryPage(): JSX.Element {
               min="0"
               aria-label="Maximum amount"
             />
+          </div>
+
+          {/* Spent By + Spent For */}
+          <div className="two-col-row mb-4">
+            <div>
+              <div className="input-label mb-2">Spent By</div>
+              <div className="search-hero-input">
+                <SearchIcon size={18} className="search-icon" aria-hidden />
+                <input
+                  className="input"
+                  value={dataset.searchFilters.spentBy}
+                  onChange={(e) =>
+                    dataset.setSearchFilters({ ...dataset.searchFilters, spentBy: e.target.value })
+                  }
+                  placeholder="Search Spent By…"
+                  inputMode="text"
+                  aria-label="Filter by Spent By"
+                />
+              </div>
+            </div>
+            <div>
+              <div className="input-label mb-2">Spent For</div>
+              <div className="search-hero-input">
+                <SearchIcon size={18} className="search-icon" aria-hidden />
+                <input
+                  className="input"
+                  value={dataset.searchFilters.spentFor}
+                  onChange={(e) =>
+                    dataset.setSearchFilters({ ...dataset.searchFilters, spentFor: e.target.value })
+                  }
+                  placeholder="Search Spent For…"
+                  inputMode="text"
+                  aria-label="Filter by Spent For"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Custom column text filters */}

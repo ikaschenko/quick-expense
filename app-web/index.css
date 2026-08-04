@@ -197,6 +197,18 @@ button { cursor: pointer; }
   margin-bottom: var(--space-5);
 }
 
+/* Reusable 50/50 two-column row (e.g. Spent By / Spent For pairing). Stacks on mobile. */
+.two-col-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+@media (max-width: 480px) {
+  .two-col-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ===== Card ===== */
 .card {
   background: var(--color-surface);

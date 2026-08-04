@@ -67,7 +67,8 @@ function classifyColumns(currencies: string[], customColumns: string[]): ColumnI
   }
   result.push({ name: "USD", type: "mandatory-currency", hideable: false });
   result.push({ name: "Category", type: "mandatory-field", hideable: false });
-  result.push({ name: "Spent By", type: "mandatory-field", hideable: false });
+  result.push({ name: "Spent By", type: "mandatory-field", hideable: true });
+  result.push({ name: "Spent For", type: "mandatory-field", hideable: true });
   result.push({ name: "Comment", type: "mandatory-field", hideable: true });
   for (const col of customColumns) {
     result.push({ name: col, type: "custom-column", hideable: true });
@@ -737,6 +738,7 @@ export function SetupPage(): JSX.Element {
                   <li><strong>USD</strong> — mandatory</li>
                   <li><strong>Category</strong> — mandatory</li>
                   <li><strong>Spent By</strong> — mandatory</li>
+                  <li><strong>Spent For</strong> — mandatory</li>
                   <li><strong>Comment</strong> — mandatory</li>
                   <li><strong>Custom columns</strong> (any names) — optional, after Comment</li>
                 </ol>

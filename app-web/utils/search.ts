@@ -19,12 +19,27 @@ export function filterExpenses(records: ExpenseRecord[], filters: SearchFilters)
 
   const customFieldEntries = Object.entries(filters.customFields).filter(([, v]) => v.trim() !== "");
 
+  const spentByParts = filters.spentBy.trim().toLowerCase().split(/\s+/).filter((p) => p.length > 0);
+  const spentByMeaningfulChars = spentByParts.join("");
+  const spentForParts = filters.spentFor.trim().toLowerCase().split(/\s+/).filter((p) => p.length > 0);
+  const spentForMeaningfulChars = spentForParts.join("");
+
   const matches = records.filter((record) => {
     const categoryMatch =
       selectedCategoriesLower.size === 0 || selectedCategoriesLower.has(record.Category.trim().toLowerCase());
     const commentMatch =
       meaningfulChars.length < 2 ||
       parts.every((p) => record.Comment.toLowerCase().includes(p));
+
+    if (spentByMeaningfulChars.length >= 2) {
+      const recordValue = record.spentBy.toLowerCase();
+      if (!spentByParts.every((p) => recordValue.includes(p))) return false;
+    }
+
+    if (spentForMeaningfulChars.length >= 2) {
+      const recordValue = record.spentFor.toLowerCase();
+      if (!spentForParts.every((p) => recordValue.includes(p))) return false;
+    }
 
     // Amount range filter
     if (amountFromNum !== null || amountToNum !== null) {

@@ -55,7 +55,7 @@ vi.mock("../../app-web/contexts/DatasetContext", () => ({
     appendToDataset: vi.fn(),
     updateInDataset: vi.fn(),
     removeLastFromDataset: vi.fn(),
-    distinctValues: { Category: [], spentBy: [], customFields: {} },
+    distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} },
     searchFilters: { comment: "", categories: [] },
     setSearchFilters: vi.fn(),
   })),
@@ -155,7 +155,7 @@ describe("AddExpensePage — double-submit guard", () => {
     resolveAppend({
       record: {
         Date: "2026-06-30", USD: "10.00", Category: "Food",
-        spentBy: "test@example.com", Comment: "",
+        spentBy: "test@example.com", spentFor: "friend@example.com", Comment: "",
         currencyAmounts: {}, customFields: {}, rowNumber: 2,
       },
       insertMode: false,
@@ -167,7 +167,7 @@ describe("AddExpensePage — Save & Continue field retention", () => {
   const successRecord = {
     record: {
       Date: "2026-06-30", USD: "10.00", Category: "Food",
-      spentBy: "test@example.com", Comment: "",
+      spentBy: "test@example.com", spentFor: "friend@example.com", Comment: "",
       currencyAmounts: {}, customFields: {}, rowNumber: 2,
     },
     insertMode: false,
@@ -238,6 +238,7 @@ describe("AddExpensePage — repeat mode pre-fill", () => {
     USD: "42.50",
     Category: "Transport",
     spentBy: "alice@example.com",
+    spentFor: "bob@example.com",
     Comment: "Bus to airport",
     currencyAmounts: {},
     customFields: {},
@@ -287,6 +288,7 @@ describe("AddExpensePage — repeat mode submit", () => {
     USD: "42.50",
     Category: "Transport",
     spentBy: "alice@example.com",
+    spentFor: "bob@example.com",
     Comment: "Bus to airport",
     currencyAmounts: {},
     customFields: {},
@@ -299,6 +301,7 @@ describe("AddExpensePage — repeat mode submit", () => {
       USD: "42.50",
       Category: "Transport",
       spentBy: "alice@example.com",
+      spentFor: "bob@example.com",
       Comment: "Bus to airport",
       currencyAmounts: {},
       customFields: {},
@@ -332,6 +335,7 @@ describe("AddExpensePage — repeat mode FX rates", () => {
     USD: "42.50",
     Category: "Transport",
     spentBy: "alice@example.com",
+    spentFor: "bob@example.com",
     Comment: "Bus to airport",
     currencyAmounts: { EUR: "40.00" },
     customFields: {},

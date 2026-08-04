@@ -9,7 +9,7 @@ import {
 } from "../../app-web/utils/spreadsheet";
 
 const SAMPLE_CURRENCIES = ["PLN", "BYN", "EUR"];
-const SAMPLE_CUSTOM = ["SpentFor", "Channel", "Theme"];
+const SAMPLE_CUSTOM = ["Channel", "Theme"];
 
 describe("spreadsheet utilities", () => {
   it("parses spreadsheet id from a Google Sheets URL", () => {
@@ -23,9 +23,9 @@ describe("spreadsheet utilities", () => {
   it("maps sheet rows to records with currencies and custom columns", () => {
     const records = mapRowsToExpenseRecords(
       [
-        ["2026-03-01", "12.34", "", "", "3.20", "Food", "a@example.com", "", "SpentFor-val", "card", "trip"],
-        ["2026-03-02", "", "", "", "5.00", "Travel", "b@example.com", "note", "", "", ""],
-        ["2026-03-03", "", "", "", "7.00", "Food", "a@example.com", "", "", "cash", "trip"],
+        ["2026-03-01", "12.34", "", "", "3.20", "Food", "a@example.com", "Family", "", "card", "trip"],
+        ["2026-03-02", "", "", "", "5.00", "Travel", "b@example.com", "Friends", "note", "", ""],
+        ["2026-03-03", "", "", "", "7.00", "Food", "a@example.com", "Family", "", "cash", "trip"],
       ],
       SAMPLE_CURRENCIES,
       SAMPLE_CUSTOM,
@@ -36,15 +36,15 @@ describe("spreadsheet utilities", () => {
     expect(records[0].currencyAmounts.PLN).toBe("12.34");
     expect(records[0].currencyAmounts.EUR).toBe("");
     expect(records[0].spentBy).toBe("a@example.com");
-    expect(records[0].customFields["SpentFor"]).toBe("SpentFor-val");
+    expect(records[0].spentFor).toBe("Family");
     expect(records[0].customFields["Channel"]).toBe("card");
     expect(records[0].customFields["Theme"]).toBe("trip");
 
     expect(buildDistinctValues(records, SAMPLE_CUSTOM)).toEqual({
       Category: ["Food", "Travel"],
       spentBy: ["a@example.com", "b@example.com"],
+      spentFor: ["Family", "Friends"],
       customFields: {
-        SpentFor: ["SpentFor-val"],
         Channel: ["card", "cash"],
         Theme: ["trip"],
       },
@@ -54,10 +54,10 @@ describe("spreadsheet utilities", () => {
   it("deduplicates categories case-insensitively, preferring the capitalized variant", () => {
     const records = mapRowsToExpenseRecords(
       [
-        ["2026-03-01", "5.00", "pocket money", "a@example.com", ""],
-        ["2026-03-02", "5.00", "Pocket Money", "a@example.com", ""],
-        ["2026-03-03", "5.00", "internet", "a@example.com", ""],
-        ["2026-03-04", "5.00", "Internet", "a@example.com", ""],
+        ["2026-03-01", "5.00", "pocket money", "a@example.com", "Family", ""],
+        ["2026-03-02", "5.00", "Pocket Money", "a@example.com", "Family", ""],
+        ["2026-03-03", "5.00", "internet", "a@example.com", "Family", ""],
+        ["2026-03-04", "5.00", "Internet", "a@example.com", "Family", ""],
       ],
       [],
       [],
@@ -68,7 +68,7 @@ describe("spreadsheet utilities", () => {
 
   it("maps rows correctly with no currencies and no custom columns", () => {
     const records = mapRowsToExpenseRecords(
-      [["2026-03-01", "5.00", "Food", "a@example.com", ""]],
+      [["2026-03-01", "5.00", "Food", "a@example.com", "Family", ""]],
       [],
       [],
     );
@@ -76,6 +76,7 @@ describe("spreadsheet utilities", () => {
     expect(records[0].USD).toBe("5.00");
     expect(records[0].Category).toBe("Food");
     expect(records[0].spentBy).toBe("a@example.com");
+    expect(records[0].spentFor).toBe("Family");
     expect(records[0].customFields).toEqual({});
   });
 
@@ -95,6 +96,7 @@ describe("spreadsheet utilities", () => {
       expect(validateColumnName("USD", [])).not.toBeNull();
       expect(validateColumnName("Category", [])).not.toBeNull();
       expect(validateColumnName("spent by", [])).not.toBeNull();
+      expect(validateColumnName("spent for", [])).not.toBeNull();
       expect(validateColumnName("COMMENT", [])).not.toBeNull();
     });
 
@@ -203,7 +205,7 @@ describe("buildCommentSuggestions", () => {
   function makeRecord(comment: string): Parameters<typeof buildCommentSuggestions>[0][number] {
     return {
       rowNumber: 1, Date: "2026-01-01", USD: "1", Category: "X",
-      spentBy: "a@b.com", Comment: comment, currencyAmounts: {}, customFields: {},
+      spentBy: "a@b.com", spentFor: "b@c.com", Comment: comment, currencyAmounts: {}, customFields: {},
     };
   }
 

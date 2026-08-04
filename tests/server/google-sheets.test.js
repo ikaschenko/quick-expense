@@ -1,5 +1,7 @@
 // @vitest-environment node
 
+import { getServiceAccountAccessToken } from "../../app-server/google-client.js";
+
 // Mock google-client.js to avoid reading service-account.json and making real OAuth calls.
 vi.mock("../../app-server/google-client.js", () => ({
   getServiceAccountAccessToken: vi.fn().mockResolvedValue("sa-mock-token"),
@@ -11,8 +13,8 @@ const LEGACY_EXPENSE_HEADERS = [
   "Date", "PLN", "BYN", "USD", "EUR",
   "Category", "WhoSpent", "ForWhom", "Comment", "PaymentChannel", "Theme",
 ];
-const NEW_FIXED_HEADERS_NOCURR = ["Date", "USD", "Category", "Spent By", "Comment"];
-const DEFAULT_CUSTOM = ["SpentFor", "Channel", "Theme"];
+const NEW_FIXED_HEADERS_NOCURR = ["Date", "USD", "Category", "Spent By", "Spent For", "Comment"];
+const DEFAULT_CUSTOM = ["Channel", "Theme"];
 
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
@@ -152,7 +154,7 @@ describe("validateSpreadsheet", () => {
   });
 
   it("returns valid when Expenses tab has correct dynamic headers with custom columns", async () => {
-    const dynamicHeaders = ["Date", "PLN", "BYN", "EUR", "USD", "Category", "Spent By", "Comment", "SpentFor", "Channel", "Theme"];
+    const dynamicHeaders = ["Date", "PLN", "BYN", "EUR", "USD", "Category", "Spent By", "Spent For", "Comment", "Channel", "Theme"];
     setupFetchSequence([
       metadataResponse(["Expenses"]),
       headerResponse([...dynamicHeaders]),
@@ -163,11 +165,11 @@ describe("validateSpreadsheet", () => {
     expect(report.tabAction).toBe("found");
     expect(report.headersAction).toBe("valid");
     expect(report.sheetCurrencies).toEqual(["PLN", "BYN", "EUR"]);
-    expect(report.customColumns).toEqual(["SpentFor", "Channel", "Theme"]);
+    expect(report.customColumns).toEqual(["Channel", "Theme"]);
   });
 
   it("returns valid with no custom columns", async () => {
-    const headers = ["Date", "PLN", "USD", "Category", "Spent By", "Comment"];
+    const headers = ["Date", "PLN", "USD", "Category", "Spent By", "Spent For", "Comment"];
     setupFetchSequence([
       metadataResponse(["Expenses"]),
       headerResponse([...headers]),
@@ -238,9 +240,8 @@ describe("loadExpenses", () => {
   }
 
   it("maps Comment correctly when custom columns appear before Comment in the sheet", async () => {
-    // Sheet header: Date, PLN, USD, Category, SpentBy, SpentFor, Comment, Channel, Theme
-    // SpentFor is BEFORE Comment — this was the bug case
-    const header = ["Date", "PLN", "USD", "Category", "Spent By", "SpentFor", "Comment", "Channel", "Theme"];
+    // Sheet header: Date, PLN, USD, Category, Spent By, Spent For, Comment, Channel, Theme
+    const header = ["Date", "PLN", "USD", "Category", "Spent By", "Spent For", "Comment", "Channel", "Theme"];
     const dataRow = ["2026-01-01", "100", "25", "Food", "ivan@x.com", "Family", "samsung galaxy", "cash", "Tech"];
 
     setupFetchSequence([
@@ -257,7 +258,7 @@ describe("loadExpenses", () => {
     expect(result.records).toHaveLength(1);
     const record = result.records[0];
     expect(record.Comment).toBe("samsung galaxy");
-    expect(record.customFields.SpentFor).toBe("Family");
+    expect(record.spentFor).toBe("Family");
     expect(record.customFields.Channel).toBe("cash");
     expect(record.customFields.Theme).toBe("Tech");
     expect(record.Category).toBe("Food");
@@ -265,9 +266,9 @@ describe("loadExpenses", () => {
   });
 
   it("maps Comment correctly when custom columns appear after Comment in the sheet (standard order)", async () => {
-    // Standard header: Date, PLN, USD, Category, SpentBy, Comment, SpentFor, Channel, Theme
-    const header = ["Date", "PLN", "USD", "Category", "Spent By", "Comment", "SpentFor", "Channel", "Theme"];
-    const dataRow = ["2026-01-01", "100", "25", "Travel", "ivan@x.com", "allegro order", "Self", "card", "Trip"];
+    // Standard header: Date, PLN, USD, Category, Spent By, Spent For, Comment, Channel, Theme
+    const header = ["Date", "PLN", "USD", "Category", "Spent By", "Spent For", "Comment", "Channel", "Theme"];
+    const dataRow = ["2026-01-01", "100", "25", "Travel", "ivan@x.com", "Self", "allegro order", "card", "Trip"];
 
     setupFetchSequence([
       metadataResponse(["Expenses"]),
@@ -280,12 +281,12 @@ describe("loadExpenses", () => {
     expect(result.records).toHaveLength(1);
     const record = result.records[0];
     expect(record.Comment).toBe("allegro order");
-    expect(record.customFields.SpentFor).toBe("Self");
+    expect(record.spentFor).toBe("Self");
     expect(record.customFields.Channel).toBe("card");
   });
 
   it("maps records correctly when the sheet header casing differs", async () => {
-    const header = ["Date", "pln", "USD", "Category", "spent by", "SpentFor", "comment", "Channel", "Theme"];
+    const header = ["Date", "pln", "USD", "Category", "spent by", "spent for", "comment", "Channel", "Theme"];
     const dataRow = ["2026-01-01", "100", "25", "Food", "ivan@x.com", "Family", "samsung galaxy", "cash", "Tech"];
 
     setupFetchSequence([
@@ -298,25 +299,26 @@ describe("loadExpenses", () => {
 
     expect(result.records).toHaveLength(1);
     expect(result.records[0].spentBy).toBe("ivan@x.com");
+    expect(result.records[0].spentFor).toBe("Family");
     expect(result.records[0].Comment).toBe("samsung galaxy");
   });
 
   it("skips re-fetching column A and reuses the given dateValues when provided", async () => {
-    const header = ["Date", "USD", "Category", "Spent By", "Comment"];
+    const header = ["Date", "USD", "Category", "Spent By", "Spent For", "Comment"];
     const report = { headerRow: header, sheetCurrencies: [], customColumns: [] };
     const dateValues = ["2026-01-01", "2026-01-02"];
     // Only the B:endCol data rows are fetched — no header, no column A.
     setupFetchSequence([
       valuesResponse([
-        ["25", "Food", "ivan@x.com", "lunch"],
-        ["10", "Travel", "ivan@x.com", "bus"],
+        ["25", "Food", "ivan@x.com", "Family", "lunch"],
+        ["10", "Travel", "ivan@x.com", "Family", "bus"],
       ]),
     ]);
 
     const result = await loadExpenses(TOKEN, SHEET_ID, null, { precomputedReport: report, dateValues });
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(mockFetch.mock.calls[0][0]).toContain(encodeURIComponent(`${SHEET_NAME}!B2:E`));
+    expect(mockFetch.mock.calls[0][0]).toContain(encodeURIComponent(`${SHEET_NAME}!B2:F`));
     expect(result.records).toHaveLength(2);
     expect(result.records[0].Date).toBe("2026-01-01");
     expect(result.records[0].USD).toBe("25");
@@ -409,15 +411,15 @@ describe("appendExpenseRow", () => {
   }
 
   it("aligns outgoing row values to actual header order when custom columns appear before Comment", async () => {
-    const header = ["Date", "PLN", "USD", "Category", "Spent By", "SpentFor", "Comment", "Channel", "Theme"];
+    const header = ["Date", "PLN", "USD", "Category", "Spent By", "Spent For", "Comment", "Channel", "Theme"];
     const canonicalValues = [
       "2026-01-02",
       "120",
       "30",
       "Food",
       "ivan@x.com",
-      "samsung galaxy",
       "Family",
+      "samsung galaxy",
       "cash",
       "Tech",
     ];
@@ -439,7 +441,7 @@ describe("appendExpenseRow", () => {
     expect(appendCall[0]).toContain(":append");
     const body = JSON.parse(appendCall[1].body);
 
-    // Free-text slots (Category, Spent By, SpentFor, Comment, Channel, Theme) are blanked
+    // Free-text slots (Category, Spent By, Spent For, Comment, Channel, Theme) are blanked
     // for the USER_ENTERED append call; Date, PLN, USD (structured) keep their values.
     expect(body.values[0]).toEqual([
       "2026-01-02",
@@ -455,15 +457,15 @@ describe("appendExpenseRow", () => {
   });
 
   it("keeps canonical value order when sheet header is already standard", async () => {
-    const header = ["Date", "PLN", "USD", "Category", "Spent By", "Comment", "SpentFor", "Channel", "Theme"];
+    const header = ["Date", "PLN", "USD", "Category", "Spent By", "Spent For", "Comment", "Channel", "Theme"];
     const canonicalValues = [
       "2026-01-03",
       "90",
       "22",
       "Travel",
       "ivan@x.com",
-      "allegro order",
       "Self",
+      "allegro order",
       "card",
       "Trip",
     ];
@@ -485,15 +487,15 @@ describe("appendExpenseRow", () => {
   });
 
   it("aligns outgoing row values when actual header casing differs", async () => {
-    const header = ["Date", "pln", "USD", "Category", "spent by", "SpentFor", "comment", "Channel", "Theme"];
+    const header = ["Date", "pln", "USD", "Category", "spent by", "spent for", "comment", "Channel", "Theme"];
     const canonicalValues = [
       "2026-01-04",
       "77",
       "19",
       "Other",
       "ivan@x.com",
-      "note text",
       "Family",
+      "note text",
       "cash",
       "Trip",
     ];
@@ -515,8 +517,8 @@ describe("appendExpenseRow", () => {
   });
 
   it("returns an ExpenseRecord with rowNumber parsed from updatedRange", async () => {
-    const header = ["Date", "USD", "Category", "Spent By", "Comment"];
-    const canonicalValues = ["2026-06-03", "15", "Food", "ivan@x.com", "lunch"];
+    const header = ["Date", "USD", "Category", "Spent By", "Spent For", "Comment"];
+    const canonicalValues = ["2026-06-03", "15", "Food", "ivan@x.com", "Family", "lunch"];
 
     setupFetchSequence([
       metadataResponse(["Expenses"]),
@@ -533,14 +535,15 @@ describe("appendExpenseRow", () => {
     expect(record.USD).toBe("15");
     expect(record.Category).toBe("Food");
     expect(record.spentBy).toBe("ivan@x.com");
+    expect(record.spentFor).toBe("Family");
     expect(record.Comment).toBe("lunch");
     expect(record.currencyAmounts).toEqual({});
     expect(record.customFields).toEqual({});
   });
 
   it("returns rowNumber 0 when updatedRange is missing from response", async () => {
-    const header = ["Date", "USD", "Category", "Spent By", "Comment"];
-    const canonicalValues = ["2026-06-03", "10", "Other", "ivan@x.com", "misc"];
+    const header = ["Date", "USD", "Category", "Spent By", "Spent For", "Comment"];
+    const canonicalValues = ["2026-06-03", "10", "Other", "ivan@x.com", "Family", "misc"];
 
     setupFetchSequence([
       metadataResponse(["Expenses"]),
@@ -553,8 +556,8 @@ describe("appendExpenseRow", () => {
   });
 
   it("blanks free-text slots in append body and writes actual values via RAW batchUpdate", async () => {
-    const header = ["Date", "USD", "Category", "Spent By", "Comment"];
-    const values = ["2026-01-01", "25", "Food", "user@example.com", "=IMPORTDATA(\"evil\")"];
+    const header = ["Date", "USD", "Category", "Spent By", "Spent For", "Comment"];
+    const values = ["2026-01-01", "25", "Food", "user@example.com", "Family", "=IMPORTDATA(\"evil\")"];
 
     setupFetchSequence([
       metadataResponse(["Expenses"]),
@@ -566,11 +569,11 @@ describe("appendExpenseRow", () => {
 
     await appendExpenseRow(TOKEN, SHEET_ID, values);
 
-    // Append call should have blanks for free-text slots (Category, Spent By, Comment); Date and USD kept.
+    // Append call should have blanks for free-text slots (Category, Spent By, Spent For, Comment); Date and USD kept.
     const appendCall = mockFetch.mock.calls[2];
     expect(appendCall[0]).toContain(":append");
     const appendBody = JSON.parse(appendCall[1].body);
-    expect(appendBody.values[0]).toEqual(["2026-01-01", "25", "", "", ""]);
+    expect(appendBody.values[0]).toEqual(["2026-01-01", "25", "", "", "", ""]);
 
     // RAW batchUpdate call should carry the actual formula value.
     const rawCall = mockFetch.mock.calls[4];
@@ -600,8 +603,8 @@ describe("updateExpenseRow", () => {
   }
 
   it("returns an ExpenseRecord with the given rowNumber and updated values", async () => {
-    const header = ["Date", "USD", "Category", "Spent By", "Comment"];
-    const canonicalValues = ["2026-06-03", "25", "Transport", "ivan@x.com", "taxi"];
+    const header = ["Date", "USD", "Category", "Spent By", "Spent For", "Comment"];
+    const canonicalValues = ["2026-06-03", "25", "Transport", "ivan@x.com", "Family", "taxi"];
 
     setupFetchSequence([
       metadataResponse(["Expenses"]),
@@ -617,14 +620,15 @@ describe("updateExpenseRow", () => {
     expect(record.USD).toBe("25");
     expect(record.Category).toBe("Transport");
     expect(record.spentBy).toBe("ivan@x.com");
+    expect(record.spentFor).toBe("Family");
     expect(record.Comment).toBe("taxi");
     expect(record.currencyAmounts).toEqual({});
     expect(record.customFields).toEqual({});
   });
 
   it("includes currency amounts in returned record when currencies are present", async () => {
-    const header = ["Date", "PLN", "USD", "Category", "Spent By", "Comment"];
-    const canonicalValues = ["2026-06-03", "50", "20", "Food", "ivan@x.com", "groceries"];
+    const header = ["Date", "PLN", "USD", "Category", "Spent By", "Spent For", "Comment"];
+    const canonicalValues = ["2026-06-03", "50", "20", "Food", "ivan@x.com", "Family", "groceries"];
 
     setupFetchSequence([
       metadataResponse(["Expenses"]),
@@ -670,7 +674,7 @@ describe("reorderCustomColumnsInSheet", () => {
   }
 
   it("reorders custom columns when mandatory headers are mapped", async () => {
-    const header = ["Date", "Amount", "Category", "WhoSpent", "Comment", "Channel", "Theme"];
+    const header = ["Date", "Amount", "Category", "WhoSpent", "Spent For", "Comment", "Channel", "Theme"];
     const mapping = { USD: "Amount", "Spent By": "WhoSpent" };
 
     setupFetchSequence([
@@ -684,12 +688,12 @@ describe("reorderCustomColumnsInSheet", () => {
     const batchUpdateCall = mockFetch.mock.calls[2];
     const body = JSON.parse(batchUpdateCall[1].body);
     expect(body.requests).toHaveLength(1);
-    expect(body.requests[0].moveDimension.source.startIndex).toBe(6);
-    expect(body.requests[0].moveDimension.destinationIndex).toBe(5);
+    expect(body.requests[0].moveDimension.source.startIndex).toBe(7);
+    expect(body.requests[0].moveDimension.destinationIndex).toBe(6);
   });
 
   it("ignores trailing empty header cells when reordering custom columns", async () => {
-    const header = ["Date", "USD", "Category", "Spent By", "Comment", "Channel", "Theme", ""];
+    const header = ["Date", "USD", "Category", "Spent By", "Spent For", "Comment", "Channel", "Theme", ""];
 
     setupFetchSequence([
       metadataResponse(["Expenses"]),
@@ -702,13 +706,13 @@ describe("reorderCustomColumnsInSheet", () => {
     const batchUpdateCall = mockFetch.mock.calls[2];
     const body = JSON.parse(batchUpdateCall[1].body);
     expect(body.requests).toHaveLength(1);
-    expect(body.requests[0].moveDimension.source.startIndex).toBe(6);
-    expect(body.requests[0].moveDimension.destinationIndex).toBe(5);
+    expect(body.requests[0].moveDimension.source.startIndex).toBe(7);
+    expect(body.requests[0].moveDimension.destinationIndex).toBe(6);
   });
 
   it("leftward move: destinationIndex = targetIdx (no adjustment)", async () => {
-    // Move Theme(6) before Channel(5): leftward, no +1.
-    const header = ["Date", "USD", "Category", "Spent By", "Comment", "Channel", "Theme"];
+    // Move Theme(7) before Channel(6): leftward, no +1.
+    const header = ["Date", "USD", "Category", "Spent By", "Spent For", "Comment", "Channel", "Theme"];
 
     setupFetchSequence([
       metadataResponse(["Expenses"]),
@@ -721,8 +725,8 @@ describe("reorderCustomColumnsInSheet", () => {
     const body = JSON.parse(mockFetch.mock.calls[2][1].body);
     expect(body.requests).toHaveLength(1);
     const move = body.requests[0].moveDimension;
-    expect(move.source.startIndex).toBe(6);
-    expect(move.destinationIndex).toBe(5);
+    expect(move.source.startIndex).toBe(7);
+    expect(move.destinationIndex).toBe(6);
   });
 
   it("rightward move formula: destinationIndex = targetIdx + 1", () => {
@@ -746,7 +750,7 @@ describe("reorderCustomColumnsInSheet", () => {
 
     await expect(
       reorderCustomColumnsInSheet(TOKEN, SHEET_ID, ["Theme"], mapping),
-    ).rejects.toThrow('Column "Comment" was not found after "Spent By".');
+    ).rejects.toThrow('Expected "Spent For" after "Spent By" but found "Theme"');
   });
 });
 
@@ -1019,8 +1023,8 @@ describe("loadExpenses with column mapping", () => {
 
   it("reads data using user column names and returns QE field names", async () => {
     // User sheet has "Amount" instead of "USD" and "WhoSpent" instead of "Spent By"
-    const header = ["Date", "Amount", "Category", "WhoSpent", "Comment"];
-    const dataRow = ["2026-01-01", "42", "Food", "alice", "lunch"];
+    const header = ["Date", "Amount", "Category", "WhoSpent", "Spent For", "Comment"];
+    const dataRow = ["2026-01-01", "42", "Food", "alice", "bob", "lunch"];
     const mapping = { USD: "Amount", "Spent By": "WhoSpent" };
 
     setupFetchSequence([
@@ -1034,6 +1038,7 @@ describe("loadExpenses with column mapping", () => {
     const record = result.records[0];
     expect(record.USD).toBe("42");
     expect(record.spentBy).toBe("alice");
+    expect(record.spentFor).toBe("bob");
     expect(record.Comment).toBe("lunch");
     expect(record.Category).toBe("Food");
   });
@@ -1192,18 +1197,48 @@ describe("createSpreadsheet", () => {
     expect(deleteCall).toBeDefined();
   });
 
-  it("throws when the template fetch fails", async () => {
+  it("throws a friendly 'prepare the template service' error when the template fetch fails", async () => {
     mockFetch
       .mockResolvedValueOnce(jsonResponse({ error: { message: "Template not found" } }, 404))
       .mockResolvedValueOnce(jsonResponse(createdSpreadsheet));
-    await expect(createSpreadsheet(TOKEN, "Fail")).rejects.toThrow("Template not found");
+    await expect(createSpreadsheet(TOKEN, "Fail")).rejects.toMatchObject({
+      message: "Couldn't prepare the template service. Please make a copy manually.",
+      templateCopyFailed: true,
+      templateUrl: expect.stringContaining(TEMPLATE_ID),
+    });
   });
 
-  it("throws when the spreadsheet create call fails", async () => {
+  it("throws a friendly 'prepare the template service' error when the SA token fetch fails", async () => {
+    getServiceAccountAccessToken.mockRejectedValueOnce(new Error("SA auth unavailable"));
+    mockFetch.mockResolvedValueOnce(jsonResponse(mockTemplateSheets));
+    await expect(createSpreadsheet(TOKEN, "Fail")).rejects.toMatchObject({
+      message: "Couldn't prepare the template service. Please make a copy manually.",
+      templateCopyFailed: true,
+      templateUrl: expect.stringContaining(TEMPLATE_ID),
+    });
+  });
+
+  it("throws a friendly 'create your spreadsheet file' error when the spreadsheet create call fails", async () => {
     mockFetch
       .mockResolvedValueOnce(jsonResponse(mockTemplateSheets))
       .mockResolvedValueOnce(jsonResponse({ error: { message: "Insufficient permissions" } }, 403));
-    await expect(createSpreadsheet(TOKEN, "Fail")).rejects.toThrow("Insufficient permissions");
+    await expect(createSpreadsheet(TOKEN, "Fail")).rejects.toMatchObject({
+      message: "Couldn't create your spreadsheet file. Please make a copy manually.",
+      templateCopyFailed: true,
+      templateUrl: expect.stringContaining(TEMPLATE_ID),
+    });
+  });
+
+  it("throws a friendly 'grant setup access' error when the SA permission grant fails", async () => {
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse(mockTemplateSheets))          // fetchTemplateSheets
+      .mockResolvedValueOnce(jsonResponse(createdSpreadsheet))          // create
+      .mockResolvedValueOnce(jsonResponse({ error: { message: "Permission denied" } }, 403)); // grant SA fails
+    await expect(createSpreadsheet(TOKEN, "Fail")).rejects.toMatchObject({
+      message: "Couldn't grant setup access to your spreadsheet. Please make a copy manually.",
+      templateCopyFailed: true,
+      templateUrl: expect.stringContaining(TEMPLATE_ID),
+    });
   });
 
   it("throws Invalid spreadsheetId when the API returns a path-traversal id, without calling any downstream fetch", async () => {
@@ -1536,7 +1571,7 @@ describe("addExpenseRow", () => {
   const SHEET_ID = "sid";
   const CURRENCIES = ["PLN"];
   const CUSTOM = [];
-  const canonicalValues = ["2026-01-01", "100", "50", "Food", "user@example.com", "Lunch"];
+  const canonicalValues = ["2026-01-01", "100", "50", "Food", "user@example.com", "Family", "Lunch"];
 
   function sheetMetaResponse(sheetId = 0) {
     return jsonResponse({
@@ -1553,7 +1588,7 @@ describe("addExpenseRow", () => {
   }
 
   it("uses append mode when submitted date >= last row date", async () => {
-    const headers = ["Date", "PLN", "USD", "Category", "Spent By", "Comment"];
+    const headers = ["Date", "PLN", "USD", "Category", "Spent By", "Spent For", "Comment"];
     // canonicalValues date = 2026-01-01; last row date = 2025-12-31 → submitted >= last → append
     setupFetchSequence([
       colAResponse(["2025-06-01", "2025-12-31"]),      // date column read
@@ -1569,8 +1604,8 @@ describe("addExpenseRow", () => {
   });
 
   it("uses insert mode when submitted date < last row date on ordered sheet", async () => {
-    const headers = ["Date", "PLN", "USD", "Category", "Spent By", "Comment"];
-    const pastValues = ["2025-06-01", "100", "50", "Food", "user@example.com", "Lunch"];
+    const headers = ["Date", "PLN", "USD", "Category", "Spent By", "Spent For", "Comment"];
+    const pastValues = ["2025-06-01", "100", "50", "Food", "user@example.com", "Family", "Lunch"];
     setupFetchSequence([
       colAResponse(["2025-01-01", "2025-06-15", "2026-01-01"]),  // date column read
       sheetMetaResponse(),                                         // validateSpreadsheet – getMetadata
@@ -1588,7 +1623,7 @@ describe("addExpenseRow", () => {
   });
 
   it("falls back to append mode when sheet has date order issue", async () => {
-    const headers = ["Date", "PLN", "USD", "Category", "Spent By", "Comment"];
+    const headers = ["Date", "PLN", "USD", "Category", "Spent By", "Spent For", "Comment"];
     // Out-of-order: 2025-01-01 appears after 2026-06-01
     setupFetchSequence([
       colAResponse(["2026-06-01", "2025-01-01"]),       // date column read (out of order)
@@ -1598,13 +1633,13 @@ describe("addExpenseRow", () => {
       jsonResponse({}),                                  // writeExpenseValues USER_ENTERED
       jsonResponse({}),                                  // writeExpenseValues RAW
     ]);
-    const pastValues = ["2024-12-01", "100", "50", "Food", "user@example.com", "Lunch"];
+    const pastValues = ["2024-12-01", "100", "50", "Food", "user@example.com", "Family", "Lunch"];
     const result = await addExpenseRow(TOKEN, SHEET_ID, pastValues);
     expect(result.insertMode).toBe(false);
   });
 
   it("uses append mode when sheet has no data rows", async () => {
-    const headers = ["Date", "PLN", "USD", "Category", "Spent By", "Comment"];
+    const headers = ["Date", "PLN", "USD", "Category", "Spent By", "Spent For", "Comment"];
     setupFetchSequence([
       jsonResponse({ values: [["Date"]] }),              // date column read (header only)
       sheetMetaResponse(),                               // validateSpreadsheet – getMetadata
@@ -1621,7 +1656,7 @@ describe("addExpenseRow", () => {
 describe("moveExpenseRow", () => {
   const TOKEN = "tok";
   const SHEET_ID = "sid";
-  const headers = ["Date", "PLN", "USD", "Category", "Spent By", "Comment"];
+  const headers = ["Date", "PLN", "USD", "Category", "Spent By", "Spent For", "Comment"];
 
   function sheetMetaResponse(sheetId = 0) {
     return jsonResponse({ sheets: [{ properties: { title: "Expenses", sheetId } }] });
@@ -1643,12 +1678,12 @@ describe("moveExpenseRow", () => {
     return jsonResponse({ replies: [{}] });
   }
 
-  const VALUES_JAN = ["2026-01-15", "100", "50", "Food", "user@example.com", "Lunch"];
+  const VALUES_JAN = ["2026-01-15", "100", "50", "Food", "user@example.com", "Family", "Lunch"];
 
   it("returns moveMode: false when date stays between neighbors (no move needed)", async () => {
     // Sheet: row2=2026-01-01, row3=2026-01-15 (original), row4=2026-02-01
     // New date 2026-01-20 stays between neighbors → in-place update
-    const newValues = ["2026-01-20", "100", "50", "Food", "user@example.com", "Lunch"];
+    const newValues = ["2026-01-20", "100", "50", "Food", "user@example.com", "Family", "Lunch"];
     setupFetchSequence([
       colAResponse(["2026-01-01", "2026-01-15", "2026-02-01"]),
       sheetMetaResponse(),
@@ -1678,7 +1713,7 @@ describe("moveExpenseRow", () => {
   it("moves row to earlier position: new row inserted before original (original shifts +1 before delete)", async () => {
     // Sheet: row2=2026-01-01, row3=2026-02-01 (original), row4=2026-03-01
     // New date 2025-12-01 < row2 → insert before all rows at row 2; original shifts to row 4
-    const newValues = ["2025-12-01", "100", "50", "Food", "user@example.com", "Lunch"];
+    const newValues = ["2025-12-01", "100", "50", "Food", "user@example.com", "Family", "Lunch"];
     setupFetchSequence([
       colAResponse(["2026-01-01", "2026-02-01", "2026-03-01"]),  // moveExpenseRow date read
       colAResponse(["2026-01-01", "2026-02-01", "2026-03-01"]),  // addExpenseRow inner date read
@@ -1702,7 +1737,7 @@ describe("moveExpenseRow", () => {
   it("moves row to later position: new row inserted after original (original stays, no shift)", async () => {
     // Sheet: row2=2026-01-01, row3=2026-01-15 (original), row4=2026-02-01, row5=2026-03-01
     // New date 2026-02-15 > row4 neighbor → insert between row4 and row5; original row3 unchanged
-    const newValues = ["2026-02-15", "100", "50", "Food", "user@example.com", "Lunch"];
+    const newValues = ["2026-02-15", "100", "50", "Food", "user@example.com", "Family", "Lunch"];
     setupFetchSequence([
       colAResponse(["2026-01-01", "2026-01-15", "2026-02-01", "2026-03-01"]),
       colAResponse(["2026-01-01", "2026-01-15", "2026-02-01", "2026-03-01"]),
@@ -1732,7 +1767,7 @@ describe("moveExpenseRow", () => {
       updateValuesResponse(),
       updateValuesResponse(),
     ]);
-    const result = await moveExpenseRow(TOKEN, SHEET_ID, 3, ["2025-06-01", "100", "50", "Food", "u@e.com", ""]);
+    const result = await moveExpenseRow(TOKEN, SHEET_ID, 3, ["2025-06-01", "100", "50", "Food", "u@e.com", "Family", ""]);
     expect(result.moveMode).toBe(false);
   });
 

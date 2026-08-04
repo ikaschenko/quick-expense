@@ -11,6 +11,7 @@ function makeRecord(overrides: Partial<ExpenseRecord> = {}): ExpenseRecord {
     USD: "25.00",
     Category: "Food",
     spentBy: "a@example.com",
+    spentFor: "b@example.com",
     Comment: "Lunch",
     currencyAmounts: {},
     customFields: {},
@@ -159,6 +160,17 @@ describe("ExpenseCard — expand/collapse vs. text selection", () => {
     expect(screen.getByText("Comment:")).toBeTruthy();
     await user.click(card);
     expect(screen.queryByText("Comment:")).toBeNull();
+  });
+
+  it("shows Spent For in the expanded detail view when populated", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<ExpenseTable records={[record]} sheetCurrencies={[]} />);
+    const card = container.querySelector(".expense-card") as HTMLElement;
+
+    expect(screen.queryByText("Spent For:")).toBeNull();
+    await user.click(card);
+    expect(screen.getByText("Spent For:")).toBeTruthy();
+    expect(screen.getByText("b@example.com")).toBeTruthy();
   });
 
   it("does not collapse the card when the click follows a text selection", async () => {

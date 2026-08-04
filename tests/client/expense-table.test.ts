@@ -7,6 +7,7 @@ function makeRecord(overrides: Partial<ExpenseRecord> = {}): ExpenseRecord {
     USD: "10.00",
     Category: "Food",
     spentBy: "a@example.com",
+    spentFor: "",
     Comment: "",
     currencyAmounts: {},
     customFields: {},
@@ -21,6 +22,7 @@ function makeDraft(overrides: Partial<ExpenseDraft> = {}): ExpenseDraft {
     USD: "10.00",
     Category: "Food",
     spentBy: "a@example.com",
+    spentFor: "",
     Comment: "",
     currencyAmounts: {},
     customFields: {},
@@ -64,6 +66,11 @@ describe("hasDetails", () => {
   it("returns true when comment is short but a custom field has a value", () => {
     const record = makeRecord({ Comment: "short", customFields: { SpentFor: "Family" } });
     expect(hasDetails(record, ["SpentFor"])).toBe(true);
+  });
+
+  it("returns true when comment and custom fields are empty but spentFor has a value", () => {
+    const record = makeRecord({ Comment: "", spentFor: "Family" });
+    expect(hasDetails(record, [])).toBe(true);
   });
 });
 

@@ -22,7 +22,7 @@ export function deriveHeaderRowDetails(details: HeaderDetails): HeaderRowDetail[
   return rows;
 }
 
-const distinctFixedKeys = ["Category", "spentBy"] as const;
+const distinctFixedKeys = ["Category", "spentBy", "spentFor"] as const;
 
 /** When two values differ only in case, prefer the one starting with an uppercase letter. */
 function pickPreferredCase(existing: string, incoming: string): string {
@@ -78,6 +78,7 @@ export function createEmptyExpenseDraft(defaultEmail = "", currencies: string[] 
     USD: "",
     Category: "",
     spentBy: defaultEmail,
+    spentFor: defaultEmail,
     Comment: "",
     currencyAmounts,
     customFields,
@@ -101,7 +102,7 @@ export function mapRowsToExpenseRecords(rows: string[][], sheetCurrencies: strin
     const postStart = 1 + sheetCurrencies.length;
     const customFields: Record<string, string> = {};
     for (let i = 0; i < customColumns.length; i++) {
-      customFields[customColumns[i]] = padded[postStart + 4 + i] ?? "";
+      customFields[customColumns[i]] = padded[postStart + 5 + i] ?? "";
     }
 
     return {
@@ -110,7 +111,8 @@ export function mapRowsToExpenseRecords(rows: string[][], sheetCurrencies: strin
       USD: padded[postStart] ?? "",
       Category: padded[postStart + 1] ?? "",
       spentBy: padded[postStart + 2] ?? "",
-      Comment: padded[postStart + 3] ?? "",
+      spentFor: padded[postStart + 3] ?? "",
+      Comment: padded[postStart + 4] ?? "",
       customFields,
       rowNumber: index + 2,
     };
@@ -136,13 +138,14 @@ export function expenseDraftToRowValues(
     draft.USD,
     draft.Category,
     draft.spentBy,
+    draft.spentFor,
     draft.Comment,
     ...customValues,
   ];
 }
 
 export function buildDistinctValues(records: ExpenseRecord[], customColumns: string[] = []): DistinctValues {
-  const fixedMaps: Record<string, Map<string, string>> = { Category: new Map(), spentBy: new Map() };
+  const fixedMaps: Record<string, Map<string, string>> = { Category: new Map(), spentBy: new Map(), spentFor: new Map() };
   const customMaps: Record<string, Map<string, string>> = {};
   for (const col of customColumns) {
     customMaps[col] = new Map();
@@ -175,6 +178,7 @@ export function buildDistinctValues(records: ExpenseRecord[], customColumns: str
   return {
     Category: [...fixedMaps.Category.values()].sort((a, b) => a.localeCompare(b)),
     spentBy: [...fixedMaps.spentBy.values()].sort((a, b) => a.localeCompare(b)),
+    spentFor: [...fixedMaps.spentFor.values()].sort((a, b) => a.localeCompare(b)),
     customFields,
   };
 }

@@ -91,5 +91,9 @@ export function validateExpenseDraft(
     errors.spentBy = "Spent By is required.";
   }
 
+  if (!draft.spentFor.trim()) {
+    errors.spentFor = "Spent For is required.";
+  }
+
   return errors;
 }
