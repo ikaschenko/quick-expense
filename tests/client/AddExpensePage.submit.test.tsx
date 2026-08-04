@@ -579,3 +579,17 @@ describe("AddExpensePage — Comment is always rendered", () => {
     expect(document.getElementById("comment-field")).not.toBeNull();
   });
 });
+
+describe("AddExpensePage — required attributes on AutosuggestInput fields", () => {
+  it("category-field, spent-by-field, spent-for-field all carry required attribute", () => {
+    renderAddPage();
+
+    const categoryInput = document.getElementById("category-field") as HTMLInputElement;
+    const spentByInput = document.getElementById("spent-by-field") as HTMLInputElement;
+    const spentForInput = document.getElementById("spent-for-field") as HTMLInputElement;
+
+    expect(categoryInput.required).toBe(true);
+    expect(spentByInput.required).toBe(true);
+    expect(spentForInput.required).toBe(true);
+  });
+});

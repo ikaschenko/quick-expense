@@ -5,7 +5,13 @@ import { AutosuggestInput } from "../../app-web/components/AutosuggestInput";
 
 const SUGGESTIONS = ["Coffee", "Taxi to airport", "Lunch at work", "Coffee shop"];
 
-function Controlled({ minChars = 3 }: { minChars?: number }) {
+function Controlled({ minChars = 3, clearable = false, showChevron = false, required = false, invalid = false }: {
+  minChars?: number;
+  clearable?: boolean;
+  showChevron?: boolean;
+  required?: boolean;
+  invalid?: boolean;
+}) {
   const [value, setValue] = useState("");
   return (
     <AutosuggestInput
@@ -15,6 +21,10 @@ function Controlled({ minChars = 3 }: { minChars?: number }) {
       allSuggestions={SUGGESTIONS}
       minChars={minChars}
       placeholder="Add a note…"
+      clearable={clearable}
+      showChevron={showChevron}
+      required={required}
+      invalid={invalid}
     />
   );
 }
@@ -88,6 +98,50 @@ describe("AutosuggestInput", () => {
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("listbox")).toBeNull();
     expect((input as HTMLInputElement).value).toBe("cof");
+  });
+
+  it("clear button is hidden when value is empty", () => {
+    render(<Controlled clearable />);
+    expect(screen.queryByRole("button", { name: "Clear" })).toBeNull();
+  });
+
+  it("clear button clears the value and refocuses the input", async () => {
+    const user = userEvent.setup();
+    render(<Controlled clearable />);
+    const input = screen.getByRole("combobox");
+    await user.type(input, "cof");
+    const clearBtn = screen.getByRole("button", { name: "Clear" });
+    await user.click(clearBtn);
+    expect((input as HTMLInputElement).value).toBe("");
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("chevron click shows the full unfiltered suggestion list regardless of minChars", async () => {
+    const user = userEvent.setup();
+    // minChars=10 means normal typing won't open the list
+    render(<Controlled minChars={10} showChevron />);
+    const chevronBtn = screen.getByRole("button", { name: "Show suggestions" });
+    await user.click(chevronBtn);
+    const options = screen.getAllByRole("option");
+    expect(options.length).toBe(SUGGESTIONS.length);
+  });
+
+  it("required prop is forwarded to the underlying input", () => {
+    render(<Controlled required />);
+    const input = screen.getByRole("combobox") as HTMLInputElement;
+    expect(input.required).toBe(true);
+  });
+
+  it("invalid prop sets data-invalid on the underlying input", () => {
+    render(<Controlled invalid />);
+    const input = screen.getByRole("combobox");
+    expect(input.getAttribute("data-invalid")).toBe("true");
+  });
+
+  it("data-invalid is absent when invalid is false", () => {
+    render(<Controlled />);
+    const input = screen.getByRole("combobox");
+    expect(input.getAttribute("data-invalid")).toBeNull();
   });
 });
 

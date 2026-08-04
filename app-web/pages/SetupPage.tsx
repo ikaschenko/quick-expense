@@ -737,8 +737,8 @@ export function SetupPage(): JSX.Element {
                   <li><strong>Currency columns</strong> (e.g. EUR, PLN) — optional, any number</li>
                   <li><strong>USD</strong> — mandatory</li>
                   <li><strong>Category</strong> — mandatory</li>
-                  <li><strong>Spent By</strong> — mandatory</li>
-                  <li><strong>Spent For</strong> — mandatory</li>
+                  <li><strong>Spent By</strong> — mandatory, hidable</li>
+                  <li><strong>Spent For</strong> — mandatory, hidable</li>
                   <li><strong>Comment</strong> — mandatory</li>
                   <li><strong>Custom columns</strong> (any names) — optional, after Comment</li>
                 </ol>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { X, ChevronDown } from "lucide-react";
 
 interface AutosuggestInputProps {
   id?: string;
@@ -12,6 +13,10 @@ interface AutosuggestInputProps {
   className?: string;
   /** When true, renders a auto-growing textarea instead of a single-line input. */
   multiLine?: boolean;
+  clearable?: boolean;
+  showChevron?: boolean;
+  required?: boolean;
+  invalid?: boolean;
 }
 
 export function AutosuggestInput({
@@ -23,18 +28,23 @@ export function AutosuggestInput({
   placeholder,
   className = "input",
   multiLine = false,
+  clearable = false,
+  showChevron = false,
+  required,
+  invalid,
 }: AutosuggestInputProps): JSX.Element {
   const uid = useId();
   const instanceId = id ?? uid;
   const listboxId = `autosuggest-lb-${instanceId}`;
 
   const [isOpen, setIsOpen] = useState(false);
+  const [forceOpen, setForceOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fieldRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
 
   const adjustHeight = useCallback(() => {
-    const el = textareaRef.current;
+    const el = fieldRef.current as HTMLTextAreaElement | null;
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
@@ -45,10 +55,12 @@ export function AutosuggestInput({
   }, [multiLine, value, adjustHeight]);
 
   const filteredSuggestions = useMemo(() => {
-    if (value.length < minChars) return [];
     const lower = value.toLowerCase();
-    return allSuggestions.filter((s) => s.toLowerCase().includes(lower));
-  }, [value, allSuggestions, minChars]);
+    const textFiltered = allSuggestions.filter((s) => s.toLowerCase().includes(lower));
+    if (forceOpen) return textFiltered;
+    if (value.length < minChars) return [];
+    return textFiltered;
+  }, [value, allSuggestions, minChars, forceOpen]);
 
   const shouldShow = isOpen && filteredSuggestions.length > 0;
 
@@ -63,6 +75,7 @@ export function AutosuggestInput({
     const handleMouseDown = (e: MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
         setIsOpen(false);
+        setForceOpen(false);
       }
     };
     document.addEventListener("mousedown", handleMouseDown);
@@ -72,6 +85,7 @@ export function AutosuggestInput({
   const select = (suggestion: string): void => {
     onChange(suggestion);
     setIsOpen(false);
+    setForceOpen(false);
     setActiveIndex(-1);
   };
 
@@ -88,9 +102,14 @@ export function AutosuggestInput({
       select(filteredSuggestions[activeIndex]);
     } else if (e.key === "Escape") {
       setIsOpen(false);
+      setForceOpen(false);
       setActiveIndex(-1);
     }
   };
+
+  const showClearBtn = clearable && value.length > 0;
+  const actionCount = (showClearBtn ? 1 : 0) + (showChevron ? 1 : 0);
+  const paddingRight = actionCount === 2 ? "3rem" : actionCount === 1 ? "1.75rem" : undefined;
 
   const sharedProps = {
     id: instanceId,
@@ -103,6 +122,9 @@ export function AutosuggestInput({
     "aria-activedescendant":
       activeIndex >= 0 ? `autosuggest-opt-${instanceId}-${activeIndex}` : undefined,
     autoComplete: "off" as const,
+    required,
+    "data-invalid": invalid ? "true" : undefined,
+    style: paddingRight ? { paddingRight } : undefined,
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       onChange(e.target.value);
       setIsOpen(true);
@@ -117,17 +139,54 @@ export function AutosuggestInput({
     <div className="autosuggest-wrapper" ref={wrapperRef}>
       {multiLine ? (
         <textarea
-          ref={textareaRef}
+          ref={fieldRef as React.RefObject<HTMLTextAreaElement>}
           className={`${className} autosuggest-textarea`}
           {...sharedProps}
           rows={1}
         />
       ) : (
         <input
+          ref={fieldRef as React.RefObject<HTMLInputElement>}
           className={className}
           {...sharedProps}
         />
       )}
+      {(showClearBtn || showChevron) ? (
+        <div className="autosuggest-actions">
+          {showClearBtn ? (
+            <button
+              type="button"
+              className="autosuggest-action-btn"
+              aria-label="Clear"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onChange("");
+                setIsOpen(false);
+                setForceOpen(false);
+                setActiveIndex(-1);
+                fieldRef.current?.focus();
+              }}
+            >
+              <X size={14} aria-hidden />
+            </button>
+          ) : null}
+          {showChevron ? (
+            <button
+              type="button"
+              className="autosuggest-action-btn"
+              aria-label="Show suggestions"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setIsOpen(true);
+                setForceOpen(true);
+                fieldRef.current?.focus();
+              }}
+            >
+              <ChevronDown size={14} aria-hidden />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {shouldShow ? (
         <ul className="autosuggest-dropdown" role="listbox" id={listboxId}>
           {filteredSuggestions.map((suggestion, i) => (

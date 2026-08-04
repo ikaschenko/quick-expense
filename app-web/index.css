@@ -2315,6 +2315,39 @@ button { cursor: pointer; }
   max-height: 8rem;
 }
 
+.autosuggest-actions {
+  position: absolute;
+  top: 50%;
+  right: var(--space-2);
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  pointer-events: none;
+}
+
+.autosuggest-action-btn {
+  pointer-events: all;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.1s, color 0.1s;
+  flex-shrink: 0;
+}
+
+.autosuggest-action-btn:hover {
+  background: var(--color-surface-raised);
+  color: var(--color-text-primary);
+}
+
 .expense-comment-text {
   white-space: pre-wrap;
   word-break: break-word;

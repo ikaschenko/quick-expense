@@ -804,21 +804,18 @@ export function AddExpensePage(): JSX.Element {
               ))}
             </div>
           ) : null}
-          <input
+          <AutosuggestInput
             id="category-field"
-            className="input"
-            list="category-options"
             value={draft.Category}
-            onChange={(event) => updateDraft("Category", event.target.value)}
+            onChange={(v) => updateDraft("Category", v)}
+            allSuggestions={suggestionLists.Category}
+            minChars={1}
             placeholder="Or type a new category…"
+            clearable
+            showChevron
             required
-            data-invalid={errors.Category ? "true" : undefined}
+            invalid={!!errors.Category}
           />
-          <datalist id="category-options">
-            {suggestionLists.Category.map((value) => (
-              <option key={value} value={value} />
-            ))}
-          </datalist>
           {errors.Category ? <div className="field-error">{errors.Category}</div> : null}
         </div>
 
@@ -828,20 +825,17 @@ export function AddExpensePage(): JSX.Element {
           {!isSpentByHidden ? (
           <div className="input-group">
             <label className="input-label" htmlFor="spent-by-field">Spent By</label>
-            <input
+            <AutosuggestInput
               id="spent-by-field"
-              className="input"
-              list="spent-by-options"
               value={draft.spentBy}
-              onChange={(event) => updateDraft("spentBy", event.target.value)}
+              onChange={(v) => updateDraft("spentBy", v)}
+              allSuggestions={suggestionLists.spentBy ?? []}
+              minChars={1}
+              clearable
+              showChevron
               required
-              data-invalid={errors.spentBy ? "true" : undefined}
+              invalid={!!errors.spentBy}
             />
-            <datalist id="spent-by-options">
-              {(suggestionLists.spentBy ?? []).map((value) => (
-                <option key={value} value={value} />
-              ))}
-            </datalist>
             {errors.spentBy ? <div className="field-error">{errors.spentBy}</div> : null}
           </div>
           ) : null}
@@ -849,20 +843,17 @@ export function AddExpensePage(): JSX.Element {
           {!isSpentForHidden ? (
           <div className="input-group">
             <label className="input-label" htmlFor="spent-for-field">Spent For</label>
-            <input
+            <AutosuggestInput
               id="spent-for-field"
-              className="input"
-              list="spent-for-options"
               value={draft.spentFor}
-              onChange={(event) => updateDraft("spentFor", event.target.value)}
+              onChange={(v) => updateDraft("spentFor", v)}
+              allSuggestions={suggestionLists.spentFor ?? []}
+              minChars={1}
+              clearable
+              showChevron
               required
-              data-invalid={errors.spentFor ? "true" : undefined}
+              invalid={!!errors.spentFor}
             />
-            <datalist id="spent-for-options">
-              {(suggestionLists.spentFor ?? []).map((value) => (
-                <option key={value} value={value} />
-              ))}
-            </datalist>
             {errors.spentFor ? <div className="field-error">{errors.spentFor}</div> : null}
           </div>
           ) : null}
