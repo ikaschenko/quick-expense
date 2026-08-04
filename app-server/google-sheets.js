@@ -14,20 +14,6 @@ const SHEET_NAME = "Expenses";
 const TEMPLATE_SPREADSHEET_ID = "1uE3OmvxHg03aETXg0msInAVniWZfoadwdpxf1gR2ENg";
 // Fixed columns that always appear after the currency block, in this exact order.
 const POST_CURRENCY_FIXED = ["USD", "Category", "Spent By", "Spent For", "Comment"];
-// Legacy header format (old column names, pre-custom-columns era)
-const LEGACY_EXPENSE_HEADERS = [
-  "Date",
-  "PLN",
-  "BYN",
-  "USD",
-  "EUR",
-  "Category",
-  "WhoSpent",
-  "ForWhom",
-  "Comment",
-  "PaymentChannel",
-  "Theme",
-];
 // Default custom columns written to a brand-new empty sheet
 const DEFAULT_CUSTOM_COLUMNS = ["Channel", "Theme"];
 // Reserved column names (case-insensitive) that cannot be used for custom columns
@@ -128,22 +114,6 @@ function diagnoseSheetStructure(normalized) {
   const hasComment = normalized.some((h, i) => i > spentForIdx && h.toLowerCase() === "comment");
   if (!hasComment) return "Column \"Comment\" was not found after \"Spent For\".";
   return "Unrecognized structure.";
-}
-
-function validateHeaderRow(row) {
-  const normalized = normalizeHeaders(row);
-  return (
-    normalized.length === EXPENSE_HEADERS.length &&
-    EXPENSE_HEADERS.every((header, index) => normalized[index] === header)
-  );
-}
-
-function validateLegacyHeaderRow(row) {
-  const normalized = normalizeHeaders(row);
-  return (
-    normalized.length === LEGACY_EXPENSE_HEADERS.length &&
-    LEGACY_EXPENSE_HEADERS.every((header, index) => normalized[index] === header)
-  );
 }
 
 /**
@@ -319,42 +289,6 @@ export async function writeExpenseValues(accessToken, spreadsheetId, rowNumber, 
   if (freeTextData.length > 0) {
     await batchUpdateValues(accessToken, spreadsheetId, "RAW", freeTextData);
   }
-}
-
-function remapLegacyRowToCurrent(row = [], customColumnCount) {
-  // Legacy: Date,PLN,BYN,USD,EUR,Category,WhoSpent,ForWhom,Comment,PaymentChannel,Theme
-  // New:    Date,PLN,BYN,EUR,USD,Category,Spent By,Spent For,Comment,[custom...]
-  const padded = [...row];
-  while (padded.length < LEGACY_EXPENSE_HEADERS.length) {
-    padded.push("");
-  }
-  const base = [
-    padded[0] ?? "", // Date
-    padded[1] ?? "", // PLN
-    padded[2] ?? "", // BYN
-    padded[4] ?? "", // EUR (was at index 4)
-    padded[3] ?? "", // USD (was at index 3)
-    padded[5] ?? "", // Category
-    padded[6] ?? "", // SpentBy (was WhoSpent)
-    padded[7] ?? "", // Spent For (was ForWhom)
-    padded[8] ?? "", // Comment (was at index 8)
-  ];
-  // Custom columns: map PaymentChannel→Channel, Theme→Theme
-  // PaymentChannel=9, Theme=10
-  if (customColumnCount > 0) base.push(padded[9] ?? ""); // Channel
-  if (customColumnCount > 1) base.push(padded[10] ?? ""); // Theme
-  return base;
-}
-
-async function migrateLegacyColumnOrder(accessToken, spreadsheetId, customColumns = []) {
-  const currentHeaders = buildExpenseHeaders(["PLN", "BYN", "EUR"], customColumns);
-  const allRows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A:K`);
-  const migratedRows = allRows.map((row, index) =>
-    index === 0 ? currentHeaders : remapLegacyRowToCurrent(row, customColumns.length),
-  );
-
-  const endCol = columnLetter(currentHeaders.length);
-  await updateValues(accessToken, spreadsheetId, `${SHEET_NAME}!A1:${endCol}${migratedRows.length}`, migratedRows);
 }
 
 /**
@@ -923,16 +857,6 @@ export async function validateSpreadsheet(accessToken, spreadsheetId, mapping = 
     report.sheetCurrencies = [];
     report.customColumns = [...DEFAULT_CUSTOM_COLUMNS];
     report.headerRow = headers;
-    return report;
-  }
-
-  if (!mapping && validateLegacyHeaderRow(headerRow)) {
-    const customCols = DEFAULT_CUSTOM_COLUMNS;
-    await migrateLegacyColumnOrder(accessToken, spreadsheetId, customCols);
-    report.headersAction = "migrated";
-    report.sheetCurrencies = ["PLN", "BYN", "EUR"];
-    report.customColumns = customCols;
-    report.headerRow = buildExpenseHeaders(["PLN", "BYN", "EUR"], customCols);
     return report;
   }
 

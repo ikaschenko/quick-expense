@@ -9,10 +9,6 @@ vi.mock("../../app-server/google-client.js", () => ({
 }));
 
 const SHEET_NAME = "Expenses";
-const LEGACY_EXPENSE_HEADERS = [
-  "Date", "PLN", "BYN", "USD", "EUR",
-  "Category", "WhoSpent", "ForWhom", "Comment", "PaymentChannel", "Theme",
-];
 const NEW_FIXED_HEADERS_NOCURR = ["Date", "USD", "Category", "Spent By", "Spent For", "Comment"];
 const DEFAULT_CUSTOM = ["Channel", "Theme"];
 
@@ -180,24 +176,6 @@ describe("validateSpreadsheet", () => {
     expect(report.headersAction).toBe("valid");
     expect(report.sheetCurrencies).toEqual(["PLN"]);
     expect(report.customColumns).toEqual([]);
-  });
-
-  it("migrates legacy headers and reports migration", async () => {
-    setupFetchSequence([
-      metadataResponse(["Expenses"]),
-      // getValues for header row — legacy format
-      headerResponse([...LEGACY_EXPENSE_HEADERS]),
-      // getValues for all rows (migration reads full sheet)
-      jsonResponse({ values: [[...LEGACY_EXPENSE_HEADERS], ["2024-01-01", "100", "", "50", "25", "Food", "user@test.com", "", "", "", ""]] }),
-      // updateValues for migration
-      updateValuesResponse(),
-    ]);
-
-    const report = await validateSpreadsheet(TOKEN, SHEET_ID);
-
-    expect(report.tabAction).toBe("found");
-    expect(report.headersAction).toBe("migrated");
-    expect(report.sheetCurrencies).toEqual(["PLN", "BYN", "EUR"]);
   });
 
   it("throws with headerDetails when headers are invalid (missing SpentBy)", async () => {
