@@ -16,7 +16,7 @@ import {
   createPkcePair,
   refreshAccessToken,
 } from "./google-client.js";
-import { validateMappingRequestBody, validateUsdMandatory, validateRequiredFields } from "./validation.js";
+import { validateMappingRequestBody, validateUsdMandatory, validateRequiredFields, isNonHideableField } from "./validation.js";
 import {
   createSpreadsheet,
   appendExpenseRow,
@@ -461,8 +461,7 @@ app.patch("/api/config/column-visibility", requireAuthenticatedUser, requireOwne
     return;
   }
 
-  const nonHideableFields = ["date", "usd", "category"];
-  if (nonHideableFields.includes(field.toLowerCase())) {
+  if (isNonHideableField(field)) {
     res.status(400).json({ message: `"${field}" is a mandatory field and cannot be hidden.` });
     return;
   }

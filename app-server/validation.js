@@ -40,6 +40,14 @@ export function validateUsdMandatory(values, sheetCurrencies) {
 }
 
 /**
+ * Returns true when a column name is protected and must never be hidden.
+ * @param {string} field
+ */
+export function isNonHideableField(field) {
+  return ["date", "usd", "category", "comment"].includes(field.toLowerCase());
+}
+
+/**
  * Ensures Category, Spent By, and Spent For are non-empty.
  * @param {string[]} values - Canonical row values array [date, ...currencies, usd, category, spentBy, spentFor, comment, ...].
  * @param {string[]} sheetCurrencies - Non-USD currency codes in sheet order.

@@ -69,7 +69,7 @@ function classifyColumns(currencies: string[], customColumns: string[]): ColumnI
   result.push({ name: "Category", type: "mandatory-field", hideable: false });
   result.push({ name: "Spent By", type: "mandatory-field", hideable: true });
   result.push({ name: "Spent For", type: "mandatory-field", hideable: true });
-  result.push({ name: "Comment", type: "mandatory-field", hideable: true });
+  result.push({ name: "Comment", type: "mandatory-field", hideable: false });
   for (const col of customColumns) {
     result.push({ name: col, type: "custom-column", hideable: true });
   }

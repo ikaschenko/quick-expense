@@ -3,9 +3,10 @@
 let validateMappingRequestBody;
 let validateUsdMandatory;
 let validateRequiredFields;
+let isNonHideableField;
 
 beforeAll(async () => {
-  ({ validateMappingRequestBody, validateUsdMandatory, validateRequiredFields } = await import("../../app-server/validation.js"));
+  ({ validateMappingRequestBody, validateUsdMandatory, validateRequiredFields, isNonHideableField } = await import("../../app-server/validation.js"));
 });
 
 describe("validateMappingRequestBody", () => {
@@ -113,5 +114,19 @@ describe("validateRequiredFields", () => {
     // sheetCurrencies = ["PLN", "EUR"] shifts USD/Category/SpentBy/SpentFor by 2
     const result = validateRequiredFields(["2026-06-09", "400", "", "50", "Food", "ivan", "family", ""], ["PLN", "EUR"]);
     expect(result).toBeNull();
+  });
+});
+
+describe("isNonHideableField", () => {
+  it.each(["date", "usd", "category", "comment"])("returns true for protected field '%s'", (field) => {
+    expect(isNonHideableField(field)).toBe(true);
+  });
+
+  it("is case-insensitive — rejects 'Comment' (capitalised)", () => {
+    expect(isNonHideableField("Comment")).toBe(true);
+  });
+
+  it("returns false for a hideable field", () => {
+    expect(isNonHideableField("Spent By")).toBe(false);
   });
 });

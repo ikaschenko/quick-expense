@@ -169,7 +169,6 @@ export function AddExpensePage(): JSX.Element {
     () => activeCurrencies.filter((c) => !hiddenColumns.includes(c)),
     [activeCurrencies, hiddenColumns],
   );
-  const isCommentHidden = hiddenColumns.includes("Comment");
   const isSpentByHidden = hiddenColumns.includes("Spent By");
   const isSpentForHidden = hiddenColumns.includes("Spent For");
   const visibleCustomColumns = useMemo(
@@ -871,7 +870,6 @@ export function AddExpensePage(): JSX.Element {
         ) : null}
 
         {/* Comment */}
-        {!isCommentHidden ? (
         <div className="input-group">
           <label className="input-label" htmlFor="comment-field">Comment</label>
           <AutosuggestInput
@@ -884,7 +882,6 @@ export function AddExpensePage(): JSX.Element {
             multiLine
           />
         </div>
-        ) : null}
 
         {/* Custom columns */}
         {visibleCustomColumns.map((col) => (

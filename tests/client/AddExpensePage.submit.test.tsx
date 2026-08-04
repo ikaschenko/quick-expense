@@ -544,3 +544,38 @@ describe("AddExpensePage — submission error toast (issue #87)", () => {
     expect(banner?.className).toContain("status-banner--toast");
   });
 });
+
+describe("AddExpensePage — Comment is always rendered", () => {
+  it("shows the Comment field even when hiddenColumns contains 'Comment'", () => {
+    vi.mocked(useConfig).mockReturnValueOnce({
+      config: {
+        email: "test@example.com",
+        spreadsheetId: "abc123",
+        spreadsheetUrl: "https://docs.google.com/spreadsheets/d/abc123/edit",
+        sheetName: "Expenses",
+        currencies: [],
+        customColumns: [],
+        configMode: "default" as const,
+        predefinedCategories: [],
+        hiddenColumns: ["Comment"],
+        isGuest: false,
+        accessLevel: "edit" as const,
+        ownerEmail: null,
+      },
+      isConfigLoading: false,
+      error: null,
+      clearError: vi.fn(),
+      fileName: null,
+      isFileNameLoading: false,
+      saveConfig: vi.fn(),
+      clearConfig: vi.fn(),
+      refreshConfig: vi.fn(),
+      updateStructure: vi.fn(),
+      toggleColumnVisibility: vi.fn(),
+    });
+
+    renderAddPage();
+
+    expect(document.getElementById("comment-field")).not.toBeNull();
+  });
+});
