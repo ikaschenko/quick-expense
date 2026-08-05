@@ -58,21 +58,8 @@ Windows note: tests are expected to run from both PowerShell and Command Prompt 
 
 ## Environment variables
 
-Create a `.env` file in the project root:
+Create a `.env` file in the project root from the available template of `.env.example`. 
 
-```env
-GOOGLE_CLIENT_ID=your_google_oauth_client_id
-GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
-GOOGLE_REDIRECT_URI=http://localhost:3001/api/auth/callback
-FRONTEND_BASE_URL=http://localhost:5173
-PORT=3001
-SESSION_SECRET=replace-this-for-local-use
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/quickexpense
-# Optional API request body limit (defaults to 10mb)
-API_JSON_BODY_LIMIT=10mb
-# Posthog analytics (leave blank to disable)
-VITE_POSTHOG_KEY=your-posthog-project-api-key
-```
 
 Notes:
 
