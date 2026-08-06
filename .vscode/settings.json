@@ -1,4 +1,5 @@
 {
+    "chat.subagents.allowInvocationsFromSubagents": true,
     "chat.tools.terminal.autoApprove": {
         "/^gh issue view\\b/": true,
         "/^gh issue comment\\b/": true,
@@ -9,6 +10,7 @@
         "/^git switch\\b/": true,
         "/^git add\\b/": true,
         "/^git log\\b/": true,
+        "/^git log --.*/": true,
 
         "/^npm test\\b/": true,
         "/^npm test --.*/": true,

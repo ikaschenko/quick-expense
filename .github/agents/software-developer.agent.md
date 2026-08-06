@@ -29,6 +29,17 @@ Before implementing anything:
 2. Use @workspace to identify existing patterns — component structure, API route conventions, error handling, naming — then match them exactly.
 3. Use @workspace to check current contents of `docs/QuickExpense_business-requirements.md` and `architecture.md` before updating them.
 
+## Context Isolation via Subagents
+
+You have the `agent` tool — use it to fork read-only research into a subagent when it keeps the main conversation's context smaller and cheaper:
+- Wide, exploratory codebase searches (e.g. "find every place X pattern is used") whose intermediate output you don't need, only the conclusion.
+- Independent parallel investigations (e.g. checking both frontend and backend conventions for an unfamiliar area) that don't depend on each other's results.
+- Any large read-only exploration step whose full output would bloat context without changing the plan.
+
+Do NOT fork implementation/editing work itself — subagents are for isolated research, not for writing the production changes you're responsible for. Give each subagent a precise, self-contained prompt (it has no access to this conversation) and state exactly what to return.
+
+Nested subagent invocation is enabled (workspace setting `chat.subagents.allowInvocationsFromSubagents`, depth up to 5) — so this works even when you yourself are running as a subagent (e.g. invoked by the orchestrator).
+
 ## When to Ask the Human
 
 Use @workspace to resolve questions about file locations, existing patterns, current API shapes, and code structure — do not ask the human for information @workspace can provide.
