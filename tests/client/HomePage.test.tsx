@@ -1,11 +1,13 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { HomePage } from "../../app-web/pages/HomePage";
 import { useDataset } from "../../app-web/contexts/DatasetContext";
 import { ExpenseRecord } from "../../app-web/types/expense";
 import { formatLocalDate } from "../../app-web/utils/date";
+import { metricsCache } from "../../app-web/services/metricsCache";
+import { googleSheetsService } from "../../app-web/services/googleSheets";
 
 vi.mock("../../app-web/contexts/AuthContext", () => ({
   useAuth: () => ({
@@ -319,5 +321,64 @@ describe("HomePage — widget info tooltips", () => {
       el.textContent?.includes("ROLLING 12M EXPENSES"),
     );
     expect(rollingCard?.parentElement?.className).toBe("home-dashboard");
+  });
+});
+
+describe("HomePage — Month details expand", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("does not force a reload when live data is already ready", async () => {
+    const user = userEvent.setup();
+    const loadDataset = vi.fn();
+    const today = formatLocalDate(new Date());
+    mockDataset({
+      loadDataset,
+      snapshot: {
+        records: [makeRecord(1, today, "25")],
+        distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} },
+        loadedAt: 0,
+        payloadBytes: 0,
+        loadPhase: "full",
+      },
+    });
+    renderHome();
+
+    await user.click(screen.getByRole("button", { name: /Month details/i }));
+    expect(loadDataset).not.toHaveBeenCalled();
+    expect(screen.queryByText("Loading…")).toBeNull();
+  });
+
+  it("forces a dataset reload and shows a spinner when expanded while only a cached snapshot is rendered", async () => {
+    const user = userEvent.setup();
+    const loadDataset = vi.fn().mockResolvedValue(undefined);
+    const today = formatLocalDate(new Date());
+    const sheetLastModifiedTime = "2026-01-01T00:00:00.000Z";
+
+    metricsCache.save("test@example.com", {
+      cacheDate: today,
+      spreadsheetId: "abc123",
+      sheetLastModifiedTime,
+      todayStats: { count: 1, usdTotal: 25, dualCurrency: null },
+      mtdStats: { count: 1, usdTotal: 25, deviation: null },
+      ytdStats: { count: 1, usdTotal: 25, deviation: null },
+      ytdForecast: { amountUsd: 300, deviation: null },
+      rolling12mStats: { count: 1, usdTotal: 25, deviation: null },
+      mtdDailyAmounts: [25],
+      weekBoundaryPositions: [],
+    });
+    // Cache is fresh (matches Drive's modified time) — the background staleness check must
+    // not itself trigger a reload here so the assertion isolates the new expand-triggered load.
+    vi.mocked(googleSheetsService.getSheetModifiedTime).mockResolvedValueOnce({ modifiedTime: sheetLastModifiedTime });
+
+    mockDataset({ status: "idle", snapshot: null, loadDataset });
+    renderHome();
+
+    await waitFor(() => expect(screen.getByRole("button", { name: /Month details/i })).toBeTruthy());
+    await user.click(screen.getByRole("button", { name: /Month details/i }));
+
+    expect(loadDataset).toHaveBeenCalled();
+    expect(screen.getByText("Loading…")).toBeTruthy();
   });
 });

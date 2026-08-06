@@ -863,6 +863,154 @@ button { cursor: pointer; }
   margin-top: var(--space-3);
 }
 
+/* ─── Month details panel (Home / MTD widget) ─── */
+.month-details {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.month-details-average {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-3);
+}
+
+.month-details-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  width: 100%;
+  margin: var(--space-2) 0 0;
+  padding: var(--space-1) 0;
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.month-details-toggle:hover {
+  color: var(--color-accent);
+}
+
+.month-details-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.month-details-heading {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.month-details-buttons {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.month-details-segmented {
+  display: inline-flex;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.month-details-segment {
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+}
+
+.month-details-segment.active {
+  background: var(--color-accent);
+  color: var(--color-text-inverse);
+}
+
+.month-details-group-toggle {
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+}
+
+.month-details-group-toggle.active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-text-inverse);
+}
+
+.month-details-empty {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-placeholder);
+  margin: 0;
+}
+
+.month-details-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.month-details-table th,
+.month-details-table td {
+  padding: 2px var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.month-details-table th {
+  color: var(--color-text-secondary);
+  font-weight: 600;
+  font-size: 0.9em;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.month-details-table tbody tr:hover {
+  background: var(--color-surface-raised);
+}
+
+/* Fixed width + right alignment keeps the decimal point at the same position across rows. */
+.month-details-amount {
+  display: inline-block;
+  min-width: 8ch;
+  text-align: right;
+}
+
+.month-details-deviation {
+  color: var(--color-text-secondary);
+  font-size: 0.9em;
+}
+
+.month-details-deviation.yoy-up {
+  color: var(--color-error);
+}
+
+.month-details-deviation.yoy-down {
+  color: var(--color-success);
+}
+
 /* ─── Config mode badges (SetupPage) ─── */
 .config-mode-badge-row {
   display: flex;

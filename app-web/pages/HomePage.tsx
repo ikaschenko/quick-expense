@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { FileSpreadsheet, Info, Receipt } from "lucide-react";
+import { ChevronDown, ChevronUp, FileSpreadsheet, Info, Receipt } from "lucide-react";
 import { FormattedAmount } from "../components/FormattedAmount";
 import { Layout } from "../components/Layout";
 import { MtdSpendChart } from "../components/MtdSpendChart";
+import { MonthDetailsPanel } from "../components/MonthDetailsPanel";
 import { StatusBanner } from "../components/StatusBanner";
 import { useConfig } from "../contexts/ConfigContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -136,6 +137,7 @@ export function HomePage(): JSX.Element {
   const [mtdHelpOpen, setMtdHelpOpen] = useState(false);
   const [ytdHelpOpen, setYtdHelpOpen] = useState(false);
   const [rolling12mHelpOpen, setRolling12mHelpOpen] = useState(false);
+  const [monthDetailsOpen, setMonthDetailsOpen] = useState(false);
 
   const [showSavedBanner, setShowSavedBanner] = useState(
     !!(location.state as { expenseSaved?: boolean } | null)?.expenseSaved,
@@ -194,6 +196,14 @@ export function HomePage(): JSX.Element {
     if (dataset.status === "ready") setCachedEntry(null);
   }, [dataset.status]);
 
+  // Month details relies on live records — a fresh metrics cache can leave dataset.status
+  // "idle" indefinitely, so force a load once the panel is expanded.
+  useEffect(() => {
+    if (monthDetailsOpen && dataset.status !== "ready") {
+      dataset.loadDataset().catch(() => {/* error surfaced via dataset.error */});
+    }
+  }, [monthDetailsOpen, dataset.status, dataset.loadDataset]);
+
   const records = dataset.snapshot?.records ?? [];
 
   const toIso = useMemo(() => buildIsoNormalizer(records), [records]);
@@ -232,6 +242,7 @@ export function HomePage(): JSX.Element {
   const monthName = new Date(year, month - 1, 1).toLocaleString("en", { month: "long" }).toUpperCase();
   const dayLabel = new Date(year, month - 1, Number.parseInt(today.split("-")[2], 10))
     .toLocaleString("en", { month: "short", day: "numeric" });
+  const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
 
   const isDatasetLoading = dataset.status === "idle" || dataset.status === "loading";
   const isLoading = isConfigLoading || isDatasetLoading;
@@ -341,7 +352,24 @@ export function HomePage(): JSX.Element {
                     year={year}
                     month={month}
                   />
+                  <button
+                    type="button"
+                    className="month-details-toggle"
+                    aria-expanded={monthDetailsOpen}
+                    onClick={() => setMonthDetailsOpen((v) => !v)}
+                  >
+                    Month details {monthDetailsOpen ? <ChevronUp size={14} aria-hidden /> : <ChevronDown size={14} aria-hidden />}
+                  </button>
                 </>
+              )}
+              {monthDetailsOpen && (
+                <MonthDetailsPanel
+                  records={records}
+                  toIso={toIso}
+                  startDate={monthStart}
+                  endDate={today}
+                  isLoading={dataset.status !== "ready"}
+                />
               )}
             </div>
 

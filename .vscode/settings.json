@@ -10,10 +10,8 @@
         "/^git switch\\b/": true,
         "/^git add\\b/": true,
         "/^git log\\b/": true,
-        "/^git log --.*/": true,
 
         "/^npm test\\b/": true,
-        "/^npm test --.*/": true,
         "/^npx vitest run\\b/": true,
 
         "/^node --check\\b/": true

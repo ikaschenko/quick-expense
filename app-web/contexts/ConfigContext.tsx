@@ -84,7 +84,10 @@ export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
         setIsFetching(false);
         setFetchedForEmail(email);
       });
-  }, [session]);
+    // Only session identity (email) matters here — re-running on every session mutation
+    // (e.g. touchSession() bumping lastActivityAt) would re-fetch config needlessly and
+    // flash the whole dashboard back to its loading skeleton on unrelated actions.
+  }, [session?.email]);
 
   // Fetch the live file display name from Drive whenever the spreadsheet changes.
   useEffect(() => {

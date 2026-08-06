@@ -17,7 +17,7 @@ interface FormattedAmountProps {
  * @example
  * // Inside a .home-metric-amount paragraph:
  * <FormattedAmount prefix="$" value={37.37} />
- * // → $37<span class="amount-fraction">.37</span>
+ * // → <span class="amount-whole">$37</span><span class="amount-fraction">.37</span>
  */
 export function FormattedAmount({
   value,
@@ -35,6 +35,6 @@ export function FormattedAmount({
   const whole = formatted.slice(0, dotIndex);
   const frac = formatted.slice(dotIndex); // includes "."
   return (
-    <>{prefix}{whole}<span className="amount-fraction">{frac}</span></>
+    <><span className="amount-whole">{prefix}{whole}</span><span className="amount-fraction">{frac}</span></>
   );
 }
