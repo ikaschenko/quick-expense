@@ -368,6 +368,20 @@ Tooltip copy per widget:
 - **YEARLY VIEW:** "Total amount of expenses for the ongoing year, compared to the same date range for the previous year (if enough data). The forecast projects your full-year total from your recent daily spending rate." (This also covers the YTD forecast line — there is no separate help icon for it.)
 - **ROLLING 12M:** "Total amount of expenses over the trailing 12 months (up to yesterday), compared to the preceding 12-month period (shown when that data exists)."
 
+### 2.7.9 Month details drill-down (issue #89)
+
+Below the MTD chart, a **"Month details"** toggle button expands/collapses a details panel for the current calendar month (tap again to collapse; collapsed by default).
+
+- **Average spent per day:** total USD spend for the month-to-date range ÷ the inclusive number of calendar days elapsed so far (days with $0 spend still count).
+- **Category breakdown table:** one row per category, current-month USD total vs. the same date range in the prior calendar month, sorted descending by current-month amount.
+  - A row shows the prior-month amount as **"-"** and omits the deviation percentage when the category has no comparable prior-month spend.
+  - When the prior-month amount for a category is exactly $0, the deviation percentage is also omitted (avoids showing a meaningless +∞%).
+  - When both amounts exist, a signed deviation percentage is shown (▲ red for an increase, ▼ green for a decrease).
+- **Row filter — "Top 5" / "All":** segmented control limiting the table to the top 5 categories by current-month spend, or showing all.
+- **"Group" toggle:** when enabled, categories whose names share the same first-3-character prefix (case-insensitive) are merged into a single row labeled `{prefix}...`, using the casing of the first-encountered record. A category's prefix must collide with at least one other category *present in the current month* to be grouped — a same-prefix category that only appears in the prior month does not trigger a merge.
+- If the panel is expanded before the full dataset has loaded (e.g. straight from a fresh metrics-cache hit), it forces a dataset load and shows a loading spinner instead of stats.
+- When there are no expenses in the selected range, the table is replaced with *"No expenses in this period."*
+
 ## 2.8 Share Setup with Another User
 
 ### 2.8.1 Story 1 — Manage shared access (owner)

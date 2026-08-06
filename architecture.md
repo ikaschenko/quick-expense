@@ -110,6 +110,7 @@ quick-expense/
 │   │   ├── ExpenseTable.tsx   <- expense card list; tap/click to expand full details inline; optional Repeat button pre-fills Add form
 │   │   ├── Layout.tsx         ← app shell: topbar + footer + page slot; Setup badge
 │   │   ├── LoadingBlock.tsx   ← spinner component
+│   │   ├── MonthDetailsPanel.tsx ← generic { records, toIso, startDate, endDate } drill-down panel: avg/day + category-vs-prior-month breakdown (reusable beyond Home MTD)
 │   │   ├── MtdSpendChart.tsx  ← Chart.js area chart for MTD daily spend (Home dashboard)
 │   │   ├── ProtectedRoute.tsx ← redirect to login if unauthenticated
 │   │   ├── StatusBanner.tsx   ← error/success/info banner
@@ -143,6 +144,7 @@ quick-expense/
 │       ├── dashboardStats.ts  ← TODAY / MTD / YTD aggregations, ISO normalizer, chart data
 │       ├── date.ts            ← local date formatting + sheet date-format detection
 │       ├── expenseTable.ts    ← expense card helpers: preview length, display amount, detail detection
+│       ├── monthDetails.ts    ← average-per-day, prior-month range clamping, category breakdown/grouping for MonthDetailsPanel
 │       ├── search.ts          ← client-side expense filtering
 │       ├── setupStatus.ts     ← resolves Setup status banner state (loading/configured/needs-setup/invalid/load-error)
 │       ├── spreadsheet.ts     ← header validation, row mapping, distinct values
@@ -615,6 +617,8 @@ The backend validates all required env vars at startup and fails fast if any are
 18. **Setup sharing model** — an owner user can share their full configuration (spreadsheet, currencies, column visibility) with any number of Google users via `POST /api/sharing`. Guests store a DB reference to the owner record — no data is duplicated. Guests with `edit` access have full read/write; `view` guests can use Tail and Search but all write actions are blocked at both API (HTTP 403) and UI levels. Guests cannot modify Setup settings. `requireAuthenticatedUser` resolves the shared reference transparently on every authenticated request. Guests whose owner config becomes invalid (owner deleted, spreadsheet removed) are shown a blocking `SharedConfigInvalidModal` prompting them to reset and set up independently.
 
 19. **Append vs. insert mode for new expenses** — `POST /api/expenses` reads the full date column before writing. If the submitted date is ≥ the last row's date (or the sheet has no data, unrecognisable date format, or out-of-order dates), the existing `appendExpenseRow` path is used unchanged. If the submitted date is earlier than the last row's date on a well-ordered sheet, `addExpenseRow` inserts the new row at the correct chronological position using Google Sheets API `batchUpdate insertDimension` followed by `values.update`. The client performs a full dataset reload after an insert-mode write. The shared `alignValuesToHeaders()` helper is used by both append and insert paths to handle legacy column ordering and column mapping.
+
+20. **Month details drill-down** (issue #89) — `MonthDetailsPanel.tsx` is a new reusable component, deliberately generic (`{ records, toIso, startDate, endDate }` props, no MTD-specific assumptions) so a future Year-Details/YTD consumer can reuse it unmodified. It is embedded, expand/collapse only, below the MTD chart on Home. All math (average per day, category breakdown with Top-5/All + first-3-char grouping, prior-month deviation with day-of-month clamping) lives in `app-web/utils/monthDetails.ts` and is computed on-the-fly via `useMemo` from the already in-memory dataset — no new API or DB changes.
 
 20. **Row repositioning on edit** — `PUT /api/expenses/:rowNumber` delegates to `moveExpenseRow` in `app-server/google-sheets.js`. The function reads the date column, checks if the new date keeps the row between its immediate neighbors, and falls back to `updateExpenseRow` (in-place) if so. When repositioning is required, `addExpenseRow` is called (reusing 100% of the insert/append decision logic), then the original row is deleted via `deleteDimension`. Insert-before-delete guarantees no data loss on partial failure. The client triggers the same `isInsertingHistorical` overlay and `reloadDataset()` call as the add insert-mode flow when `moveMode: true` is returned.
 
