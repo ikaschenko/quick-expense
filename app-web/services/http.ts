@@ -2,11 +2,28 @@ import { AppError, HeaderDetails } from "../types/expense";
 
 const FETCH_TIMEOUT_MS = 15_000;
 
+class TimeoutError extends Error {
+  constructor() {
+    super("Request timed out");
+    this.name = "TimeoutError";
+  }
+}
+
 function createTimeoutAbortController(timeoutMs: number): AbortController {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   
   return controller;
+}
+
+// Independent of controller.signal so requests still time out in environments that ignore abort().
+function createTimeoutPromise(timeoutMs: number): { promise: Promise<never>; timeoutId: ReturnType<typeof setTimeout> } {
+  let timeoutId!: ReturnType<typeof setTimeout>;
+  const promise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new TimeoutError()), timeoutMs);
+  });
+  
+  return { promise, timeoutId };
 }
 
 function getFriendlyErrorMessage(error: unknown): string {
@@ -23,18 +40,27 @@ function getFriendlyErrorMessage(error: unknown): string {
 
 export async function requestJson<T>(input: string, init?: RequestInit): Promise<T> {
   const controller = createTimeoutAbortController(FETCH_TIMEOUT_MS);
+  const { promise: timeoutPromise, timeoutId } = createTimeoutPromise(FETCH_TIMEOUT_MS);
   
   try {
-    const response = await fetch(input, {
-      credentials: "include",
-      ...init,
-      signal: controller.signal,
-      headers: {
-        "X-Requested-With": "fetch",
-        ...(init?.body ? { "Content-Type": "application/json" } : {}),
-        ...(init?.headers ?? {}),
-      },
-    });
+    let response: Response;
+    try {
+      response = await Promise.race([
+        fetch(input, {
+          credentials: "include",
+          ...init,
+          signal: controller.signal,
+          headers: {
+            "X-Requested-With": "fetch",
+            ...(init?.body ? { "Content-Type": "application/json" } : {}),
+            ...(init?.headers ?? {}),
+          },
+        }),
+        timeoutPromise,
+      ]);
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
       let message = "Request failed.";
@@ -82,7 +108,7 @@ export async function requestJson<T>(input: string, init?: RequestInit): Promise
       throw error; // Re-throw our known error type
     }
     
-    if (error instanceof Error && error.name === "AbortError") {
+    if (error instanceof TimeoutError || (error instanceof Error && error.name === "AbortError")) {
       console.warn("[http.ts requestJson] Request timeout after 15s:", input);
       throw new AppError("network", "Request timed out. Please check your connection and try again.");
     }
@@ -96,18 +122,27 @@ export async function requestJson<T>(input: string, init?: RequestInit): Promise
 
 export async function requestNoContent(input: string, init?: RequestInit): Promise<void> {
   const controller = createTimeoutAbortController(FETCH_TIMEOUT_MS);
+  const { promise: timeoutPromise, timeoutId } = createTimeoutPromise(FETCH_TIMEOUT_MS);
   
   try {
-    const response = await fetch(input, {
-      credentials: "include",
-      ...init,
-      signal: controller.signal,
-      headers: {
-        "X-Requested-With": "fetch",
-        ...(init?.body ? { "Content-Type": "application/json" } : {}),
-        ...(init?.headers ?? {}),
-      },
-    });
+    let response: Response;
+    try {
+      response = await Promise.race([
+        fetch(input, {
+          credentials: "include",
+          ...init,
+          signal: controller.signal,
+          headers: {
+            "X-Requested-With": "fetch",
+            ...(init?.body ? { "Content-Type": "application/json" } : {}),
+            ...(init?.headers ?? {}),
+          },
+        }),
+        timeoutPromise,
+      ]);
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
       let message = "Request failed.";
@@ -137,7 +172,7 @@ export async function requestNoContent(input: string, init?: RequestInit): Promi
       throw error; // Re-throw our known error type
     }
     
-    if (error instanceof Error && error.name === "AbortError") {
+    if (error instanceof TimeoutError || (error instanceof Error && error.name === "AbortError")) {
       console.warn("[http.ts requestNoContent] Request timeout after 15s:", input);
       throw new AppError("network", "Request timed out. Please check your connection and try again.");
     }
