@@ -6,6 +6,7 @@ dist
 .DS_Store
 coverage
 *.log
+logs/
 *.tsbuildinfo
 app-server/config/runtime-data.json
 app-server/config/sessions

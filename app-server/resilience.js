@@ -1,5 +1,7 @@
-export function logInfrastructureError(context, error, logger = console) {
-  logger.error(`${context}:`, error);
+import winstonLogger from "./logger.js";
+
+export function logInfrastructureError(context, error, logger = winstonLogger) {
+  logger.error(context, { error: error?.message ?? String(error) });
 }
 
 export function destroySession(sessionState) {
@@ -20,7 +22,7 @@ export function destroySession(sessionState) {
   });
 }
 
-export async function safelyDestroySession(sessionState, context, logger = console) {
+export async function safelyDestroySession(sessionState, context, logger = winstonLogger) {
   try {
     await destroySession(sessionState);
   } catch (error) {
@@ -33,7 +35,7 @@ export function createRequireAuthenticatedUser({
   getUserRecord,
   getShareForGuest,
   destroySessionState = safelyDestroySession,
-  logger = console,
+  logger = winstonLogger,
 }) {
   return async function requireAuthenticatedUser(req, res, next) {
     const sessionUser = getUserSession(req);
@@ -105,6 +107,17 @@ export function requireEditAccess(req, res, next) {
   next();
 }
 
+/** Blocks access unless the authenticated user's email matches ADMIN_EMAIL. Use on app-admin-only routes. */
+export function requireAppAdmin(req, res, next) {
+  const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  const userEmail = req.userRecord?.email?.trim().toLowerCase();
+  if (!adminEmail || userEmail !== adminEmail) {
+    res.status(403).json({ message: "Admin access required." });
+    return;
+  }
+  next();
+}
+
 export async function checkDatabaseHealth(dbPool) {
   try {
     await dbPool.query("SELECT 1");
@@ -129,7 +142,7 @@ export function createGracefulShutdown({
   getServer,
   closeDatabase,
   setShuttingDown,
-  logger = console,
+  logger = winstonLogger,
   onExit = (code) => process.exit(code),
   timeoutMs = 10_000,
 }) {
@@ -141,7 +154,7 @@ export function createGracefulShutdown({
     }
 
     setShuttingDown(true);
-    logger.log(`Received ${signal}. Starting graceful shutdown.`);
+    logger.info(`Received ${signal}. Starting graceful shutdown.`);
 
     shutdownPromise = new Promise((resolve) => {
       const server = getServer();
@@ -171,7 +184,7 @@ export function createGracefulShutdown({
         .then(() => closeDatabase())
         .then(() => {
           clearTimeout(timeoutId);
-          logger.log("Graceful shutdown complete.");
+          logger.info("Graceful shutdown complete.");
           resolve(0);
         })
         .catch((error) => {

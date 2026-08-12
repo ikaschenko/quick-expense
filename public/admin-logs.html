@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QuickExpense — Admin Log Viewer</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; background: #16181d; color: #d8dbe0; margin: 0; padding: 16px; font-size: 13px; }
+  h1 { font-size: 16px; margin: 0 0 12px; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  select, input, button { background: #24272e; color: #d8dbe0; border: 1px solid #3a3d45; border-radius: 4px; padding: 6px 8px; font: inherit; }
+  input[type="text"] { flex: 1; min-width: 200px; }
+  button { cursor: pointer; }
+  button:hover { background: #2f333c; }
+  #status { color: #8a8f99; margin-bottom: 8px; }
+  #entries { border: 1px solid #3a3d45; border-radius: 4px; max-height: 75vh; overflow-y: auto; }
+  .entry { padding: 6px 10px; border-bottom: 1px solid #24272e; white-space: pre-wrap; word-break: break-word; }
+  .entry.error { background: #2a1518; color: #ff8a8a; }
+  .entry.warn { background: #2a2313; color: #ffcf7a; }
+  .entry.info { color: #d8dbe0; }
+  .meta { color: #8a8f99; }
+</style>
+</head>
+<body>
+<h1>QuickExpense — Admin Log Viewer</h1>
+<div class="toolbar">
+  <select id="file"></select>
+  <select id="level">
+    <option value="">All levels</option>
+    <option value="error">Error</option>
+    <option value="warn">Warn</option>
+    <option value="info">Info</option>
+  </select>
+  <input type="text" id="q" placeholder="Search…">
+  <input type="number" id="lines" value="200" min="1" max="1000" style="width:80px" title="Lines">
+  <button id="refresh">Refresh</button>
+</div>
+<div id="status"></div>
+<div id="entries"></div>
+
+<script>
+  const fileSelect = document.getElementById("file");
+  const levelSelect = document.getElementById("level");
+  const qInput = document.getElementById("q");
+  const linesInput = document.getElementById("lines");
+  const statusEl = document.getElementById("status");
+  const entriesEl = document.getElementById("entries");
+
+  async function getJson(url) {
+    const response = await fetch(url, { credentials: "same-origin", headers: { "X-Requested-With": "fetch" } });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.message || `Request failed (${response.status})`);
+    }
+    return response.json();
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  async function loadFiles() {
+    const { files } = await getJson("/api/admin/logs/files");
+    fileSelect.innerHTML = files
+      .map((f) => `<option value="${f.name}">${f.name} (${formatSize(f.size)})</option>`)
+      .join("");
+  }
+
+  async function loadTail() {
+    if (!fileSelect.value) return;
+    statusEl.textContent = "Loading…";
+    const params = new URLSearchParams({
+      file: fileSelect.value,
+      level: levelSelect.value,
+      q: qInput.value,
+      lines: linesInput.value,
+    });
+    try {
+      const { entries } = await getJson(`/api/admin/logs/tail?${params}`);
+      entriesEl.innerHTML = entries
+        .map((entry) => `<div class="entry ${entry.level || "info"}"><span class="meta">${entry.timestamp || ""}</span> ${JSON.stringify(entry)}</div>`)
+        .join("");
+      statusEl.textContent = `${entries.length} entries`;
+    } catch (err) {
+      statusEl.textContent = err.message;
+      entriesEl.innerHTML = "";
+    }
+  }
+
+  document.getElementById("refresh").addEventListener("click", loadTail);
+  fileSelect.addEventListener("change", loadTail);
+  levelSelect.addEventListener("change", loadTail);
+  qInput.addEventListener("keydown", (e) => { if (e.key === "Enter") loadTail(); });
+
+  (async function init() {
+    try {
+      await loadFiles();
+      await loadTail();
+    } catch (err) {
+      statusEl.textContent = err.message;
+    }
+  })();
+</script>
+</body>
+</html>

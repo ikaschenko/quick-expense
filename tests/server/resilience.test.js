@@ -9,6 +9,7 @@ import {
   requireGuest,
   requireOwner,
 } from "../../app-server/resilience.js";
+import winstonLogger from "../../app-server/logger.js";
 
 describe("destroySession", () => {
   it("resolves when the session destroy callback succeeds", async () => {
@@ -161,7 +162,7 @@ describe("createRequireAuthenticatedUser", () => {
 
     await middleware(req, res, next);
 
-    expect(destroySessionState).toHaveBeenCalledWith(req.session, "Failed to clear stale authenticated session.", console);
+    expect(destroySessionState).toHaveBeenCalledWith(req.session, "Failed to clear stale authenticated session.", winstonLogger);
     expect(res.statusCode).toBe(401);
     expect(res.body).toEqual({ message: "Stored session is no longer available. Please sign in again." });
     expect(next).not.toHaveBeenCalled();
@@ -318,7 +319,7 @@ describe("createShutdownGuard", () => {
 describe("createGracefulShutdown", () => {
   it("closes the server and database, marks shutdown, and exits with code 0", async () => {
     const steps = [];
-    const logger = { log: vi.fn((message) => steps.push(message)), error: vi.fn() };
+    const logger = { info: vi.fn((message) => steps.push(message)), error: vi.fn() };
     const onExit = vi.fn();
     const setShuttingDown = vi.fn((nextValue) => steps.push(`shutting:${nextValue}`));
     const server = {

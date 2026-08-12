@@ -1,4 +1,5 @@
 import "dotenv/config";
+import "express-async-errors";
 import crypto from "node:crypto";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -55,7 +56,7 @@ import {
   createRequireAuthenticatedUser,
   createShutdownGuard,
   destroySession,
-  logInfrastructureError,
+  requireAppAdmin,
   requireEditAccess,
   requireGuest,
   requireOwner,
@@ -80,7 +81,16 @@ import {
   updateShareAccessLevel,
 } from "./sharing.js";
 import { sendShareGrantedEmail, sendShareRevokedEmail } from "./email.js";
+import logger, { startWarningDigestScheduler, listLogFiles, readLogEntries, logRouteError } from "./logger.js";
 import pool from "./db.js";
+
+const EMULATE_FAILURES = false;  // use 'true' if need to emulate some random errors in backend logic
+const FAILURE_PROBABILITY = 0.04; // 4% of requests will fail with a 500 error when EMULATE_FAILURES is true.
+function emulateFailure(endpoint) {
+  if (EMULATE_FAILURES && Math.random() <= FAILURE_PROBABILITY) {
+    throw new Error(`Test error raised, endpoint ${endpoint}`);
+  }
+}
 
 const PgSession = connectPgSimple(session);
 const app = express();
@@ -151,8 +161,7 @@ app.use((req, res, next) => {
 
   res.on("finish", () => {
     const elapsedMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
-    const logEntry = {
-      level: "info",
+    logger.info("http_request", {
       event: "http_request",
       requestId,
       method: req.method,
@@ -160,9 +169,7 @@ app.use((req, res, next) => {
       statusCode: res.statusCode,
       durationMs: Number(elapsedMs.toFixed(2)),
       shuttingDown: isShuttingDown,
-    };
-
-    console.log(JSON.stringify(logEntry));
+    });
   });
 
   next();
@@ -260,9 +267,18 @@ const apiLimiter = rateLimit({
   message: { message: "Too many requests. Please slow down." },
 });
 
+const adminLogsLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { message: "Too many requests. Please slow down." },
+});
+
 app.use(createShutdownGuard({ isShuttingDown: () => isShuttingDown, excludedPaths: ["/api/health"] }));
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/callback", authLimiter);
+app.use("/api/admin/logs", adminLogsLimiter);
 app.use("/api/", (req, res, next) => {
   if (req.path === "/health") {
     next();
@@ -280,6 +296,7 @@ app.get("/api/auth/login", (req, res) => {
     req.session.codeVerifier = verifier;
     res.redirect(buildGoogleAuthorizationUrl({ state, codeChallenge: challenge }));
   } catch (error) {
+    logRouteError(req, "auth_login_failed", error);
     res.status(500).send((error).message);
   }
 });
@@ -335,6 +352,7 @@ app.get("/api/auth/callback", async (req, res) => {
       res.redirect(`${getFrontendBaseUrl()}/home`);
     });
   } catch (callbackError) {
+    logRouteError(req, "auth_callback_failed", callbackError);
     res.redirect(
       `${getFrontendBaseUrl()}/?error=${encodeURIComponent((callbackError).message)}`,
     );
@@ -385,7 +403,7 @@ app.get("/api/auth/session", async (req, res) => {
       },
     });
   } catch (error) {
-    logInfrastructureError("Failed to load auth session", error);
+    logRouteError(req, "auth_session_failed", error);
     res.status(500).json({ message: "Unable to load your session right now. Please try again." });
   }
 });
@@ -395,7 +413,7 @@ app.post("/api/auth/logout", async (req, res) => {
     await destroySession(req.session);
     res.status(204).end();
   } catch (error) {
-    logInfrastructureError("Failed to destroy session during logout", error);
+    logRouteError(req, "auth_logout_failed", error);
     res.status(500).json({ message: "Unable to sign out right now. Please try again." });
   }
 });
@@ -439,11 +457,16 @@ app.get("/api/config", requireAuthenticatedUser, async (req, res) => {
       },
     });
   } catch (error) {
+    logRouteError(req, "config_get_failed", error);
     res.status(500).json({ message: (error).message });
   }
 });
 
 app.patch("/api/config/column-visibility", requireAuthenticatedUser, requireOwner, async (req, res) => {
+  if (EMULATE_FAILURES && Math.random() <= FAILURE_PROBABILITY) {
+    throw new Error(`Test error raised, endpoint ${req.path}`);
+  }
+
   if (!req.configRecord.spreadsheetId) {
     res.status(400).json({ message: "Spreadsheet is not configured." });
     return;
@@ -471,11 +494,13 @@ app.patch("/api/config/column-visibility", requireAuthenticatedUser, requireOwne
     const hiddenColumns = await getHiddenColumns(req.configRecord.email, req.configRecord.spreadsheetId);
     res.json({ hiddenColumns });
   } catch (error) {
+    logRouteError(req, "column_visibility_update_failed", error);
     res.status(500).json({ message: (error).message });
   }
 });
 
 app.post("/api/config", requireAuthenticatedUser, requireOwner, async (req, res) => {
+  emulateFailure(req.path);
   try {
     const spreadsheetUrl = String(req.body?.spreadsheetUrl ?? "").trim();
     const spreadsheetId = parseSpreadsheetUrl(spreadsheetUrl);
@@ -515,7 +540,7 @@ app.post("/api/config", requireAuthenticatedUser, requireOwner, async (req, res)
       setupReport,
     });
   } catch (error) {
-    console.error(`[${req.requestId}] POST /api/config failed:`, error);
+    logRouteError(req, "config_update_failed", error);
     const body = { message: (error).message };
     if (error.headerDetails) {
       body.headerDetails = error.headerDetails;
@@ -525,6 +550,7 @@ app.post("/api/config", requireAuthenticatedUser, requireOwner, async (req, res)
 });
 
 app.post("/api/config/create-spreadsheet", requireAuthenticatedUser, requireOwner, async (req, res) => {
+  emulateFailure(req.path);
   try {
     const rawName = String(req.body?.name ?? "").trim();
     const name = rawName.slice(0, 100) || "Quick Expense — My Expenses";
@@ -554,7 +580,7 @@ app.post("/api/config/create-spreadsheet", requireAuthenticatedUser, requireOwne
       setupReport,
     });
   } catch (error) {
-    console.error(`[${req.requestId}] POST /api/config/create-spreadsheet failed:`, error);
+    logRouteError(req, "create_spreadsheet_failed", error);
     const body = { message: error.message };
     if (error.templateCopyFailed) {
       body.templateCopyFailed = true;
@@ -565,6 +591,7 @@ app.post("/api/config/create-spreadsheet", requireAuthenticatedUser, requireOwne
 });
 
 app.get("/api/config/file-info", requireAuthenticatedUser, async (req, res) => {
+  emulateFailure(req.path);
   if (!req.configRecord.spreadsheetId) {
     res.status(400).json({ message: "Spreadsheet is not configured." });
     return;
@@ -574,6 +601,7 @@ app.get("/api/config/file-info", requireAuthenticatedUser, async (req, res) => {
     const { fileName } = await getSpreadsheetFileMeta(accessToken, req.configRecord.spreadsheetId);
     res.json({ fileName });
   } catch (error) {
+    logRouteError(req, "config_file_info_failed", error);
     res.status(500).json({ message: (error).message });
   }
 });
@@ -587,6 +615,7 @@ app.get("/api/sheet/modifiedtime", requireAuthenticatedUser, async (req, res) =>
     const result = await getSpreadsheetModifiedTime(accessToken, req.configRecord.spreadsheetId);
     res.json(result);
   } catch (error) {
+    logRouteError(req, "sheet_modifiedtime_failed", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -608,11 +637,13 @@ app.get("/api/config/mapping", requireAuthenticatedUser, async (req, res) => {
       detectedColumns,
     });
   } catch (error) {
+    logRouteError(req, "config_mapping_get_failed", error);
     res.status(500).json({ message: (error).message });
   }
 });
 
 app.post("/api/config/mapping", requireAuthenticatedUser, requireOwner, async (req, res) => {
+  emulateFailure(req.path);
   if (!req.configRecord.spreadsheetId) {
     res.status(400).json({
       message:
@@ -633,6 +664,7 @@ app.post("/api/config/mapping", requireAuthenticatedUser, requireOwner, async (r
     const mode = "config-driven";
     res.json({ mapping, mode });
   } catch (error) {
+    logRouteError(req, "config_mapping_update_failed", error);
     res.status(500).json({ message: (error).message });
   }
 });
@@ -643,6 +675,7 @@ app.get("/api/auth/picker-config", requireAuthenticatedUser, async (req, res) =>
     const appId = getGoogleClientId().split("-")[0];
     res.json({ accessToken, apiKey: process.env.GOOGLE_API_KEY, appId });
   } catch (error) {
+    logRouteError(req, "picker_config_failed", error);
     res.status(400).json({ message: (error).message });
   }
 });
@@ -668,11 +701,13 @@ app.get("/api/expenses/count", requireAuthenticatedUser, async (req, res) => {
     const rowCount = await getExpenseRowCount(accessToken, req.configRecord.spreadsheetId);
     res.json({ rowCount });
   } catch (error) {
+    logRouteError(req, "expenses_count_failed", error);
     res.status(400).json({ message: error.message });
   }
 });
 
 app.get("/api/expenses/history", requireAuthenticatedUser, async (req, res) => {
+  emulateFailure(req.path);
   try {
     if (!req.configRecord.spreadsheetId) {
       res.status(400).json({ message: "Spreadsheet is not configured." });
@@ -696,11 +731,13 @@ app.get("/api/expenses/history", requireAuthenticatedUser, async (req, res) => {
     });
     res.json({ ...snapshot, loadPhase: "full" });
   } catch (error) {
+    logRouteError(req, "expenses_history_failed", error);
     res.status(400).json({ message: (error).message });
   }
 });
 
 app.get("/api/expenses", requireAuthenticatedUser, async (req, res) => {
+  emulateFailure(req.path);
   try {
     if (!req.configRecord.spreadsheetId) {
       res.status(400).json({ message: "Spreadsheet is not configured." });
@@ -728,6 +765,7 @@ app.get("/api/expenses", requireAuthenticatedUser, async (req, res) => {
       dateOrderIssueRows,
     });
   } catch (error) {
+    logRouteError(req, "expenses_load_failed", error);
     res.status(400).json({ message: (error).message });
   }
 });
@@ -741,6 +779,7 @@ const FX_API_URL = "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@lates
 const FX_API_TIMEOUT_MS = 5_000;
 
 app.get("/api/fx/rates", requireAuthenticatedUser, async (req, res) => {
+  emulateFailure(req.path);
   const raw = String(req.query.currencies ?? "").trim();
   if (!raw) {
     res.status(400).json({ message: "currencies query parameter is required." });
@@ -784,6 +823,7 @@ app.get("/api/fx/rates", requireAuthenticatedUser, async (req, res) => {
 });
 
 app.post("/api/expenses", requireAuthenticatedUser, requireEditAccess, async (req, res) => {
+  emulateFailure(req.path);
   try {
     if (!req.configRecord.spreadsheetId) {
       res.status(400).json({ message: "Spreadsheet is not configured." });
@@ -820,6 +860,7 @@ app.post("/api/expenses", requireAuthenticatedUser, requireEditAccess, async (re
 
     res.status(201).json({ record, insertMode });
   } catch (error) {
+    logRouteError(req, "expenses_create_failed", error);
     res.status(400).json({ message: (error).message });
   }
 });
@@ -867,11 +908,13 @@ app.put("/api/expenses/:rowNumber", requireAuthenticatedUser, requireEditAccess,
 
     res.status(200).json({ record, moveMode });
   } catch (error) {
+    logRouteError(req, "expenses_update_failed", error);
     res.status(400).json({ message: error.message });
   }
 });
 
 app.delete("/api/expenses/last", requireAuthenticatedUser, requireEditAccess, async (req, res) => {
+  emulateFailure(req.path);
   try {
     if (!req.configRecord.spreadsheetId) {
       res.status(400).json({ message: "Spreadsheet is not configured." });
@@ -888,6 +931,7 @@ app.delete("/api/expenses/last", requireAuthenticatedUser, requireEditAccess, as
     await deleteLastExpenseRow(accessToken, req.configRecord.spreadsheetId, expectedRowCount);
     res.status(204).end();
   } catch (error) {
+    logRouteError(req, "expenses_delete_last_failed", error);
     const status = error.code === "CONFLICT" ? 409 : 400;
     res.status(status).json({ message: error.message });
   }
@@ -896,6 +940,7 @@ app.delete("/api/expenses/last", requireAuthenticatedUser, requireEditAccess, as
 // ─── Sheet Structure Management ───────────────────────────────────────────────
 
 app.post("/api/sheet/currency", requireAuthenticatedUser, requireOwner, async (req, res) => {
+  emulateFailure(req.path);
   try {
     if (!req.configRecord.spreadsheetId) {
       res.status(400).json({ message: "Connect a spreadsheet first." });
@@ -916,11 +961,13 @@ app.post("/api/sheet/currency", requireAuthenticatedUser, requireOwner, async (r
     const result = await insertCurrencyColumnInSheet(accessToken, req.configRecord.spreadsheetId, code);
     res.status(201).json(result);
   } catch (error) {
+    logRouteError(req, "sheet_currency_add_failed", error);
     res.status(400).json({ message: (error).message });
   }
 });
 
 app.post("/api/sheet/column", requireAuthenticatedUser, requireOwner, async (req, res) => {
+  emulateFailure(req.path);
   try {
     if (!req.configRecord.spreadsheetId) {
       res.status(400).json({ message: "Connect a spreadsheet first." });
@@ -952,11 +999,13 @@ app.post("/api/sheet/column", requireAuthenticatedUser, requireOwner, async (req
     const updated = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
     res.status(201).json({ currencies: updated.sheetCurrencies, customColumns: updated.customColumns });
   } catch (error) {
+    logRouteError(req, "sheet_column_add_failed", error);
     res.status(400).json({ message: (error).message });
   }
 });
 
 app.patch("/api/sheet/column/rename", requireAuthenticatedUser, requireOwner, async (req, res) => {
+  emulateFailure(req.path);
   try {
     if (!req.configRecord.spreadsheetId) {
       res.status(400).json({ message: "Spreadsheet is not configured." });
@@ -1007,11 +1056,13 @@ app.patch("/api/sheet/column/rename", requireAuthenticatedUser, requireOwner, as
     const updated = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
     res.json({ currencies: updated.sheetCurrencies, customColumns: updated.customColumns });
   } catch (error) {
+    logRouteError(req, "sheet_column_rename_failed", error);
     res.status(400).json({ message: (error).message });
   }
 });
 
 app.put("/api/sheet/columns/reorder", requireAuthenticatedUser, requireOwner, async (req, res) => {
+  emulateFailure(req.path);
   try {
     if (!req.configRecord.spreadsheetId) {
       res.status(400).json({ message: "Spreadsheet is not configured." });
@@ -1039,11 +1090,13 @@ app.put("/api/sheet/columns/reorder", requireAuthenticatedUser, requireOwner, as
     const updated = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
     res.json({ currencies: updated.sheetCurrencies, customColumns: updated.customColumns });
   } catch (error) {
+    logRouteError(req, "sheet_columns_reorder_failed", error);
     res.status(400).json({ message: (error).message });
   }
 });
 
 app.put("/api/sheet/currencies/reorder", requireAuthenticatedUser, requireOwner, async (req, res) => {
+  emulateFailure(req.path);
   try {
     if (!req.configRecord.spreadsheetId) {
       res.status(400).json({ message: "Spreadsheet is not configured." });
@@ -1071,6 +1124,7 @@ app.put("/api/sheet/currencies/reorder", requireAuthenticatedUser, requireOwner,
     const updated = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
     res.json({ currencies: updated.sheetCurrencies, customColumns: updated.customColumns });
   } catch (error) {
+    logRouteError(req, "sheet_currencies_reorder_failed", error);
     res.status(400).json({ message: (error).message });
   }
 });
@@ -1116,6 +1170,7 @@ app.delete("/api/sheet/column", requireAuthenticatedUser, requireOwner, async (r
     const updated = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
     res.json({ currencies: updated.sheetCurrencies, customColumns: updated.customColumns });
   } catch (error) {
+    logRouteError(req, "sheet_column_delete_failed", error);
     res.status(400).json({ message: (error).message });
   }
 });
@@ -1123,10 +1178,12 @@ app.delete("/api/sheet/column", requireAuthenticatedUser, requireOwner, async (r
 // ─── Setup Sharing ────────────────────────────────────────────────────────────
 
 app.get("/api/sharing", requireAuthenticatedUser, requireOwner, async (req, res) => {
+  emulateFailure(req.path);
   try {
     const shares = await listSharesForOwner(req.userRecord.email);
     res.json({ shares });
   } catch (error) {
+    logRouteError(req, "sharing_list_failed", error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -1135,6 +1192,7 @@ app.post("/api/sharing", requireAuthenticatedUser, requireOwner, async (req, res
   const guestEmail = String(req.body?.guestEmail ?? "").trim().toLowerCase();
   const accessLevel = String(req.body?.accessLevel ?? "").trim();
 
+  emulateFailure(req.path);
   if (!guestEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail)) {
     res.status(400).json({ message: "A valid Gmail address is required." });
     return;
@@ -1165,6 +1223,7 @@ app.post("/api/sharing", requireAuthenticatedUser, requireOwner, async (req, res
 
     res.status(201).json({ guestEmail, accessLevel });
   } catch (error) {
+    logRouteError(req, "sharing_create_failed", error);
     if (error.code === "23505") {
       res.status(409).json({ message: "This user is already in your share list." });
       return;
@@ -1190,6 +1249,7 @@ app.patch("/api/sharing/:guestEmail", requireAuthenticatedUser, requireOwner, as
     }
     res.json({ guestEmail, accessLevel });
   } catch (error) {
+    logRouteError(req, "sharing_update_failed", error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -1202,6 +1262,7 @@ app.delete("/api/sharing/:guestEmail", requireAuthenticatedUser, requireOwner, a
     sendShareRevokedEmail({ ownerEmail: req.userRecord.email, guestEmail });
     res.status(204).end();
   } catch (error) {
+    logRouteError(req, "sharing_delete_failed", error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -1211,12 +1272,32 @@ app.post("/api/sharing/guest/reset", requireAuthenticatedUser, requireGuest, asy
     await removeShareAsGuest(req.userRecord.email);
     res.status(204).end();
   } catch (error) {
+    logRouteError(req, "sharing_guest_reset_failed", error);
     res.status(500).json({ message: error.message });
   }
 });
 
+app.get("/api/admin/logs/files", requireAuthenticatedUser, requireAppAdmin, (_req, res) => {
+  res.json({ files: listLogFiles() });
+});
+
+app.get("/api/admin/logs/tail", requireAuthenticatedUser, requireAppAdmin, (req, res) => {
+  const file = String(req.query.file ?? "");
+  const level = req.query.level ? String(req.query.level) : undefined;
+  const q = req.query.q ? String(req.query.q) : undefined;
+  const lines = Math.min(Math.max(Number.parseInt(req.query.lines, 10) || 200, 1), 1000);
+
+  const entries = readLogEntries({ file, level, q, lines });
+  if (entries === null) {
+    res.status(400).json({ message: "Unknown log file." });
+    return;
+  }
+
+  res.json({ entries });
+});
+
 app.use((error, req, res, next) => {
-  logInfrastructureError("Unhandled request error", error);
+  logRouteError(req, "unhandled_request_error", error);
 
   if (res.headersSent) {
     next(error);
@@ -1260,6 +1341,15 @@ function registerSignalHandlers() {
   process.once("SIGINT", () => {
     void shutdownServer("SIGINT");
   });
+
+  // Last-resort net for errors outside the request lifecycle (e.g. thrown inside a timer).
+  process.on("unhandledRejection", (reason) => {
+    logger.error("unhandled_rejection", { event: "unhandled_rejection", error: reason instanceof Error ? reason.message : String(reason) });
+  });
+  process.on("uncaughtException", (error) => {
+    logger.error("uncaught_exception", { event: "uncaught_exception", error: error.message });
+    void shutdownServer("uncaughtException");
+  });
 }
 
 export function startServer() {
@@ -1271,6 +1361,7 @@ export function startServer() {
     console.log(`QuickExpense backend listening on http://localhost:${port}`);
   });
   registerSignalHandlers();
+  startWarningDigestScheduler();
   return server;
 }
 

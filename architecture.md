@@ -77,7 +77,8 @@ quick-expense/
 │
 ├── public/                    ← static assets served by Vite / Express
 │   ├── privacy-policy.html    ← required for Google OAuth app verification
-│   └── terms-of-service.html  ← required for Google OAuth app verification
+│   ├── terms-of-service.html  ← required for Google OAuth app verification
+│   └── admin-logs.html        ← standalone vanilla-JS admin log viewer (tail/filter/search), calls /api/admin/logs/*
 │
 ├── app-server/                ← Express back-end (plain JS, ES modules)
 │   ├── index.js               ← app entry: routes, middleware, session setup
@@ -87,8 +88,9 @@ quick-expense/
 │   ├── store.js               ← PostgreSQL-backed user record and FX backup persistence
 │   ├── sharing.js             ← sharing CRUD: list/add/update/remove guest access
 │   ├── email.js               ← Resend email sender (fire-and-forget delivery)
-│   ├── email-templates.js     ← HTML + plain-text email templates for share/revoke notifications
-│   ├── resilience.js          ← auth middleware (createRequireAuthenticatedUser, requireOwner, requireGuest, requireEditAccess), health check, and graceful shutdown
+│   ├── email-templates.js     ← HTML + plain-text email templates for share/revoke notifications + error-alert/warning-digest alerts
+│   ├── logger.js               ← winston logger (console + rotating file transports), size-cap sweep, error-alert/warning-digest scheduling, admin log file listing/tailing
+│   ├── resilience.js          ← auth middleware (createRequireAuthenticatedUser, requireOwner, requireGuest, requireEditAccess, requireAppAdmin), health check, and graceful shutdown
 │   ├── validation.js          ← server-side expense input validation
 │   ├── utils.js               ← shared backend utilities
 │   │
@@ -181,9 +183,10 @@ quick-expense/
 | External API | Google Sheets API v4 | All CRUD on expense data |
 | Authentication | Google OAuth 2.0 (Authorization Code + PKCE) | Server-side flow |
 | Google Picker | Google Picker API | For spreadsheet selection in Setup |
-| Deployment | Fly.io (Docker) | Stateless app container (no persistent volume) |
+| Deployment | Fly.io (Docker) | App container is otherwise stateless; a single 1GB volume is mounted at `/data/logs` for rotated log files only (see §11) |
 | Landing page | Vanilla HTML/CSS/JS + nginx:alpine | Separate Fly.io app |
-| Email | Resend (resend.com) | Transactional email for share/revoke notifications; silently skipped if `RESEND_API_KEY` absent |
+| Email | Resend (resend.com) | Transactional email for share/revoke notifications and error-alert/warning-digest emails; silently skipped if `RESEND_API_KEY` absent |
+| Logging | winston + winston-daily-rotate-file | Console (JSON) + rotating combined/error log files, retention + size-cap sweep, admin-only in-app viewer |
 
 ### Runtime Version Baseline
 
@@ -282,8 +285,10 @@ All API routes are defined in `app-server/index.js`.
 | PATCH | `/api/sharing/:guestEmail` | Yes (owner) | Update access level for a shared user |
 | DELETE | `/api/sharing/:guestEmail` | Yes (owner) | Remove a user from the share list |
 | POST | `/api/sharing/guest/reset` | Yes (guest) | Guest-initiated reset: detach from shared setup and clear to re-run Setup |
+| GET | `/api/admin/logs/files` | Yes (app admin) | List rotated log files (name/size/mtime) from `LOG_DIR` |
+| GET | `/api/admin/logs/tail` | Yes (app admin) | Tail/filter a whitelisted log file. Query params: `file` (must be a name returned by `/files`), `level`, `q` (substring search), `lines` (default 200, max 1000) |
 
-"Auth = Yes" means the `requireAuthenticatedUser` middleware is applied: it verifies the session cookie has a `userEmail`, retrieves the user record, resolves any shared setup reference (populating `req.configRecord`, `req.isGuest`, `req.accessLevel`), and attaches them to the request. "owner" routes additionally require `requireOwner` (403 for guests). Write expense routes additionally require `requireEditAccess` (403 for view-level guests).
+"Auth = Yes" means the `requireAuthenticatedUser` middleware is applied: it verifies the session cookie has a `userEmail`, retrieves the user record, resolves any shared setup reference (populating `req.configRecord`, `req.isGuest`, `req.accessLevel`), and attaches them to the request. "owner" routes additionally require `requireOwner` (403 for guests). Write expense routes additionally require `requireEditAccess` (403 for view-level guests). "app admin" routes additionally require `requireAppAdmin` (403 unless the signed-in user's email matches the `ADMIN_EMAIL` env var) — a separate, app-wide admin gate distinct from spreadsheet ownership.
 
 ---
 
@@ -568,8 +573,16 @@ In development, Vite proxies all `/api` requests to `http://localhost:3001` (con
 | `EXPENSE_RECENT_MONTHS` | *(Optional)* Number of months of recent expense data loaded in Phase 1. Default: `24`. Older records are fetched in the background after the UI is ready. |
 | `RESEND_API_KEY` | *(Optional)* Resend API key for transactional email. If absent, email notifications are silently skipped (app runs normally). |
 | `EMAIL_FROM` | *(Optional)* Sender address for email notifications (e.g. `noreply@send.q-expense.com`). Required when `RESEND_API_KEY` is set. |
+| `ADMIN_EMAIL` | *(Optional)* Email allowed to access `/admin-logs.html` and the `/api/admin/logs/*` routes (`requireAppAdmin`). Admin routes 403 when unset. |
+| `ALERT_EMAIL_TO` | *(Optional)* Comma/semicolon-separated recipient list for error-alert and warning-digest emails. Alert emails are skipped when unset. |
+| `LOG_DIR` | *(Optional)* Directory for rotated log files. Defaults to a repo-relative `logs/` folder; set to `/data/logs` in production (mounted volume). |
+| `LOG_RETENTION_DAYS` | *(Optional)* Days to retain rotated log files. Default: `15`. |
+| `LOG_MAX_TOTAL_MB` | *(Optional)* Total log directory size cap in MB; oldest files are swept on each rotation once exceeded. Default: `50`. |
+| `ALERT_ERROR_THROTTLE_MS` | *(Optional)* Minimum time between error-alert emails, in milliseconds. Default: `300000` (5 min). |
+| `ALERT_WARNING_DIGEST_INTERVAL_HOURS` | *(Optional)* How often the warning-digest email is sent (only if warnings occurred). Default: `24`. |
+| `ALERT_EMAIL_SUBJECT_PREFIX` | *(Optional)* Subject line prefix for alert emails. Default: `[QuickExpense Alert]`. |
 
-The backend validates all required env vars at startup and fails fast if any are missing. `EXPENSE_RECENT_MONTHS`, `RESEND_API_KEY`, and `EMAIL_FROM` are optional; missing values generate a startup warning but do not fail the process.
+The backend validates all required env vars at startup and fails fast if any are missing. `EXPENSE_RECENT_MONTHS`, `RESEND_API_KEY`, `EMAIL_FROM`, and the logging/alerting vars above are optional; missing values generate a startup warning (or silently disable the feature) but do not fail the process.
 
 ---
 
@@ -580,11 +593,17 @@ The backend validates all required env vars at startup and fails fast if any are
 - **Dockerfile:** Multi-stage: install all deps → `npm run build` → prune to production deps → run `node app-server/index.js`.
 - **Fly.io config (`fly.toml`):**
   - Region: `fra` (Frankfurt)
-  - No persistent volume — all state is in the PostgreSQL database (Supabase).
+  - A single 1GB volume (`qe_logs`) is mounted at `/data/logs` — the sole exception to the otherwise-stateless container; it holds rotated log files only (`LOG_DIR=/data/logs`). All other state remains in the PostgreSQL database (Supabase).
   - Single shared-cpu-1x VM (256 MB), always running (`auto_stop_machines = off`, `min_machines_running = 1`).
   - Forces HTTPS.
-  - `NODE_ENV=production`, `PORT=3001`.
-  - `DATABASE_URL` set as a Fly.io secret.
+  - `NODE_ENV=production`, `PORT=3001`, plus the `LOG_*`/`ALERT_*` env vars (see §10).
+  - `DATABASE_URL`, `ADMIN_EMAIL`, and `ALERT_EMAIL_TO` set as Fly.io secrets.
+
+### Admin Log Viewer
+
+- `public/admin-logs.html` is a standalone vanilla-JS/CSS page (no React/build dependency) served statically alongside the SPA. It calls `GET /api/admin/logs/files` and `GET /api/admin/logs/tail` to tail rotated log files with a severity filter and substring search.
+- Both routes require `requireAuthenticatedUser` + `requireAppAdmin` (email must match `ADMIN_EMAIL`), plus a dedicated `express-rate-limit` limiter as defense in depth.
+- The tail route validates the requested `file` against the list returned by the files route (whitelist check) to block path traversal — no arbitrary filesystem reads are possible.
 
 ### Landing Page (`q-expense-landing`)
 
@@ -595,7 +614,7 @@ The backend validates all required env vars at startup and fails fast if any are
 
 ## 12. Key Design Decisions & Constraints (v1)
 
-1. **PostgreSQL via Supabase Free** — user records, FX rate backups, and sessions are stored in a managed PostgreSQL database. The app container is stateless.
+1. **PostgreSQL via Supabase Free** — user records, FX rate backups, and sessions are stored in a managed PostgreSQL database. The app container is otherwise stateless, with one narrow exception: a 1GB Fly.io volume mounted at `/data/logs` holds rotated application log files (see §11).
 2. **Expense data in Google Sheets only** — the app is a thin client over Google Sheets API. No expense data is cached or stored server-side.
 3. **Client-side search** — the full dataset is loaded into the browser. Capped at 10 MB JSON payload.
 4. **Edit of existing records** — supported via `PUT /api/expenses/:rowNumber`. Returns `{ record, moveMode }`. When the date change keeps the row in chronological order, an in-place cell update is performed (`moveMode: false`). When the date change would break order, `moveExpenseRow` calls the existing `addExpenseRow` (insert/append decision fully reused), then deletes the original row (`moveMode: true`). The client performs a full dataset reload on `moveMode: true`, identical to the add insert-mode flow. Delete is scoped to the **last row only**, available from Tail view. Protected by a row-count conflict check: the client passes the expected row count; the backend rejects with HTTP 409 if the sheet was updated concurrently.

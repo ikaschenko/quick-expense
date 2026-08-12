@@ -11,6 +11,16 @@ primary_region = 'fra'
 [env]
   NODE_ENV = 'production'
   PORT = '3001'
+  LOG_DIR = '/data/logs'
+  LOG_RETENTION_DAYS = '15'
+  LOG_MAX_TOTAL_MB = '50'
+  ALERT_ERROR_THROTTLE_MS = '300000'
+  ALERT_WARNING_DIGEST_INTERVAL_HOURS = '24'
+  ALERT_EMAIL_SUBJECT_PREFIX = '[QuickExpense Alert]'
+
+[[mounts]]
+  source = 'qe_logs'
+  destination = '/data/logs'
 
 [http_service]
   internal_port = 3001
