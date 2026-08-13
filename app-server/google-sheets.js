@@ -24,6 +24,10 @@ const MAX_DATASET_BYTES = 10 * 1024 * 1024;
 // The server cannot import frontend TypeScript sources. Keep both values in sync.
 const MAX_CUSTOM_COLUMNS = 10;
 const MAX_OPTIONAL_CURRENCIES = 10;
+// Row-count based chunking for large History fetches (see loadExpenses partial path).
+const HISTORY_CHUNK_ROWS = 5000;
+// Self-imposed safety margin on values:batchGet fan-out/URL length, not a documented Google hard limit.
+const MAX_RANGES_PER_BATCH_GET = 20;
 
 function assertValidSpreadsheetId(id) {
   if (typeof id !== "string" || !/^[A-Za-z0-9_-]+$/.test(id)) {
@@ -237,6 +241,63 @@ async function getValues(accessToken, spreadsheetId, range) {
   );
 
   return payload.values ?? [];
+}
+
+/**
+ * Split an inclusive row range into [start, end] chunks of at most chunkSize rows each,
+ * preserving order. Returns [] when rowEnd < rowStart.
+ */
+export function buildRowChunks(rowStart, rowEnd, chunkSize) {
+  const chunks = [];
+  for (let start = rowStart; start <= rowEnd; start += chunkSize) {
+    chunks.push([start, Math.min(start + chunkSize - 1, rowEnd)]);
+  }
+  return chunks;
+}
+
+async function getValuesBatch(accessToken, spreadsheetId, ranges) {
+  const params = ranges.map((range) => `ranges=${encodeURIComponent(range)}`).join("&");
+  const payload = await requestJson(
+    accessToken,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${params}&majorDimension=ROWS`,
+    {
+      headers: createHeaders(accessToken),
+    },
+  );
+
+  return (payload.valueRanges ?? []).map((valueRange) => valueRange.values ?? []);
+}
+
+/**
+ * Fetch a (possibly very large) row range, splitting it into HISTORY_CHUNK_ROWS-row chunks
+ * grouped into values:batchGet calls of at most MAX_RANGES_PER_BATCH_GET ranges each, fired
+ * concurrently. Falls back to a single plain getValues call when the range fits one chunk.
+ * Exported for direct testing of the multi-batch merge, independent of loadExpenses'
+ * unrelated MAX_DATASET_BYTES payload cap.
+ */
+export async function getValuesChunked(accessToken, spreadsheetId, sheetName, colStart, colEnd, rowStart, rowEnd) {
+  const chunks = buildRowChunks(rowStart, rowEnd, HISTORY_CHUNK_ROWS);
+  if (chunks.length <= 1) {
+    return getValues(accessToken, spreadsheetId, `${sheetName}!${colStart}${rowStart}:${colEnd}${rowEnd}`);
+  }
+
+  const batches = [];
+  for (let i = 0; i < chunks.length; i += MAX_RANGES_PER_BATCH_GET) {
+    batches.push(chunks.slice(i, i + MAX_RANGES_PER_BATCH_GET));
+  }
+
+  const batchResults = await Promise.all(
+    batches.map((batchChunks) =>
+      getValuesBatch(
+        accessToken,
+        spreadsheetId,
+        batchChunks.map(([start, end]) => `${sheetName}!${colStart}${start}:${colEnd}${end}`),
+      ),
+    ),
+  );
+
+  // Each batch result is an array of per-range row arrays, in request order — flatten to a single row list.
+  return batchResults.flatMap((rangeResults) => rangeResults.flat());
 }
 
 async function updateValues(accessToken, spreadsheetId, range, values) {
@@ -886,6 +947,32 @@ export async function validateSpreadsheet(accessToken, spreadsheetId, mapping = 
   return report;
 }
 
+const STRUCTURE_CACHE_TTL_MS = 60_000;
+const structureCache = new Map();
+
+/**
+ * Cached { mode, mapping, report } for a spreadsheet, refreshed via detectConfigSheet +
+ * validateSpreadsheet on cache miss/expiry. Consulted only by read routes — mutation routes
+ * always revalidate directly and must call invalidateSheetStructureCache after a structural change.
+ */
+export async function getCachedStructureReport(accessToken, spreadsheetId) {
+  const cached = structureCache.get(spreadsheetId);
+  if (cached && Date.now() - cached.timestamp < STRUCTURE_CACHE_TTL_MS) {
+    return { mode: cached.mode, mapping: cached.mapping, report: cached.report };
+  }
+
+  const configResult = await detectConfigSheet(accessToken, spreadsheetId);
+  const mapping = configResult.mode === "config-driven" ? configResult.mapping : null;
+  const report = await validateSpreadsheet(accessToken, spreadsheetId, mapping, configResult.metadata);
+
+  structureCache.set(spreadsheetId, { mode: configResult.mode, mapping, report, timestamp: Date.now() });
+  return { mode: configResult.mode, mapping, report };
+}
+
+export function invalidateSheetStructureCache(spreadsheetId) {
+  structureCache.delete(spreadsheetId);
+}
+
 /**
  * Insert a single optional currency column immediately before USD.
  * Validates: max 10 currencies, no duplicates.
@@ -1294,9 +1381,13 @@ export async function loadExpenses(accessToken, spreadsheetId, mapping = null, o
     rows = rows.slice(1);
     rowOffset = 0;
   } else {
-    // Partial path: fetch only [startRow..endRow] — data rows only, no header
-    const rangeEnd = endRow !== null ? `${endCol}${endRow}` : endCol;
-    rows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A${startRow}:${rangeEnd}`);
+    // Partial path: fetch only [startRow..endRow] — data rows only, no header.
+    // Chunked via getValuesChunked when bounded (History); unbounded fetches fall back to a single call.
+    if (endRow !== null) {
+      rows = await getValuesChunked(accessToken, spreadsheetId, SHEET_NAME, "A", endCol, startRow, endRow);
+    } else {
+      rows = await getValues(accessToken, spreadsheetId, `${SHEET_NAME}!A${startRow}:${endCol}`);
+    }
     actualHeaderRow = report.headerRow;
     rowOffset = startRow - 2;
   }

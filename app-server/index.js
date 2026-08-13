@@ -44,6 +44,8 @@ import {
   readExpensesSheetHeader,
   writeConfigSheetMapping,
   findExpenseStartRow,
+  getCachedStructureReport,
+  invalidateSheetStructureCache,
   DEFAULT_CUSTOM_COLUMNS,
   MAX_CUSTOM_COLUMNS,
   MAX_OPTIONAL_CURRENCIES,
@@ -661,6 +663,7 @@ app.post("/api/config/mapping", requireAuthenticatedUser, requireOwner, async (r
   try {
     const accessToken = await getAuthorizedAccessToken(req.configRecord);
     await writeConfigSheetMapping(accessToken, req.configRecord.spreadsheetId, mapping);
+    invalidateSheetStructureCache(req.configRecord.spreadsheetId);
     const mode = "config-driven";
     res.json({ mapping, mode });
   } catch (error) {
@@ -721,9 +724,7 @@ app.get("/api/expenses/history", requireAuthenticatedUser, async (req, res) => {
     }
 
     const accessToken = await getAuthorizedAccessToken(req.configRecord);
-    const { mode, mapping: configMapping = null, metadata } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
-    const mapping = mode === "config-driven" ? configMapping : null;
-    const report = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping, metadata);
+    const { mapping, report } = await getCachedStructureReport(accessToken, req.configRecord.spreadsheetId);
     const snapshot = await loadExpenses(accessToken, req.configRecord.spreadsheetId, mapping, {
       startRow: 2,
       endRow,
@@ -745,11 +746,9 @@ app.get("/api/expenses", requireAuthenticatedUser, async (req, res) => {
     }
 
     const accessToken = await getAuthorizedAccessToken(req.configRecord);
-    const { mode, mapping: configMapping = null, metadata } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
-    const mapping = mode === "config-driven" ? configMapping : null;
-    // validateSpreadsheet and findExpenseStartRow don't depend on each other's result — run concurrently.
-    const [report, { startRow, totalRows, isSplit, dateOrderIssueRows, dateValues }] = await Promise.all([
-      validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping, metadata),
+    // getCachedStructureReport and findExpenseStartRow don't depend on each other's result — run concurrently.
+    const [{ mapping, report }, { startRow, totalRows, isSplit, dateOrderIssueRows, dateValues }] = await Promise.all([
+      getCachedStructureReport(accessToken, req.configRecord.spreadsheetId),
       findExpenseStartRow(accessToken, req.configRecord.spreadsheetId, RECENT_MONTHS),
     ]);
     const snapshot = await loadExpenses(accessToken, req.configRecord.spreadsheetId, mapping, {
@@ -959,6 +958,7 @@ app.post("/api/sheet/currency", requireAuthenticatedUser, requireOwner, async (r
 
     const accessToken = await getAuthorizedAccessToken(req.configRecord);
     const result = await insertCurrencyColumnInSheet(accessToken, req.configRecord.spreadsheetId, code);
+    invalidateSheetStructureCache(req.configRecord.spreadsheetId);
     res.status(201).json(result);
   } catch (error) {
     logRouteError(req, "sheet_currency_add_failed", error);
@@ -994,6 +994,7 @@ app.post("/api/sheet/column", requireAuthenticatedUser, requireOwner, async (req
     }
 
     await insertCustomColumnInSheet(accessToken, req.configRecord.spreadsheetId, name);
+    invalidateSheetStructureCache(req.configRecord.spreadsheetId);
 
     // Re-read to return updated structure
     const updated = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
@@ -1052,6 +1053,7 @@ app.patch("/api/sheet/column/rename", requireAuthenticatedUser, requireOwner, as
 
     await renameColumnInSheet(accessToken, req.configRecord.spreadsheetId, colIndex, newName);
     await renameVisibilityEntry(req.configRecord.email, req.configRecord.spreadsheetId, currentName, newName);
+    invalidateSheetStructureCache(req.configRecord.spreadsheetId);
 
     const updated = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
     res.json({ currencies: updated.sheetCurrencies, customColumns: updated.customColumns });
@@ -1086,6 +1088,7 @@ app.put("/api/sheet/columns/reorder", requireAuthenticatedUser, requireOwner, as
     }
 
     await reorderCustomColumnsInSheet(accessToken, req.configRecord.spreadsheetId, orderedNames, mapping);
+    invalidateSheetStructureCache(req.configRecord.spreadsheetId);
 
     const updated = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
     res.json({ currencies: updated.sheetCurrencies, customColumns: updated.customColumns });
@@ -1120,6 +1123,7 @@ app.put("/api/sheet/currencies/reorder", requireAuthenticatedUser, requireOwner,
     }
 
     await reorderCurrencyColumnsInSheet(accessToken, req.configRecord.spreadsheetId, orderedCodes, mapping);
+    invalidateSheetStructureCache(req.configRecord.spreadsheetId);
 
     const updated = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
     res.json({ currencies: updated.sheetCurrencies, customColumns: updated.customColumns });
@@ -1166,6 +1170,7 @@ app.delete("/api/sheet/column", requireAuthenticatedUser, requireOwner, async (r
     }
 
     await deleteColumnFromSheet(accessToken, req.configRecord.spreadsheetId, colIndex);
+    invalidateSheetStructureCache(req.configRecord.spreadsheetId);
 
     const updated = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
     res.json({ currencies: updated.sheetCurrencies, customColumns: updated.customColumns });

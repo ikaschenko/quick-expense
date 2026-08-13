@@ -36,6 +36,10 @@ let addExpenseRow;
 let moveExpenseRow;
 let isStructuredHeader;
 let writeExpenseValues;
+let buildRowChunks;
+let getValuesChunked;
+let getCachedStructureReport;
+let invalidateSheetStructureCache;
 
 beforeAll(async () => {
   ({
@@ -52,6 +56,10 @@ beforeAll(async () => {
     moveExpenseRow,
     isStructuredHeader,
     writeExpenseValues,
+    buildRowChunks,
+    getValuesChunked,
+    getCachedStructureReport,
+    invalidateSheetStructureCache,
   } = await import("../../app-server/google-sheets.js"));
 });
 
@@ -302,6 +310,210 @@ describe("loadExpenses", () => {
     expect(result.records[0].USD).toBe("25");
     expect(result.records[1].Date).toBe("2026-01-02");
     expect(result.records[1].Comment).toBe("bus");
+  });
+});
+
+describe("buildRowChunks", () => {
+  it("returns a single chunk when the range fits within chunkSize", () => {
+    expect(buildRowChunks(2, 100, 5000)).toEqual([[2, 100]]);
+  });
+
+  it("splits an exact multiple of chunkSize into equal chunks with no remainder", () => {
+    // 2..5001 = 5000 rows (one full chunk), 5002..10001 = another 5000 rows
+    expect(buildRowChunks(2, 10001, 5000)).toEqual([
+      [2, 5001],
+      [5002, 10001],
+    ]);
+  });
+
+  it("produces a smaller remainder chunk at the end", () => {
+    // 2..10001 = 10000 rows (2 full chunks), plus a 3-row remainder 10002..10004
+    expect(buildRowChunks(2, 10004, 5000)).toEqual([
+      [2, 5001],
+      [5002, 10001],
+      [10002, 10004],
+    ]);
+  });
+
+  it("returns an empty array when rowEnd < rowStart (zero rows)", () => {
+    expect(buildRowChunks(2, 1, 5000)).toEqual([]);
+  });
+});
+
+describe("loadExpenses — partial path (startRow/endRow, no dateValues)", () => {
+  const TOKEN = "test-token";
+  const SHEET_ID = "spreadsheet-123";
+  const HEADER = ["Date", "USD", "Category", "Spent By", "Spent For", "Comment"];
+  const REPORT = { headerRow: HEADER, sheetCurrencies: [], customColumns: [] };
+
+  function valuesResponse(rows) {
+    return jsonResponse({ values: rows });
+  }
+
+  function batchGetResponse(rowsPerRange) {
+    return jsonResponse({ valueRanges: rowsPerRange.map((rows) => ({ values: rows })) });
+  }
+
+  function dataRow(i) {
+    return ["2026-01-01", String(i), "Food", "a@x.com", "Family", `row-${i}`];
+  }
+
+  it("issues a single plain values.get call for a small range (< 5,000 rows)", async () => {
+    setupFetchSequence([valuesResponse([dataRow(0), dataRow(1), dataRow(2)])]);
+
+    const result = await loadExpenses(TOKEN, SHEET_ID, null, {
+      precomputedReport: REPORT,
+      startRow: 2,
+      endRow: 4,
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const url = mockFetch.mock.calls[0][0];
+    expect(url).not.toContain("batchGet");
+    expect(url).toContain(encodeURIComponent(`${SHEET_NAME}!A2:F4`));
+    expect(result.records).toHaveLength(3);
+    expect(result.records[0].rowNumber).toBe(2);
+    expect(result.records[2].rowNumber).toBe(4);
+  });
+
+  it("issues exactly one batchGet call with 5 ranges for a 21,832-row range, preserving order at chunk boundaries", async () => {
+    const startRow = 2;
+    const totalRows = 21_832;
+    const endRow = startRow + totalRows - 1; // 21833
+    const allRows = Array.from({ length: totalRows }, (_, i) => dataRow(i));
+    const chunks = buildRowChunks(startRow, endRow, 5000);
+    expect(chunks).toHaveLength(5);
+
+    setupFetchSequence([
+      batchGetResponse(chunks.map(([s, e]) => allRows.slice(s - startRow, e - startRow + 1))),
+    ]);
+
+    const result = await loadExpenses(TOKEN, SHEET_ID, null, {
+      precomputedReport: REPORT,
+      startRow,
+      endRow,
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const url = mockFetch.mock.calls[0][0];
+    expect(url).toContain("values:batchGet");
+    expect(url.match(/ranges=/g) ?? []).toHaveLength(5);
+
+    expect(result.records).toHaveLength(totalRows);
+    // No row dropped/duplicated at the chunk boundary (sheet rows 5001/5002 = data indices 4999/5000).
+    expect(result.records[4999].Comment).toBe("row-4999");
+    expect(result.records[4999].rowNumber).toBe(5001);
+    expect(result.records[5000].Comment).toBe("row-5000");
+    expect(result.records[5000].rowNumber).toBe(5002);
+    expect(result.records[0].rowNumber).toBe(startRow);
+    expect(result.records[totalRows - 1].rowNumber).toBe(endRow);
+  });
+});
+
+describe("getValuesChunked", () => {
+  const TOKEN = "test-token";
+  const SHEET_ID = "spreadsheet-123";
+
+  function batchGetResponse(rowsPerRange) {
+    return jsonResponse({ valueRanges: rowsPerRange.map((rows) => ({ values: rows })) });
+  }
+
+  it("issues multiple batchGet calls when chunks exceed MAX_RANGES_PER_BATCH_GET, preserving merged order", async () => {
+    const rowStart = 2;
+    const totalRows = 120_000;
+    const rowEnd = rowStart + totalRows - 1; // 120001
+    const allRows = Array.from({ length: totalRows }, (_, i) => [`r${i}`]);
+    const chunks = buildRowChunks(rowStart, rowEnd, 5000);
+    expect(chunks).toHaveLength(24);
+
+    const firstBatchChunks = chunks.slice(0, 20);
+    const secondBatchChunks = chunks.slice(20);
+
+    setupFetchSequence([
+      batchGetResponse(firstBatchChunks.map(([s, e]) => allRows.slice(s - rowStart, e - rowStart + 1))),
+      batchGetResponse(secondBatchChunks.map(([s, e]) => allRows.slice(s - rowStart, e - rowStart + 1))),
+    ]);
+
+    const result = await getValuesChunked(TOKEN, SHEET_ID, SHEET_NAME, "A", "A", rowStart, rowEnd);
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch.mock.calls[0][0].match(/ranges=/g) ?? []).toHaveLength(20);
+    expect(mockFetch.mock.calls[1][0].match(/ranges=/g) ?? []).toHaveLength(4);
+
+    expect(result).toHaveLength(totalRows);
+    expect(result[0]).toEqual(["r0"]);
+    expect(result[totalRows - 1]).toEqual([`r${totalRows - 1}`]);
+    // Boundary between the two batchGet calls (chunk 19 ends at row 100001 → data index 99999).
+    expect(result[99_999]).toEqual(["r99999"]);
+    expect(result[100_000]).toEqual(["r100000"]);
+  });
+});
+
+describe("getCachedStructureReport / invalidateSheetStructureCache", () => {
+  const TOKEN = "test-token";
+  const HEADER = ["Date", "USD", "Category", "Spent By", "Spent For", "Comment"];
+
+  function metadataResponse(sheetNames) {
+    return jsonResponse({
+      sheets: sheetNames.map((title, i) => ({ properties: { sheetId: i, title } })),
+    });
+  }
+
+  function headerResponse(headers) {
+    return jsonResponse({ values: headers ? [headers] : [] });
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("returns a cached report on a second call within the TTL, skipping a fresh fetch", async () => {
+    const spreadsheetId = "cache-hit-1";
+    setupFetchSequence([metadataResponse(["Expenses"]), headerResponse(HEADER)]);
+
+    const first = await getCachedStructureReport(TOKEN, spreadsheetId);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+
+    const second = await getCachedStructureReport(TOKEN, spreadsheetId);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(second).toEqual(first);
+  });
+
+  it("fetches fresh data again after the TTL expires", async () => {
+    const spreadsheetId = "cache-expiry-1";
+    vi.useFakeTimers();
+    setupFetchSequence([
+      metadataResponse(["Expenses"]),
+      headerResponse(HEADER),
+      metadataResponse(["Expenses"]),
+      headerResponse(HEADER),
+    ]);
+
+    await getCachedStructureReport(TOKEN, spreadsheetId);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+
+    vi.advanceTimersByTime(61_000);
+
+    await getCachedStructureReport(TOKEN, spreadsheetId);
+    expect(mockFetch).toHaveBeenCalledTimes(4);
+  });
+
+  it("invalidateSheetStructureCache forces an immediate fresh fetch", async () => {
+    const spreadsheetId = "cache-invalidate-1";
+    setupFetchSequence([
+      metadataResponse(["Expenses"]),
+      headerResponse(HEADER),
+      metadataResponse(["Expenses"]),
+      headerResponse(HEADER),
+    ]);
+
+    await getCachedStructureReport(TOKEN, spreadsheetId);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+
+    invalidateSheetStructureCache(spreadsheetId);
+
+    await getCachedStructureReport(TOKEN, spreadsheetId);
+    expect(mockFetch).toHaveBeenCalledTimes(4);
   });
 });
 
