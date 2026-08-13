@@ -68,8 +68,4 @@ Existing tests to follow as examples:
 
 ## Rules
 
-- Use Vitest (`describe`/`it`/`expect`), not Jest. Test runner is configured in `vite.config.ts`.
-- Do not mock what you can call directly. Pure functions (`app-web/utils/`) should be tested with real inputs.
-- DO NOT modify production code in `app-web/` or `app-server/` — only test files.
-- Keep test data inline and minimal — only include fields relevant to the assertion.
-- Each test should test one behavior — avoid multi-assertion tests that obscure which behavior failed.
+Follow [tests.instructions.md](../../instructions/tests.instructions.md): Vitest (not Jest), one behavior per test, inline minimal data, don't mock what you can call directly, and never modify production code (`app-web/`, `app-server/`) — only test files.

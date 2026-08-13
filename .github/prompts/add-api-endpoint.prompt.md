@@ -22,9 +22,9 @@ Add a new API endpoint to the Quick Expense application following all project co
 
 In `app-server/index.js`, add a new route for `{{HTTP_METHOD}} {{ENDPOINT_PATH}}`.
 
-- If `{{REQUIRES_AUTH}}` is "yes", apply the `requireAuthenticatedUser` middleware.
-- If the method is POST, PUT, or DELETE (mutating), require the `X-Requested-With: fetch` header — use the existing CSRF check pattern from other mutating routes in the file.
-- Follow the existing route structure and error handling patterns in `app-server/index.js`.
+- If `{{REQUIRES_AUTH}}` is "yes", apply `requireAuthenticatedUser` plus the correct guard from [server.instructions.md](../instructions/server.instructions.md) (`requireOwner` / `requireEditAccess` / `requireGuest`).
+- Mutating methods (POST/PUT/DELETE) require the `X-Requested-With: fetch` CSRF header — follow the existing pattern in `app-server/index.js`.
+- Follow the existing route structure and error-handling patterns in `app-server/index.js`.
 
 ---
 
@@ -42,7 +42,7 @@ If the endpoint reuses existing types, skip this step.
 
 Add a service function in the appropriate `app-web/services/*.ts` file (or create a new one if no existing file fits).
 
-- Use the `http.ts` wrappers (`httpGet`, `httpPost`, etc.) — never raw `fetch`.
+- Use the `http.ts` wrappers (`requestJson` / `requestNoContent`) — never raw `fetch`.
 - Export the function so components/contexts can import it.
 
 ---

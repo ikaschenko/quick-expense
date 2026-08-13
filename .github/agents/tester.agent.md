@@ -46,19 +46,7 @@ When asked to audit a module or the full codebase for coverage gaps:
 
 ### Mode 3 — Pre-Ship Audit
 
-When asked to verify readiness before a production release:
-
-1. Run `npm test` — must be green. Report any failures and fix them.
-2. Run `npm run build` — must succeed. Report compile errors.
-3. Run `npm run security:audit` — report any vulnerabilities found.
-4. For every file changed in the current feature branch, check: does a test exist that exercises the changed behavior? List uncovered changes.
-5. Check `architecture.md` and `docs/QuickExpense_business-requirements.md` are current with the delivered feature.
-6. Output a **Ship Report**:
-   - ✅ Tests: N passing, 0 failing
-   - ✅ Build: clean
-   - ✅ Security: 0 vulnerabilities (or list findings)
-   - ✅ / ⚠️ Coverage: list any new behavior without test coverage
-   - ✅ / ⚠️ Docs: list any stale documentation
+When asked to verify readiness before a production release, run the gates in the `ship-checklist` prompt (tests → build → security audit → coverage spot-check → docs) and output its **Ship Report**.
 
 ## Unit Test Approach
 

@@ -2,11 +2,9 @@
 
 ## Who I Am & Project Stage
 
-- **Solo builder/entrepreneur.** There is no team. I am the sole person responsible for product decisions, design, code, shipping, and promotion.
-- **Current stage: personal + family use.** The product is live and used personally and within my family. The next milestone is a public launch (ProductHunt / TinyProduct).
-- **AI is the primary development force.** I use AI throughout the full lifecycle: idea → requirements → architecture → implementation → testing. I do not have a human QA role — AI must fill that gap entirely.
-- **Testing is a critical AI responsibility.** I test manually and tend to cover happy paths only. Edge cases, regression, and boundary conditions are easy for me to miss. AI must proactively cover these — not wait to be asked.
-- **Shipping velocity matters.** I want to spend time promoting the product, not manually testing it. The faster AI can produce verified, production-ready code, the more time I can invest in growth.
+- **Solo builder.** No team — I own product, design, code, shipping, and promotion. Ship velocity matters.
+- **Stage:** live for personal/family use; next milestone is a public launch (ProductHunt / TinyProduct).
+- **AI is the primary dev force and the only QA.** I test happy paths manually; AI must proactively cover edge cases, regression, and boundaries without being asked.
 
 ## Project Overview
 
@@ -34,81 +32,20 @@ Run `npm run build` after TypeScript changes and `npm test` after any logic chan
 
 ## Core Engineering Principles
 
-### Root-Cause Thinking
-- Diagnose and fix the **root cause**, not the symptom. If a fix feels like a workaround, investigate deeper.
-
-### Domain-Driven Design
-- Start from the **logical data model** — understand domain entities and relationships before touching store, API, or UI.
-- Name things after domain concepts, not implementation details.
-
-### SOLID Principles
-- **Single Responsibility:** One reason to change per module/component/function.
-- **Open/Closed:** Extend via composition, not modification of working code.
-- **Dependency Inversion:** Frontend services depend on `http.ts` abstractions, not raw `fetch`.
-
-### Low Coupling, High Cohesion
-- Keep related logic together (contexts own state, services own API calls, utils are pure).
-- Frontend and backend communicate only via `/api` routes — never import across boundaries.
-
-### Do More With Less
-- **Less code is better code.** The primary metric for implementation quality is minimal lines of code added while preserving clarity and correctness.
-- Prefer the simplest solution that solves the problem correctly.
-- **Prefer proven libraries over hand-rolled code.** When a well-maintained package solves the problem, recommend it — the project codebase grows slower and responsibility is shared with the community. Always get human approval before adding a new dependency.
-- **Zero duplication.** Before writing new code, search for existing utilities, helpers, or patterns that can be reused. Suggest tactical refactorings (with estimated LOC impact) in the implementation plan when they enable reuse or reduce net code.
-- When a short-term shortcut will degrade long-term maintainability — apply timely refactoring.
-
-### Maintainability First
-- Every change must leave the codebase in equal or better shape. No dead code, orphaned files, or commented-out blocks.
-- If you notice deteriorating patterns, flag them — don't ignore rot.
-
-### Ask Before Deciding
-- On architectural choices, trade-offs, or ambiguity — **ask the human** with options, pros/cons, and your recommendation.
+- **Root cause, not symptom.** If a fix feels like a workaround, dig deeper.
+- **Domain-driven.** Model the domain first (entities/relationships) before store, API, or UI. Name things after domain concepts.
+- **SOLID / low coupling, high cohesion.** One reason to change per module; extend via composition; contexts own state, services own API calls, utils are pure; frontend and backend communicate only via `/api` — never import across the boundary.
+- **Do more with less.** Less code is the quality metric — prefer the simplest correct solution. Reuse existing utils/helpers before writing new (zero duplication); suggest tactical refactorings with LOC impact when they reduce net code. Prefer proven libraries over hand-rolled code, but get human approval before adding any dependency.
+- **Maintainability first.** Every change leaves the codebase equal or better — no dead code, orphaned files, or commented-out blocks. Flag rot; don't ignore it.
+- **Ask before deciding.** On architectural choices, trade-offs, or ambiguity, ask with options + a recommendation.
 
 ## Behavioral Guidelines
 
-### Questions Before Output
-
-**Resolve all open questions before generating any content.**
-
-- While planning any deliverable (implementation plan, user story, feature spec, code), if open questions arise — **stop and ask them all before writing any output**. Do not generate content against unresolved assumptions.
-- Repeat the question loop as many times as needed until every open question is resolved, then proceed.
-- Reason: avoids wasting tokens and human review time on content that may need to be discarded.
-
-### Think Before Coding
-
-**Don't assume. Don't hide confusion. Surface tradeoffs. Be concise.**
-
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them — don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
-- **Conciseness:** When investigating a problem or proposing a plan, use short bullet points and brief rationale — no verbose prose or restating the obvious.
-
-### Goal-Driven Execution
-
-**Define success criteria. Loop until verified.**
-
-Transform tasks into verifiable goals:
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
-
-For multi-step tasks, state a brief plan:
-```
-1. [Step] → verify: [check]
-2. [Step] → verify: [check]
-```
-
-### Surgical Changes
-
-**Touch only what you must — except when deduplication reduces net code.**
-
-- Don't "improve" adjacent code, comments, or formatting when editing.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code or duplication, mention it — don't fix it silently.
-- Remove imports/variables/functions that YOUR changes made unused.
-- Don't remove pre-existing dead code unless asked.
-- **Exception:** When a task reveals duplication that the new code would worsen, include a refactoring step in the plan (with LOC impact). Apply only after human approval.
+- **Resolve open questions before generating output.** If planning a deliverable surfaces open questions, ask them all first — never produce content against unresolved assumptions.
+- **Think before coding.** State assumptions explicitly. If multiple interpretations exist, surface them — don't pick silently. If a simpler approach exists, say so.
+- **Goal-driven execution.** Turn tasks into verifiable goals ("fix the bug" → "write a failing test that reproduces it, then make it pass"). For multi-step work, state a brief plan with a verify step per step.
+- **Surgical changes.** Touch only what the task requires; match existing style; remove imports/vars your change orphaned; don't touch pre-existing dead code unless asked. Exception: apply deduplication that reduces net code (LOC impact noted) after approval.
+- **Be concise.** Short bullets and brief rationale — no verbose prose or restating the obvious.
 
 ## Project-Specific Conventions
 

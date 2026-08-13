@@ -3,10 +3,7 @@ applyTo: "app-server/**"
 description: "Backend conventions for Express server files (plain JavaScript, ES modules)."
 ---
 
-- **Plain JavaScript only** — no TypeScript. Use ES module syntax (`import`/`export`), not CommonJS.
-- All routes live in `app-server/index.js`. Do not create separate route files without architect approval.
-- Protected routes must use `requireAuthenticatedUser` middleware.
-- Mutating endpoints (POST/PUT/DELETE) must check the `X-Requested-With: fetch` header (CSRF).
+- Use ES module syntax (`import`/`export`), not CommonJS. Do not create route files outside `app-server/index.js` without architect approval.
 
 ### Route Guards (`app-server/resilience.js`)
 
@@ -19,9 +16,8 @@ description: "Backend conventions for Express server files (plain JavaScript, ES
 | Setup/config mutation (spreadsheet structure, columns, currencies, sharing management) — owner only | `requireAuthenticatedUser, requireOwner` | `POST /api/sheet/column` |
 | Guest-only action | `requireAuthenticatedUser, requireGuest` | `POST /api/sharing/guest/reset` |
 
-- `requireOwner` blocks **guests entirely** — use on any route that mutates the setup/config itself (not expense rows), since guests must never alter the owner's configuration.
-- `requireEditAccess` blocks **view-only guests** — use on any route that mutates expense data, allowing edit-level guests through.
-- Never add a new mutating (POST/PUT/PATCH/DELETE) route without one of `requireOwner` or `requireEditAccess` unless it is guest-only (`requireGuest`) or intentionally accessible to all authenticated roles — state the reason in the PR/commit if so.
+- `requireOwner` blocks **guests entirely** — use on any route that mutates the setup/config itself (not expense rows). `requireEditAccess` blocks **view-only guests** — use on any route that mutates expense data.
+- Never add a new mutating (POST/PUT/PATCH/DELETE) route without one of `requireOwner` or `requireEditAccess` unless it is guest-only (`requireGuest`) or intentionally open to all authenticated roles — state the reason in the PR/commit if so.
 - Google OAuth tokens (access/refresh) are stored server-side in the session — never expose them to the browser.
 - Database access goes through `app-server/db.js` (pg.Pool). Use parameterized queries (`$1`, `$2`) — never string interpolation.
 - User/config persistence uses `app-server/store.js`. Google Sheets operations use `app-server/google-sheets.js`.

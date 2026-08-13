@@ -64,13 +64,11 @@ Guidance for Developer: [one or two lines — what to keep / what to change]
 - ASCII diagrams when helpful.
 - Open questions numbered sequentially starting at 1, each prefixed with **⚠️ QUESTION `n`:** (e.g. `⚠️ QUESTION 1:`, `⚠️ QUESTION 2:`) so the human can answer by number without ambiguity.
 - When proposing doc updates mid-discussion, show the intended change as a clear diff (section, before/after) and wait for explicit human approval before writing to disk.
-- **Implementation plan — exactly one, ever:** The response contains a single step-by-step plan, formatted as a compact GitHub issue comment. Use a `## Implementation Plan` heading with numbered steps, each step a single line. No prose, no rationale, no alternatives. Do not precede it with a separate detailed/narrative walkthrough of the same steps, and do not repeat or rephrase the plan anywhere else in the response — the `## Implementation Plan` block is the only step list a Developer subagent or human should ever see.
+- **Implementation plan — exactly one, ever:** a single `## Implementation Plan` heading with numbered single-line steps, compact GitHub-issue style — no prose, rationale, alternatives, or a second/narrative copy of the steps anywhere.
 
 ## Output Exclusivity Rule
 
-**Your output must be EITHER questions OR a complete plan — never both in the same response.**
+Output EITHER questions OR a plan — never both (the orchestrator routes on these markers; mixed/duplicate output causes duplicate posts).
 
-- If you have blocking questions that must be answered before you can produce the plan → output ONLY the questions, numbered sequentially starting at 1 (each prefixed with `⚠️ QUESTION 1:`, `⚠️ QUESTION 2:`, ...). Do NOT output the `## Implementation Plan` section.
-- If you have enough information to produce the plan → output supporting design notes (if any), followed by exactly ONE `## Implementation Plan` block. Do NOT include any `⚠️ QUESTION:` lines, and do NOT emit a second `## Implementation Plan` heading or an equivalent numbered-steps list anywhere else in the response.
-- Before finalizing your response, verify it contains at most one `## Implementation Plan` heading. If you find yourself writing a second version of the plan (e.g., a "full" plan followed by a "compact" one), delete the first and keep only the final compact block.
-- This rule exists because the orchestrator uses the presence/absence of these markers to determine whether to post your output to GitHub or route questions to the human. Mixed or duplicate output causes duplicate posts.
+- Blocking questions → output ONLY numbered `⚠️ QUESTION n:` lines; no `## Implementation Plan` section.
+- Otherwise → optional design notes, then exactly ONE `## Implementation Plan` block, no `⚠️ QUESTION:` lines. Never emit a second plan or an equivalent numbered-step list anywhere else in the response.

@@ -25,13 +25,7 @@ description: "Use when analyzing feature requirements, finding gaps or inconsist
    - Is the output defined? (UI component, API response shape, side effect)
    - Are error/edge cases covered? (network failure, missing data, auth expiry, empty spreadsheet)
    - Are there implicit assumptions about Google Sheets structure or data shape?
-4. **Conflict check.** Verify the requirement does not:
-   - Assume multi-sheet support (§12.8 — single sheet named "Expenses").
-   - Require cross-boundary imports (`app-server/` ↔ `app-web/`).
-   - Duplicate logic already in `app-web/utils/` or `app-web/services/`.
-   - Bypass `app-web/services/http.ts` for API calls.
-   - Change context provider nesting order (Auth → Config → Dataset).
-   - Introduce a new npm dependency without justification.
+4. **Conflict check.** Verify the requirement doesn't violate `architecture.md` §12 constraints or the project conventions in `.github/copilot-instructions.md` and the instructions files — e.g. multi-sheet support, cross-boundary imports (`app-server/` ↔ `app-web/`), bypassing `app-web/services/http.ts`, changing the Auth → Config → Dataset nesting, duplicating existing `utils/`/`services/` logic, or adding an unapproved npm dependency.
 5. **Output.** Present findings as:
    - **Gaps:** numbered list of missing/unclear items, each with a suggested resolution.
    - **Conflicts:** items that contradict existing architecture, with references to specific modules or §12 constraints.

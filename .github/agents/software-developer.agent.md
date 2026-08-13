@@ -22,12 +22,13 @@ When available, a compact **Implementation Plan** from the Architect (numbered s
 
 For minor tasks (bug fixes, small isolated changes) there may be no Implementation Plan — proceed directly from the human's description and @workspace inspection. Do not ask for an Implementation Plan when the task clearly doesn't require one.
 
-## Context Gathering
+## Approach
 
-Before implementing anything:
-1. Use @workspace to read the current structure of files relevant to the task.
-2. Use @workspace to identify existing patterns — component structure, API route conventions, error handling, naming — then match them exactly.
-3. Use @workspace to check current contents of `docs/QuickExpense_business-requirements.md` and `architecture.md` before updating them.
+1. Read relevant source, types, tests, and — before updating them — `docs/QuickExpense_business-requirements.md` / `architecture.md` via @workspace; identify existing patterns (component structure, route conventions, error handling, naming) and match them exactly.
+2. Plan the minimal change — reuse existing utilities/libraries to minimize net LOC; suggest tactical refactorings (with LOC impact) when they reduce duplication. If a library fits better than custom code, recommend it (with rationale) before implementing.
+3. Implement following existing patterns. Be concise in plans — short bullets.
+4. Run build + tests to verify.
+5. Flag architectural changes (new routes, data flows, dependencies) for architect review.
 
 ## Context Isolation via Subagents
 
@@ -62,15 +63,6 @@ Ask the human (and wait for an answer before proceeding) when:
 1. `npm run build` after TypeScript changes.
 2. `npm test` after logic changes.
 3. Fix failures before reporting done.
-
-## Approach
-
-1. Read relevant source, types, and tests via @workspace.
-2. Plan the minimal change — reuse existing utilities/libraries to minimize net LOC. Suggest tactical refactorings (with LOC impact) when they reduce duplication.
-3. If a library solves the problem better than custom code, recommend it (with rationale) before implementing.
-4. Implement following existing patterns. Be concise in plans — short bullet points.
-5. Run build + tests to verify.
-6. Flag architectural changes (new routes, data flows, dependencies) for architect review.
 
 ## Tests & Documentation — No Debt Policy
 
