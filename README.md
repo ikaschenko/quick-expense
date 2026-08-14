@@ -139,6 +139,14 @@ Backend request logs are emitted as JSON lines to stdout. Each request includes:
 - status code
 - latency in milliseconds (`durationMs`)
 
+### Admin log viewer
+
+Rotated log files can be browsed at `/logs` (served by the backend, guarded by `requireAuthenticatedUser` + `requireAppAdmin`). To use it locally:
+
+1. Set `ADMIN_EMAIL` (or `ALERT_EMAIL_TO`) in `.env` to the Google account email you sign in with.
+2. Run `npm run dev` and sign in at `http://localhost:5173`.
+3. Open `http://localhost:5173/logs` — the dev server proxies it to the backend.
+
 ### Integration tests env setup
 
 Keep integration test variables in `.env` (gitignored):

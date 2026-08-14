@@ -5,6 +5,7 @@ import {
   createRequireAuthenticatedUser,
   createShutdownGuard,
   destroySession,
+  requireAppAdmin,
   requireEditAccess,
   requireGuest,
   requireOwner,
@@ -256,6 +257,80 @@ describe("requireEditAccess", () => {
 
     expect(res.status).toHaveBeenCalledWith(403);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: "ACCESS_DENIED" }));
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe("requireAppAdmin", () => {
+  const originalAdminEmail = process.env.ADMIN_EMAIL;
+  const originalAlertEmailTo = process.env.ALERT_EMAIL_TO;
+
+  afterEach(() => {
+    process.env.ADMIN_EMAIL = originalAdminEmail;
+    process.env.ALERT_EMAIL_TO = originalAlertEmailTo;
+  });
+
+  it("calls next when the user's email matches ADMIN_EMAIL", () => {
+    process.env.ADMIN_EMAIL = "admin@test.com";
+    process.env.ALERT_EMAIL_TO = "";
+    const req = { userRecord: { email: "Admin@Test.com" } };
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    const next = vi.fn();
+
+    requireAppAdmin(req, res, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it("calls next when the user's email matches one entry in a comma/semicolon-separated ALERT_EMAIL_TO", () => {
+    process.env.ADMIN_EMAIL = "";
+    process.env.ALERT_EMAIL_TO = "first@test.com,second@test.com;third@test.com";
+    const req = { userRecord: { email: "second@test.com" } };
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    const next = vi.fn();
+
+    requireAppAdmin(req, res, next);
+
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it("returns 403 when the user's email is in neither ADMIN_EMAIL nor ALERT_EMAIL_TO", () => {
+    process.env.ADMIN_EMAIL = "admin@test.com";
+    process.env.ALERT_EMAIL_TO = "alert@test.com";
+    const req = { userRecord: { email: "stranger@test.com" } };
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    const next = vi.fn();
+
+    requireAppAdmin(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({ message: "Admin access required." });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when both env vars are unset", () => {
+    process.env.ADMIN_EMAIL = "";
+    process.env.ALERT_EMAIL_TO = "";
+    const req = { userRecord: { email: "admin@test.com" } };
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    const next = vi.fn();
+
+    requireAppAdmin(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when there is no authenticated user record", () => {
+    process.env.ADMIN_EMAIL = "admin@test.com";
+    const req = {};
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    const next = vi.fn();
+
+    requireAppAdmin(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
     expect(next).not.toHaveBeenCalled();
   });
 });

@@ -87,12 +87,15 @@ import logger, { startWarningDigestScheduler, listLogFiles, readLogEntries, logR
 import pool from "./db.js";
 import { serializeError } from "./utils.js";
 
-const EMULATE_FAILURES = true;  // use 'true' if need to emulate some random errors in backend logic
+const EMULATE_FAILURES = false;  // use 'true' if need to emulate some random errors in backend logic
 const FAILURE_PROBABILITY = 0.1; // % of requests will fail with a 500 error when EMULATE_FAILURES is true.
 function emulateFailure(endpoint) {
-  if (EMULATE_FAILURES && Math.random() <= FAILURE_PROBABILITY) {
-    logger.debug("Going to throw a simulated exception...");
-    throw new Error(`Test error raised, endpoint ${endpoint}`);
+  if (EMULATE_FAILURES) {
+    const r = Math.random();
+    if (r <= FAILURE_PROBABILITY) {
+      logger.debug(`Going to throw a simulated exception (prob=${r}, threshold=${FAILURE_PROBABILITY})...`);
+      throw new Error(`Test error raised, endpoint ${endpoint}`);
+    }
   }
 }
 
@@ -467,9 +470,7 @@ app.get("/api/config", requireAuthenticatedUser, async (req, res) => {
 });
 
 app.patch("/api/config/column-visibility", requireAuthenticatedUser, requireOwner, async (req, res) => {
-  if (EMULATE_FAILURES && Math.random() <= FAILURE_PROBABILITY) {
-    throw new Error(`Test error raised, endpoint ${req.path}`);
-  }
+  emulateFailure(req.path);
 
   if (!req.configRecord.spreadsheetId) {
     res.status(400).json({ message: "Spreadsheet is not configured." });
@@ -1301,6 +1302,14 @@ app.get("/api/admin/logs/tail", requireAuthenticatedUser, requireAppAdmin, (req,
   }
 
   res.json({ entries });
+});
+
+app.get("/logs", requireAuthenticatedUser, requireAppAdmin, (_req, res) => {
+  res.sendFile(path.resolve(process.cwd(), "app-server/views/logs.html"));
+});
+
+app.get("/logs.js", requireAuthenticatedUser, requireAppAdmin, (_req, res) => {
+  res.sendFile(path.resolve(process.cwd(), "app-server/views/logs.js"));
 });
 
 app.use((error, req, res, next) => {

@@ -77,8 +77,7 @@ quick-expense/
 │
 ├── public/                    ← static assets served by Vite / Express
 │   ├── privacy-policy.html    ← required for Google OAuth app verification
-│   ├── terms-of-service.html  ← required for Google OAuth app verification
-│   └── admin-logs.html        ← standalone vanilla-JS admin log viewer (tail/filter/search), calls /api/admin/logs/*
+│   └── terms-of-service.html  ← required for Google OAuth app verification
 │
 ├── app-server/                ← Express back-end (plain JS, ES modules)
 │   ├── index.js               ← app entry: routes, middleware, session setup
@@ -287,8 +286,10 @@ All API routes are defined in `app-server/index.js`.
 | POST | `/api/sharing/guest/reset` | Yes (guest) | Guest-initiated reset: detach from shared setup and clear to re-run Setup |
 | GET | `/api/admin/logs/files` | Yes (app admin) | List rotated log files (name/size/mtime) from `LOG_DIR` |
 | GET | `/api/admin/logs/tail` | Yes (app admin) | Tail/filter a whitelisted log file. Query params: `file` (must be a name returned by `/files`), `level`, `q` (substring search), `lines` (default 200, max 1000) |
+| GET | `/logs` | Yes (app admin) | Serves the admin log viewer HTML page (`app-server/views/logs.html`) |
+| GET | `/logs.js` | Yes (app admin) | Serves the admin log viewer's client script (`app-server/views/logs.js`) |
 
-"Auth = Yes" means the `requireAuthenticatedUser` middleware is applied: it verifies the session cookie has a `userEmail`, retrieves the user record, resolves any shared setup reference (populating `req.configRecord`, `req.isGuest`, `req.accessLevel`), and attaches them to the request. "owner" routes additionally require `requireOwner` (403 for guests). Write expense routes additionally require `requireEditAccess` (403 for view-level guests). "app admin" routes additionally require `requireAppAdmin` (403 unless the signed-in user's email matches the `ADMIN_EMAIL` env var) — a separate, app-wide admin gate distinct from spreadsheet ownership.
+"Auth = Yes" means the `requireAuthenticatedUser` middleware is applied: it verifies the session cookie has a `userEmail`, retrieves the user record, resolves any shared setup reference (populating `req.configRecord`, `req.isGuest`, `req.accessLevel`), and attaches them to the request. "owner" routes additionally require `requireOwner` (403 for guests). Write expense routes additionally require `requireEditAccess` (403 for view-level guests). "app admin" routes additionally require `requireAppAdmin` (403 unless the signed-in user's email is listed in the `ADMIN_EMAIL` or `ALERT_EMAIL_TO` env var, comma/semicolon-separated) — a separate, app-wide admin gate distinct from spreadsheet ownership.
 
 ---
 
@@ -573,7 +574,7 @@ In development, Vite proxies all `/api` requests to `http://localhost:3001` (con
 | `EXPENSE_RECENT_MONTHS` | *(Optional)* Number of months of recent expense data loaded in Phase 1. Default: `24`. Older records are fetched in the background after the UI is ready. |
 | `RESEND_API_KEY` | *(Optional)* Resend API key for transactional email. If absent, email notifications are silently skipped (app runs normally). |
 | `EMAIL_FROM` | *(Optional)* Sender address for email notifications (e.g. `noreply@send.q-expense.com`). Required when `RESEND_API_KEY` is set. |
-| `ADMIN_EMAIL` | *(Optional)* Email allowed to access `/admin-logs.html` and the `/api/admin/logs/*` routes (`requireAppAdmin`). Admin routes 403 when unset. |
+| `ADMIN_EMAIL` | *(Optional)* Email(s) allowed to access `/logs` and the `/api/admin/logs/*` routes (`requireAppAdmin`). Comma/semicolon-separated; combined with `ALERT_EMAIL_TO` into a single allow-list. Admin routes 403 when the signed-in user's email is in neither. |
 | `ALERT_EMAIL_TO` | *(Optional)* Comma/semicolon-separated recipient list for error-alert and warning-digest emails. Alert emails are skipped when unset. |
 | `LOG_DIR` | *(Optional)* Directory for rotated log files. Defaults to a repo-relative `logs/` folder; set to `/data/logs` in production (mounted volume). |
 | `LOG_RETENTION_DAYS` | *(Optional)* Days to retain rotated log files. Default: `15`. |
@@ -601,8 +602,9 @@ The backend validates all required env vars at startup and fails fast if any are
 
 ### Admin Log Viewer
 
-- `public/admin-logs.html` is a standalone vanilla-JS/CSS page (no React/build dependency) served statically alongside the SPA. It calls `GET /api/admin/logs/files` and `GET /api/admin/logs/tail` to tail rotated log files with a severity filter and substring search.
-- Both routes require `requireAuthenticatedUser` + `requireAppAdmin` (email must match `ADMIN_EMAIL`), plus a dedicated `express-rate-limit` limiter as defense in depth.
+- `app-server/views/logs.html` (served at `GET /logs`) is a standalone vanilla-JS/CSS page (no React/build dependency), kept outside `public/`/`dist/` so it is never served as a static asset — it's only reachable via the guarded Express route below. Its client script (`logs.js`) is served at `GET /logs.js`.
+- It calls `GET /api/admin/logs/files` and `GET /api/admin/logs/tail` to tail rotated log files with a severity filter and substring search.
+- `/logs`, `/logs.js`, and both API routes require `requireAuthenticatedUser` + `requireAppAdmin` (email must be listed in `ADMIN_EMAIL` or `ALERT_EMAIL_TO`); the API routes additionally have a dedicated `express-rate-limit` limiter as defense in depth.
 - The tail route validates the requested `file` against the list returned by the files route (whitelist check) to block path traversal — no arbitrary filesystem reads are possible.
 
 ### Landing Page (`q-expense-landing`)

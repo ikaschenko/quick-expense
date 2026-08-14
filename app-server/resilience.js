@@ -109,11 +109,14 @@ export function requireEditAccess(req, res, next) {
   next();
 }
 
-/** Blocks access unless the authenticated user's email matches ADMIN_EMAIL. Use on app-admin-only routes. */
+/** Blocks access unless the authenticated user's email is listed in ADMIN_EMAIL or ALERT_EMAIL_TO. Use on app-admin-only routes. */
 export function requireAppAdmin(req, res, next) {
-  const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  const allowedEmails = [process.env.ADMIN_EMAIL, process.env.ALERT_EMAIL_TO]
+    .flatMap((value) => (value || "").split(/[,;]/))
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
   const userEmail = req.userRecord?.email?.trim().toLowerCase();
-  if (!adminEmail || userEmail !== adminEmail) {
+  if (!userEmail || !allowedEmails.includes(userEmail)) {
     res.status(403).json({ message: "Admin access required." });
     return;
   }

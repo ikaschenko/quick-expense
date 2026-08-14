@@ -11,6 +11,11 @@ export default defineConfig({
         target: "http://localhost:3001",
         changeOrigin: true,
       },
+      // Admin log viewer is served by the backend, not the SPA — proxy it too.
+      "/logs": {
+        target: "http://localhost:3001",
+        changeOrigin: true,
+      },
     },
   },
   test: {

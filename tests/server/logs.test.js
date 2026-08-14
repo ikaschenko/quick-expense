@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-describe("admin-logs entry rendering", () => {
+describe("logs entry rendering", () => {
   beforeEach(() => {
     document.body.innerHTML = `
       <select id="file"></select>
@@ -27,7 +27,7 @@ describe("admin-logs entry rendering", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await import("../../public/admin-logs.js");
+    await import("../../app-server/views/logs.js");
 
     const entriesEl = document.getElementById("entries");
     await vi.waitFor(() => {
