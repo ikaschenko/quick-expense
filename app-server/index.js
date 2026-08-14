@@ -85,11 +85,13 @@ import {
 import { sendShareGrantedEmail, sendShareRevokedEmail } from "./email.js";
 import logger, { startWarningDigestScheduler, listLogFiles, readLogEntries, logRouteError } from "./logger.js";
 import pool from "./db.js";
+import { serializeError } from "./utils.js";
 
-const EMULATE_FAILURES = false;  // use 'true' if need to emulate some random errors in backend logic
-const FAILURE_PROBABILITY = 0.04; // 4% of requests will fail with a 500 error when EMULATE_FAILURES is true.
+const EMULATE_FAILURES = true;  // use 'true' if need to emulate some random errors in backend logic
+const FAILURE_PROBABILITY = 0.1; // % of requests will fail with a 500 error when EMULATE_FAILURES is true.
 function emulateFailure(endpoint) {
   if (EMULATE_FAILURES && Math.random() <= FAILURE_PROBABILITY) {
+    logger.debug("Going to throw a simulated exception...");
     throw new Error(`Test error raised, endpoint ${endpoint}`);
   }
 }
@@ -1349,10 +1351,12 @@ function registerSignalHandlers() {
 
   // Last-resort net for errors outside the request lifecycle (e.g. thrown inside a timer).
   process.on("unhandledRejection", (reason) => {
-    logger.error("unhandled_rejection", { event: "unhandled_rejection", error: reason instanceof Error ? reason.message : String(reason) });
+    const { message, stack } = serializeError(reason);
+    logger.error("unhandled_rejection", { event: "unhandled_rejection", error: message, stack });
   });
   process.on("uncaughtException", (error) => {
-    logger.error("uncaught_exception", { event: "uncaught_exception", error: error.message });
+    const { message, stack } = serializeError(error);
+    logger.error("uncaught_exception", { event: "uncaught_exception", error: message, stack });
     void shutdownServer("uncaughtException");
   });
 }

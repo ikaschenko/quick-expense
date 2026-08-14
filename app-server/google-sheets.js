@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { getServiceAccountAccessToken, SERVICE_ACCOUNT_EMAIL } from "./google-client.js";
 import logger from "./logger.js";
+import { serializeError } from "./utils.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -607,7 +608,8 @@ async function fetchTemplateSheets() {
 // Wraps a caught error with a distinct, stage-specific friendly message and the
 // existing "make a copy manually" fallback, after logging the original cause.
 function stageFailure(stage, message, cause) {
-  logger.error(`createSpreadsheet: ${stage} failed`, { event: "create_spreadsheet_stage_failed", stage, error: cause?.message ?? String(cause) });
+  const { message: errorMessage, stack } = serializeError(cause);
+  logger.error(`createSpreadsheet: ${stage} failed`, { event: "create_spreadsheet_stage_failed", stage, error: errorMessage, stack });
   const error = new Error(message);
   error.templateCopyFailed = true;
   error.templateUrl = `https://docs.google.com/spreadsheets/d/${TEMPLATE_SPREADSHEET_ID}/copy`;
@@ -711,7 +713,10 @@ export async function createSpreadsheet(accessToken, title) {
     await fetch(
       `https://www.googleapis.com/drive/v3/files/${spreadsheetId}/permissions/${permissionId}`,
       { method: "DELETE", headers: createHeaders(accessToken) },
-    ).catch((revokeErr) => logger.error("createSpreadsheet: revoke-sa-permission failed", { event: "revoke_sa_permission_failed", error: revokeErr?.message ?? String(revokeErr) }));
+    ).catch((revokeErr) => {
+      const { message, stack } = serializeError(revokeErr);
+      logger.error("createSpreadsheet: revoke-sa-permission failed", { event: "revoke_sa_permission_failed", error: message, stack });
+    });
   }
 
   return { spreadsheetId, spreadsheetUrl };

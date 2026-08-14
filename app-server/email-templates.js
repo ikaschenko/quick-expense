@@ -56,7 +56,7 @@ function subjectPrefix() {
  * @param {{ message: string, event?: string, requestId?: string, timestamp?: string }} params
  * @returns {{ subject: string, html: string, text: string }}
  */
-export function errorAlertEmail({ message, event, requestId, timestamp, error, path, method, statusCode }) {
+export function errorAlertEmail({ message, event, requestId, timestamp, error, stack, path, method, statusCode }) {
   const subject = `${subjectPrefix()} Error: ${event ?? "unknown"}`;
   const requestLine = method && path ? `${escapeHtml(String(method))} ${escapeHtml(String(path))}` : null;
   const html = wrapHtml(`
@@ -67,6 +67,7 @@ export function errorAlertEmail({ message, event, requestId, timestamp, error, p
     ${requestLine != null ? `<p><strong>Request:</strong> ${requestLine}${statusCode != null ? ` — ${escapeHtml(String(statusCode))}` : ""}</p>` : ""}
     <p><strong>Request ID:</strong> ${escapeHtml(String(requestId ?? ""))}</p>
     <p><strong>Time:</strong> ${escapeHtml(String(timestamp ?? ""))}</p>
+    ${stack ? `<p><strong>Stack trace:</strong></p><pre style="white-space:pre-wrap;word-break:break-word;background:#f5f5f5;padding:12px;border-radius:6px;font-size:12px">${escapeHtml(String(stack))}</pre>` : ""}
   `);
   const textParts = [
     `An error was logged on QuickExpense.`,
@@ -77,6 +78,7 @@ export function errorAlertEmail({ message, event, requestId, timestamp, error, p
     ...(requestLine != null ? [`Request: ${method} ${path}${statusCode != null ? ` — ${statusCode}` : ""}`] : []),
     `Request ID: ${requestId ?? ""}`,
     `Time: ${timestamp ?? ""}`,
+    ...(stack ? [``, `Stack trace:`, stack] : []),
   ];
   return { subject, html, text: textParts.join("\n") };
 }

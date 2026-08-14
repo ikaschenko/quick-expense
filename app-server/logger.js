@@ -4,6 +4,7 @@ import winston from "winston";
 import "winston-daily-rotate-file";
 import Transport from "winston-transport";
 import { sendErrorAlertEmail, sendWarningDigestEmail } from "./email.js";
+import { serializeError } from "./utils.js";
 
 export const LOG_DIR = process.env.LOG_DIR?.trim() || path.resolve(process.cwd(), "logs");
 const RETENTION_DAYS = process.env.LOG_RETENTION_DAYS?.trim() || "15";
@@ -59,6 +60,7 @@ export function handleAlertableEntry(info) {
         requestId: info.requestId,
         timestamp: info.timestamp ?? new Date().toISOString(),
         error: info.error,
+        stack: info.stack,
         path: info.path,
         method: info.method,
         statusCode: info.statusCode,
@@ -126,7 +128,8 @@ const logger = winston.createLogger({
 /** Logs a route-terminating error exactly once via winston; no-ops if already logged (e.g. by stageFailure()). */
 export function logRouteError(req, event, error) {
   if (error?.logged) return;
-  logger.error(event, { event, requestId: req?.requestId, error: error?.message ?? String(error) });
+  const { message, stack } = serializeError(error);
+  logger.error(event, { event, requestId: req?.requestId, error: message, stack });
   if (error && typeof error === "object") {
     error.logged = true;
   }

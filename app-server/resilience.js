@@ -1,7 +1,9 @@
 import winstonLogger from "./logger.js";
+import { serializeError } from "./utils.js";
 
 export function logInfrastructureError(context, error, logger = winstonLogger) {
-  logger.error(context, { error: error?.message ?? String(error) });
+  const { message, stack } = serializeError(error);
+  logger.error(context, { error: message, stack });
 }
 
 export function destroySession(sessionState) {

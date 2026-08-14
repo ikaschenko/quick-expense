@@ -52,11 +52,17 @@ describe("handleAlertableEntry", () => {
     ({ handleAlertableEntry } = await import("../../app-server/logger.js"));
   });
 
-  it("sends an error alert email on an error-level entry", () => {
-    handleAlertableEntry({ level: "error", message: "boom", event: "test_error", requestId: "req-1" });
+  it("sends an error alert email on an error-level entry, forwarding the stack trace", () => {
+    handleAlertableEntry({
+      level: "error",
+      message: "boom",
+      event: "test_error",
+      requestId: "req-1",
+      stack: "Error: boom\n    at x",
+    });
 
     expect(sendErrorAlertEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ message: "boom", event: "test_error", requestId: "req-1" }),
+      expect.objectContaining({ message: "boom", event: "test_error", requestId: "req-1", stack: "Error: boom\n    at x" }),
     );
   });
 
@@ -110,14 +116,14 @@ describe("flushWarningDigest", () => {
 });
 
 describe("logRouteError", () => {
-  it("logs the error with event/requestId/message and marks it as logged", () => {
+  it("logs the error with event/requestId/message/stack and marks it as logged", () => {
     const spy = vi.spyOn(logger, "error").mockImplementation(() => {});
     const error = new Error("boom");
     const req = { requestId: "req-1" };
 
     logRouteError(req, "test_event", error);
 
-    expect(spy).toHaveBeenCalledWith("test_event", { event: "test_event", requestId: "req-1", error: "boom" });
+    expect(spy).toHaveBeenCalledWith("test_event", { event: "test_event", requestId: "req-1", error: "boom", stack: error.stack });
     expect(error.logged).toBe(true);
     spy.mockRestore();
   });

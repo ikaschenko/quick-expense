@@ -20,6 +20,13 @@ function formatSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+const escapeDiv = document.createElement("div");
+
+function escapeHtml(value) {
+  escapeDiv.textContent = String(value);
+  return escapeDiv.innerHTML;
+}
+
 async function loadFiles() {
   const { files } = await getJson("/api/admin/logs/files");
   fileSelect.innerHTML = files
@@ -39,7 +46,7 @@ async function loadTail() {
   try {
     const { entries } = await getJson(`/api/admin/logs/tail?${params}`);
     entriesEl.innerHTML = entries
-      .map((entry) => `<div class="entry ${entry.level || "info"}"><span class="meta">${entry.timestamp || ""}</span> ${JSON.stringify(entry)}</div>`)
+      .map((entry) => `<div class="entry ${entry.level || "info"}"><span class="meta">${escapeHtml(entry.timestamp || "")}</span> ${escapeHtml(JSON.stringify(entry))}</div>`)
       .join("");
     statusEl.textContent = `${entries.length} entries`;
   } catch (err) {
