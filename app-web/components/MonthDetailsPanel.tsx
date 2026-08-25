@@ -2,8 +2,9 @@ import { useMemo, useState } from "react";
 import { FormattedAmount } from "./FormattedAmount";
 import { LoadingBlock } from "./LoadingBlock";
 import { formatPctChange, IsoNormalizer } from "../utils/dashboardStats";
-import { getAverageDailySpend, getCategoryBreakdown, computePriorMonthRange } from "../utils/monthDetails";
+import { getAverageDailySpend, getCategoryBreakdown, computePriorMonthRange, buildPieSlices } from "../utils/monthDetails";
 import { ExpenseRecord } from "../types/expense";
+import { CategoryPieChart } from "./CategoryPieChart";
 
 export interface MonthDetailsPanelProps {
   records: ExpenseRecord[];
@@ -39,6 +40,7 @@ export function MonthDetailsPanel({ records, toIso, startDate, endDate, isLoadin
     [records, startDate, endDate, toIso, grouped],
   );
   const rows = topFilter === "top5" ? breakdown.slice(0, 5) : breakdown;
+  const pieSlices = useMemo(() => buildPieSlices(rows, topFilter), [rows, topFilter]);
 
   const currentLabel = monthLabel(startDate);
   const priorLabel = monthLabel(computePriorMonthRange(startDate, endDate).startDate);
@@ -90,41 +92,44 @@ export function MonthDetailsPanel({ records, toIso, startDate, endDate, isLoadin
       {rows.length === 0 ? (
         <p className="month-details-empty">No expenses in this period.</p>
       ) : (
-        <table className="month-details-table">
-          <thead>
-            <tr>
-              <th>Category</th>
-              <th>{currentLabel}</th>
-              <th>{priorLabel}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.label}>
-                <td>{row.label}</td>
-                <td>
-                  <span className="month-details-amount">
-                    <FormattedAmount prefix="$" value={row.currentAmount} />
-                  </span>
-                  {row.deviationPct !== null && (
-                    <span
-                      className={`month-details-deviation${
-                        row.deviationPct > 0 ? " yoy-up" : row.deviationPct < 0 ? " yoy-down" : ""
-                      }`}
-                    >
-                      {" "}({row.deviationPct >= 0 ? "+" : "-"}{formatPctChange(Math.abs(row.deviationPct))}%)
-                    </span>
-                  )}
-                </td>
-                <td>
-                  <span className="month-details-amount">
-                    {row.priorAmount !== null ? <FormattedAmount prefix="$" value={row.priorAmount} /> : "-"}
-                  </span>
-                </td>
+        <>
+          <CategoryPieChart slices={pieSlices} />
+          <table className="month-details-table">
+            <thead>
+              <tr>
+                <th>Category</th>
+                <th>{currentLabel}</th>
+                <th>{priorLabel}</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.label}>
+                  <td>{row.label}</td>
+                  <td>
+                    <span className="month-details-amount">
+                      <FormattedAmount prefix="$" value={row.currentAmount} />
+                    </span>
+                    {row.deviationPct !== null && (
+                      <span
+                        className={`month-details-deviation${
+                          row.deviationPct > 0 ? " yoy-up" : row.deviationPct < 0 ? " yoy-down" : ""
+                        }`}
+                      >
+                        {" "}({row.deviationPct >= 0 ? "+" : "-"}{formatPctChange(Math.abs(row.deviationPct))}%)
+                      </span>
+                    )}
+                  </td>
+                  <td>
+                    <span className="month-details-amount">
+                      {row.priorAmount !== null ? <FormattedAmount prefix="$" value={row.priorAmount} /> : "-"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
       )}
     </div>
   );

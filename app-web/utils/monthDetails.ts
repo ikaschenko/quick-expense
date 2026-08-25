@@ -1,4 +1,5 @@
 import { parseUsd } from "./currencyTotals";
+import { getCategoryColor } from "./categoryColor";
 import { ExpenseRecord } from "../types/expense";
 import { IsoNormalizer } from "./dashboardStats";
 
@@ -9,6 +10,16 @@ export interface CategoryBreakdownRow {
   /** Signed percentage change vs prior month; null when no comparable prior data. */
   deviationPct: number | null;
 }
+
+export interface PieSlice {
+  label: string;
+  amount: number;
+  pct: number;
+  color: string;
+}
+
+export const OTHER_LABEL = "Other";
+const OTHER_THRESHOLD_PCT = 1;
 
 function toDateLocal(iso: string): Date {
   const [y, m, d] = iso.split("-").map(Number);
@@ -135,3 +146,43 @@ export function getCategoryBreakdown(
 
   return rows.sort((a, b) => b.currentAmount - a.currentAmount);
 }
+
+/**
+ * Builds pie-chart slices from the same rows shown in the table (post Group/Top5-All filter).
+ * Top 5: one slice per row, percentages relative to the sum of the shown rows only (no "Other").
+ * All: rows below `OTHER_THRESHOLD_PCT`% of the rows' total are merged into a single "Other" slice.
+ */
+export function buildPieSlices(rows: CategoryBreakdownRow[], topFilter: "top5" | "all"): PieSlice[] {
+  const total = rows.reduce((sum, r) => sum + r.currentAmount, 0);
+  if (total <= 0) return [];
+
+  if (topFilter === "top5") {
+    return rows.map((r) => ({
+      label: r.label,
+      amount: r.currentAmount,
+      pct: (r.currentAmount / total) * 100,
+      color: getCategoryColor(r.label),
+    }));
+  }
+
+  const slices: PieSlice[] = [];
+  let otherAmount = 0;
+  for (const r of rows) {
+    const pct = (r.currentAmount / total) * 100;
+    if (pct < OTHER_THRESHOLD_PCT) {
+      otherAmount += r.currentAmount;
+    } else {
+      slices.push({ label: r.label, amount: r.currentAmount, pct, color: getCategoryColor(r.label) });
+    }
+  }
+  if (otherAmount > 0) {
+    slices.push({
+      label: OTHER_LABEL,
+      amount: otherAmount,
+      pct: (otherAmount / total) * 100,
+      color: getCategoryColor(OTHER_LABEL), // overridden with the fixed neutral color by the chart component
+    });
+  }
+  return slices;
+}
+

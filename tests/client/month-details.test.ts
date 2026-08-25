@@ -5,6 +5,8 @@ import {
   getAverageDailySpend,
   computePriorMonthRange,
   getCategoryBreakdown,
+  buildPieSlices,
+  CategoryBreakdownRow,
 } from "../../app-web/utils/monthDetails";
 
 const iso: IsoNormalizer = (s) => s; // dates already in ISO in tests
@@ -147,3 +149,51 @@ describe("getCategoryBreakdown", () => {
     expect(rows[0]).toMatchObject({ label: "foo...", currentAmount: 12 });
   });
 });
+
+// ─── buildPieSlices ────────────────────────────────────────────────────────────
+
+function makeRow(label: string, currentAmount: number): CategoryBreakdownRow {
+  return { label, currentAmount, priorAmount: null, deviationPct: null };
+}
+
+describe("buildPieSlices", () => {
+  it("returns an empty array when there are no rows", () => {
+    expect(buildPieSlices([], "all")).toEqual([]);
+  });
+
+  it("top5: one slice per row, percentages relative to the shown rows only, no 'Other'", () => {
+    const rows = [makeRow("Food", 60), makeRow("Rent", 40)];
+    const slices = buildPieSlices(rows, "top5");
+    expect(slices).toHaveLength(2);
+    expect(slices.find((s) => s.label === "Food")?.pct).toBeCloseTo(60);
+    expect(slices.find((s) => s.label === "Rent")?.pct).toBeCloseTo(40);
+    expect(slices.some((s) => s.label === "Other")).toBe(false);
+  });
+
+  it("all: merges categories under 1% of the total into a single 'Other' slice", () => {
+    const rows = [makeRow("Food", 989), makeRow("Tiny A", 6), makeRow("Tiny B", 5)];
+    const slices = buildPieSlices(rows, "all");
+    expect(slices).toHaveLength(2);
+    const other = slices.find((s) => s.label === "Other")!;
+    expect(other.amount).toBe(11);
+    expect(other.pct).toBeCloseTo(1.1);
+  });
+
+  it("all: keeps every category separate when none falls under the 1% threshold", () => {
+    const rows = [makeRow("Food", 60), makeRow("Rent", 30), makeRow("Transport", 10)];
+    const slices = buildPieSlices(rows, "all");
+    expect(slices.map((s) => s.label)).toEqual(["Food", "Rent", "Transport"]);
+  });
+
+  it("all: still shows 'Other' as a single slice even when it becomes the largest by value", () => {
+    const rows = [
+      makeRow("Big", 50),
+      ...Array.from({ length: 60 }, (_, i) => makeRow(`Tiny${i}`, 1)),
+    ];
+    const slices = buildPieSlices(rows, "all");
+    const other = slices.find((s) => s.label === "Other")!;
+    expect(other.amount).toBe(60);
+    expect(slices.filter((s) => s.label === "Other")).toHaveLength(1);
+  });
+});
+
