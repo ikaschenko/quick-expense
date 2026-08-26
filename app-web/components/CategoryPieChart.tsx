@@ -72,6 +72,11 @@ export function CategoryPieChart({ slices }: CategoryPieChartProps): JSX.Element
             label: { show: labeled.has(s.label) },
             labelLine: { show: labeled.has(s.label) },
           })),
+          itemStyle: {
+            shadowBlur: 8,
+            shadowColor: "rgba(0, 0, 0, 0.2)",
+            shadowOffsetY: 2,
+          },
           label: {
             formatter: (params) =>
               `{name|${params.name}}\n{detail|${formatPieAmount(params.value as number)} (${formatPctChange(slices[params.dataIndex].pct)}%)}`,
