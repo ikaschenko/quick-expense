@@ -20,6 +20,8 @@ export interface PieSlice {
 
 export const OTHER_LABEL = "Other";
 const OTHER_THRESHOLD_PCT = 1;
+/** Above this slice count the pie's callouts overlap into an unreadable mess — smaller slices lose their label. */
+export const MAX_PIE_LABELS = 10;
 
 function toDateLocal(iso: string): Date {
   const [y, m, d] = iso.split("-").map(Number);
@@ -184,5 +186,21 @@ export function buildPieSlices(rows: CategoryBreakdownRow[], topFilter: "top5" |
     });
   }
   return slices;
+}
+
+/** Labels of the slices that keep a pie callout: all of them, or the `MAX_PIE_LABELS` largest by amount. */
+export function getLabeledSliceLabels(slices: PieSlice[]): Set<string> {
+  if (slices.length <= MAX_PIE_LABELS) return new Set(slices.map((s) => s.label));
+  return new Set(
+    [...slices]
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, MAX_PIE_LABELS)
+      .map((s) => s.label),
+  );
+}
+
+/** Compact USD for pie callouts — whole dollars only, thousands-separated. */
+export function formatPieAmount(amount: number): string {
+  return `$${Math.round(amount).toLocaleString("en", { maximumFractionDigits: 0 })}`;
 }
 

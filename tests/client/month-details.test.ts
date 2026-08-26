@@ -6,6 +6,10 @@ import {
   computePriorMonthRange,
   getCategoryBreakdown,
   buildPieSlices,
+  getLabeledSliceLabels,
+  formatPieAmount,
+  MAX_PIE_LABELS,
+  PieSlice,
   CategoryBreakdownRow,
 } from "../../app-web/utils/monthDetails";
 
@@ -194,6 +198,54 @@ describe("buildPieSlices", () => {
     const other = slices.find((s) => s.label === "Other")!;
     expect(other.amount).toBe(60);
     expect(slices.filter((s) => s.label === "Other")).toHaveLength(1);
+  });
+});
+
+// ─── getLabeledSliceLabels ──────────────────────────────────────────
+
+function makeSlice(label: string, amount: number): PieSlice {
+  return { label, amount, pct: 0, color: "#4E79A7" };
+}
+
+describe("getLabeledSliceLabels", () => {
+  it("returns an empty set for no slices", () => {
+    expect(getLabeledSliceLabels([]).size).toBe(0);
+  });
+
+  it("labels every slice at or below the cap", () => {
+    const slices = Array.from({ length: MAX_PIE_LABELS }, (_, i) => makeSlice(`C${i}`, i + 1));
+    expect(getLabeledSliceLabels(slices).size).toBe(MAX_PIE_LABELS);
+  });
+
+  it("keeps only the largest slices once the cap is exceeded", () => {
+    const slices = Array.from({ length: MAX_PIE_LABELS + 3 }, (_, i) => makeSlice(`C${i}`, i + 1));
+    const labeled = getLabeledSliceLabels(slices);
+    expect(labeled.size).toBe(MAX_PIE_LABELS);
+    expect(labeled.has("C12")).toBe(true); // largest
+    expect(labeled.has("C0")).toBe(false); // smallest
+    expect(labeled.has("C2")).toBe(false);
+    expect(labeled.has("C3")).toBe(true); // 10th largest
+  });
+
+  it("does not reorder the input", () => {
+    const slices = Array.from({ length: MAX_PIE_LABELS + 1 }, (_, i) => makeSlice(`C${i}`, i + 1));
+    getLabeledSliceLabels(slices);
+    expect(slices[0].label).toBe("C0");
+  });
+});
+
+// ─── formatPieAmount ────────────────────────────────────────────────
+
+describe("formatPieAmount", () => {
+  it("drops the fractional part", () => {
+    expect(formatPieAmount(1234.56)).toBe("$1,235");
+    expect(formatPieAmount(12.4)).toBe("$12");
+  });
+
+  it("handles zero and sub-dollar amounts", () => {
+    expect(formatPieAmount(0)).toBe("$0");
+    expect(formatPieAmount(0.4)).toBe("$0");
+    expect(formatPieAmount(0.6)).toBe("$1");
   });
 });
 

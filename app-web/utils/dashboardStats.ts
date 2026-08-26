@@ -283,7 +283,7 @@ function buildDeviation(
   return { up: absChange >= 0, pctChange, absChange: Math.abs(absChange), priorLabel, priorTotal: prior };
 }
 
-/** Formats a deviation percentage: one decimal digit when < 10%, integer when >= 10%. */
+/** Formats a percentage: one decimal digit when < 10%, integer when >= 10%. */
 export function formatPctChange(pct: number): string {
   return pct >= 10 ? String(Math.round(pct)) : pct.toFixed(1);
 }

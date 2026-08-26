@@ -974,6 +974,13 @@ button { cursor: pointer; }
   margin-bottom: var(--space-4);
 }
 
+.month-details-pie-hint {
+  margin: calc(-1 * var(--space-3)) 0 var(--space-4);
+  text-align: center;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-placeholder);
+}
+
 .month-details-table {
   width: 100%;
   border-collapse: collapse;

@@ -23,4 +23,16 @@ describe("CategoryPieChart", () => {
     const { container } = render(<CategoryPieChart slices={slices} />);
     expect(container.querySelector(".month-details-pie")).toBeTruthy();
   });
+
+  it("hints how many callouts were dropped once the label cap is exceeded", () => {
+    const slices = Array.from({ length: 20 }, (_, i) => makeSlice(`Category ${i}`, 10, 5));
+    const { container } = render(<CategoryPieChart slices={slices} />);
+    expect(container.querySelector(".month-details-pie-hint")?.textContent).toContain("+10");
+  });
+
+  it("shows no hint when every slice keeps its callout", () => {
+    const slices = Array.from({ length: 10 }, (_, i) => makeSlice(`Category ${i}`, 10, 10));
+    const { container } = render(<CategoryPieChart slices={slices} />);
+    expect(container.querySelector(".month-details-pie-hint")).toBeNull();
+  });
 });
