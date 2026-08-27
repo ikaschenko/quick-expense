@@ -841,6 +841,27 @@ button { cursor: pointer; }
   margin: var(--space-2) 0 0;
 }
 
+/* Cached values rendered while a background refresh runs (cross-day cache). */
+.home-dashboard--stale .home-metric-card {
+  opacity: 0.6;
+  transition: opacity 150ms ease-out;
+}
+
+.home-stale-hint {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.home-metric-refreshing {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-base);
+  color: var(--color-text-placeholder);
+  margin: var(--space-2) 0 0;
+}
+
 .home-chart-container {
   height: 100px;
   margin-top: var(--space-2);

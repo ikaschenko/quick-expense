@@ -88,18 +88,25 @@ export function DatasetProvider({ children }: PropsWithChildren): JSX.Element {
   const previousSpreadsheetIdRef = useRef(config?.spreadsheetId ?? null);
   useEffect(() => {
     const currentSpreadsheetId = config?.spreadsheetId ?? null;
-    if (previousSpreadsheetIdRef.current !== currentSpreadsheetId) {
-      previousSpreadsheetIdRef.current = currentSpreadsheetId;
-      loadGenerationRef.current += 1; // discard any in-flight load/history fetch for the old sheet
-      inFlightRef.current = null;
-      retryBackoffRef.current.reset();
-      setSnapshot(null);
-      snapshotRef.current = null;
-      setIsInvalidated(false);
-      isInvalidatedRef.current = false;
-      setError(null);
-      setStatus("idle");
-    }
+    if (previousSpreadsheetIdRef.current === currentSpreadsheetId) return;
+
+    const hadPreviousSheet = previousSpreadsheetIdRef.current !== null;
+    previousSpreadsheetIdRef.current = currentSpreadsheetId;
+
+    // null → id is the initial config resolution, not a switch. Resetting here would discard
+    // the load a consumer effect started in the same commit (child effects flush first) and
+    // strand status at "idle" with no dep change to re-trigger it.
+    if (!hadPreviousSheet) return;
+
+    loadGenerationRef.current += 1; // discard any in-flight load/history fetch for the old sheet
+    inFlightRef.current = null;
+    retryBackoffRef.current.reset();
+    setSnapshot(null);
+    snapshotRef.current = null;
+    setIsInvalidated(false);
+    isInvalidatedRef.current = false;
+    setError(null);
+    setStatus("idle");
   }, [config?.spreadsheetId]);
 
   const loadDataset = useCallback(

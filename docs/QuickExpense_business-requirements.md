@@ -347,16 +347,18 @@ To eliminate the 5–8 second reload on repeated Home visits, the dashboard pers
 **Cache content:** TODAY totals, MTD totals + YoY deviation + daily chart amounts, YTD totals + YoY deviation, Rolling 12M totals, week-boundary positions, `cacheDate` (YYYY-MM-DD), and `sheetLastModifiedTime` (ISO 8601 Drive timestamp, or `null`).
 
 **Cache invalidation rules:**
-- Invalidated at midnight — `cacheDate` ≠ today on next page load.
-- Invalidated when the Drive `modifiedTime` of the spreadsheet is newer than the stored `sheetLastModifiedTime`. Checked on every explicit Home page load via `GET /api/sheet/modifiedtime` (within the existing `drive.file` scope — no scope change).
-- Cleared immediately on sign-out and when the user disconnects their spreadsheet (config clear).
-- If the Drive API returns `null` for `modifiedTime` (e.g. shared-setup guests whose spreadsheet is not in their `drive.file` grant, or URL-pasted sheets), the cache is not used and the app falls back to a full sheet reload on every Home visit.
+- A cache from an earlier day is **not** discarded — it is rendered immediately as stale while a refresh runs (see "UX on a cross-day cache hit" below).
+- Invalidated when the Drive `modifiedTime` of the spreadsheet is newer than the stored `sheetLastModifiedTime`. Checked on an explicit Home page load **only when the cache is from today** via `GET /api/sheet/modifiedtime` (within the existing `drive.file` scope — no scope change). A cross-day cache always refreshes, so the check is skipped.
+- Cleared immediately on sign-out, when the user disconnects their spreadsheet (config clear), and when a different spreadsheet is linked.
+- If the Drive API returns `null` for `modifiedTime` (e.g. shared-setup guests whose spreadsheet is not in their `drive.file` grant, or URL-pasted sheets), the same-day cache is not trusted and the app falls back to a full sheet reload on every Home visit.
 
 **After CRUD operations:** When a surgical in-memory mutation completes (append-mode Add, in-place Edit, Delete last), the Home screen recomputes all metrics from the updated in-memory dataset and rewrites the cache immediately. `sheetLastModifiedTime` is stored as the current UTC time (optimistic). Result: Home shows instant, up-to-date data after Add/Edit/Delete — no "Refreshing…" indicator.
 
 **Cache write timing:** After Phase 1 of the two-phase dataset load (recent 24 months). Phase 2 (history > 24 months) may rewrite the cache a second time when it completes, updating YoY comparisons.
 
 **UX on cache hit:** The dashboard renders instantly with cached values while a background `GET /api/sheet/modifiedtime` request validates freshness. A subtle "Refreshing…" status indicator is shown during validation. If the sheet is unchanged, the indicator disappears and the cached view remains. If the sheet changed, a full reload occurs silently and the cache is updated.
+
+**UX on a cross-day cache hit:** After hours or days of inactivity the dashboard still appears instantly instead of a loading skeleton. The cards are dimmed, an `Updating… · as of <MMM D>` hint states how old the figures are, and a full refresh starts immediately. Because a date rollover invalidates period-relative figures, the TODAY card — and the current-month card when the cache predates the current month — shows an `Updating…` placeholder (with its entry-count link hidden) rather than a wrong number; the year-to-date, forecast and rolling-12-month cards keep showing cached values. When live data arrives, dimming, hint and placeholders disappear together.
 
 ### 2.7.8 Widget info tooltips (issue #63)
 

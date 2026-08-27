@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { HomePage } from "../../app-web/pages/HomePage";
 import { useDataset } from "../../app-web/contexts/DatasetContext";
@@ -380,5 +380,128 @@ describe("HomePage — Month details expand", () => {
 
     expect(loadDataset).toHaveBeenCalled();
     expect(screen.getByText("Loading…")).toBeTruthy();
+  });
+});
+
+describe("HomePage — stale cached metrics", () => {
+  const EMAIL = "test@example.com";
+  const CACHED_MTD_TOTAL = 200;
+
+  function saveEntry(cacheDate: string) {
+    metricsCache.save(EMAIL, {
+      cacheDate,
+      spreadsheetId: "abc123",
+      sheetLastModifiedTime: "2026-06-14T10:00:00.000Z",
+      todayStats: { count: 3, usdTotal: 42, dualCurrency: null },
+      mtdStats: { count: 7, usdTotal: CACHED_MTD_TOTAL, deviation: null },
+      ytdStats: { count: 20, usdTotal: 800, deviation: null },
+      ytdForecast: { amountUsd: 1500, deviation: null },
+      rolling12mStats: { count: 100, usdTotal: 4000, deviation: null },
+      mtdDailyAmounts: [10, 20, 30],
+      weekBoundaryPositions: [6, 13],
+    });
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    vi.mocked(googleSheetsService.getSheetModifiedTime).mockClear();
+    vi.setSystemTime(new Date(2026, 5, 15, 12)); // 2026-06-15
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("renders a previous-day cache instantly, blanks TODAY and refreshes without a Drive check", async () => {
+    const loadDataset = vi.fn().mockResolvedValue(undefined);
+    saveEntry("2026-06-14");
+    mockDataset({ status: "idle", snapshot: null, loadDataset });
+
+    const { container } = renderHome();
+
+    await waitFor(() => expect(container.querySelector(".home-dashboard")).not.toBeNull());
+    expect(screen.queryByText("Loading expenses from Google Sheet…")).toBeNull();
+    expect(screen.getByText("Updating… · as of Jun 14")).toBeTruthy();
+    expect(container.querySelector(".home-dashboard--stale")).not.toBeNull();
+
+    const amounts = Array.from(container.querySelectorAll(".home-metric-amount")).map((el) => el.textContent);
+    expect(amounts).toContain("$200.00"); // MTD still comes from cache — same month
+    expect(amounts).not.toContain("$42.00"); // TODAY is suppressed
+    expect(container.querySelectorAll(".home-metric-refreshing")).toHaveLength(1);
+
+    expect(loadDataset).toHaveBeenCalledTimes(1);
+    expect(googleSheetsService.getSheetModifiedTime).not.toHaveBeenCalled();
+  });
+
+  it("blanks both TODAY and MTD (including the chart) when the cache is from a previous month", async () => {
+    const loadDataset = vi.fn().mockResolvedValue(undefined);
+    saveEntry("2026-05-31");
+    mockDataset({ status: "idle", snapshot: null, loadDataset });
+
+    const { container } = renderHome();
+
+    await waitFor(() => expect(container.querySelector(".home-dashboard")).not.toBeNull());
+    expect(container.querySelectorAll(".home-metric-refreshing")).toHaveLength(2);
+    expect(container.querySelector(".home-chart-container")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Month details/i })).toBeNull();
+
+    const amounts = Array.from(container.querySelectorAll(".home-metric-amount")).map((el) => el.textContent);
+    expect(amounts).not.toContain("$200.00");
+    expect(amounts).toContain("$800.00"); // YTD is still meaningful
+  });
+
+  it("drops the stale affordances once live data is ready", async () => {
+    const loadDataset = vi.fn().mockResolvedValue(undefined);
+    saveEntry("2026-06-14");
+    mockDataset({ status: "idle", snapshot: null, loadDataset });
+
+    const { container, rerender } = renderHome();
+    await waitFor(() => expect(screen.getByText("Updating… · as of Jun 14")).toBeTruthy());
+
+    mockDataset({
+      snapshot: {
+        records: [makeRecord(1, "2026-06-15", "25")],
+        distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} },
+        loadedAt: 0,
+        payloadBytes: 0,
+        loadPhase: "full",
+      },
+      loadDataset,
+    });
+    rerender(
+      <MemoryRouter initialEntries={["/home"]}>
+        <HomePage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.queryByText("Updating… · as of Jun 14")).toBeNull());
+    expect(container.querySelector(".home-dashboard--stale")).toBeNull();
+    expect(container.querySelectorAll(".home-metric-refreshing")).toHaveLength(0);
+    const amounts = Array.from(container.querySelectorAll(".home-metric-amount")).map((el) => el.textContent);
+    expect(amounts).toContain("$25.00"); // live TODAY value
+  });
+
+  it("still validates a same-day cache against Drive and reloads when modifiedTime is unavailable (guest)", async () => {
+    const loadDataset = vi.fn().mockResolvedValue(undefined);
+    saveEntry("2026-06-15");
+    vi.mocked(googleSheetsService.getSheetModifiedTime).mockResolvedValueOnce({ modifiedTime: null });
+    mockDataset({ status: "idle", snapshot: null, loadDataset });
+
+    const { container } = renderHome();
+
+    await waitFor(() => expect(googleSheetsService.getSheetModifiedTime).toHaveBeenCalled());
+    await waitFor(() => expect(loadDataset).toHaveBeenCalledTimes(1));
+    expect(container.querySelector(".home-dashboard--stale")).toBeNull();
+    expect(screen.queryByText(/Updating… · as of/)).toBeNull();
+  });
+
+  it("shows the skeleton and loads immediately when no cache exists", async () => {
+    const loadDataset = vi.fn().mockResolvedValue(undefined);
+    mockDataset({ status: "idle", snapshot: null, loadDataset });
+
+    renderHome();
+
+    expect(screen.getByText("Loading expenses from Google Sheet…")).toBeTruthy();
+    await waitFor(() => expect(loadDataset).toHaveBeenCalledTimes(1));
   });
 });

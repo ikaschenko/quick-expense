@@ -1,8 +1,7 @@
 import { type TodayStats, type PeriodStats, type YtdForecast } from "../utils/dashboardStats";
 import { readJsonStorage, writeJsonStorage } from "../utils/storage";
-import { getTodayLocalDate } from "../utils/date";
 
-const CURRENT_SCHEMA_VERSION = 7;
+const CURRENT_SCHEMA_VERSION = 8;
 const MAX_DAYS_IN_MONTH = 31;
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_DATETIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
@@ -227,12 +226,13 @@ function sanitizeMetricsCacheEntry(value: unknown, requireStoredSchemaVersion: b
 export const metricsCache = {
   // spreadsheetId must match the currently linked sheet — prevents showing stale totals
   // from a previously linked sheet after the user relinks a different one.
+  // Entries from earlier days are still returned: callers render them as stale while refreshing.
   load(email: string, spreadsheetId: string): MetricsCacheEntry | null {
     const key = cacheKey(email);
     const entry = readJsonStorage<unknown>(localStorage, key);
     const sanitized = sanitizeMetricsCacheEntry(entry, true);
 
-    if (!sanitized || sanitized.cacheDate !== getTodayLocalDate() || sanitized.spreadsheetId !== spreadsheetId) {
+    if (!sanitized || sanitized.spreadsheetId !== spreadsheetId) {
       localStorage.removeItem(key);
       return null;
     }

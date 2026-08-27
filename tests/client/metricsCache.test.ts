@@ -1,15 +1,11 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { metricsCache, type MetricsCacheEntry } from "../../app-web/services/metricsCache";
 
 const TODAY = "2026-06-24";
 
-vi.mock("../../app-web/utils/date", () => ({
-  getTodayLocalDate: () => TODAY,
-}));
-
 function makeEntry(overrides: Partial<MetricsCacheEntry> = {}): MetricsCacheEntry {
   return {
-    schemaVersion: 7,
+    schemaVersion: 8,
     cacheDate: TODAY,
     spreadsheetId: "sheet-abc123",
     sheetLastModifiedTime: "2026-06-24T10:00:00.000Z",
@@ -55,14 +51,21 @@ describe("metricsCache.save / load", () => {
     expect(metricsCache.load("user@example.com", SPREADSHEET_ID)).not.toBeNull();
   });
 
-  it("returns null when cacheDate is not today (midnight rollover)", () => {
-    metricsCache.save(EMAIL, makeEntry({ cacheDate: "2026-06-23" }));
-    expect(metricsCache.load(EMAIL, SPREADSHEET_ID)).toBeNull();
+  it("keeps an entry from an earlier day so callers can render it while refreshing", () => {
+    const entry = makeEntry({ cacheDate: "2026-06-23" });
+    metricsCache.save(EMAIL, entry);
+    expect(metricsCache.load(EMAIL, SPREADSHEET_ID)).toEqual(entry);
+    expect(localStorage.getItem(CACHE_KEY)).not.toBeNull();
   });
 
   it("returns null when schemaVersion is missing or outdated", () => {
     // Simulate stale entry written by old app code (before schema version bump)
     localStorage.setItem(CACHE_KEY, JSON.stringify({ ...makeEntry(), schemaVersion: 1 }));
+    expect(metricsCache.load(EMAIL, SPREADSHEET_ID)).toBeNull();
+  });
+
+  it("returns null for a schemaVersion 7 entry written under the delete-at-midnight contract", () => {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ ...makeEntry(), schemaVersion: 7 }));
     expect(metricsCache.load(EMAIL, SPREADSHEET_ID)).toBeNull();
   });
 

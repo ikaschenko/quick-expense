@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronUp, FileSpreadsheet, Info, Receipt } from "lucide-react";
+import { ChevronDown, ChevronUp, FileSpreadsheet, Info, Loader2, Receipt } from "lucide-react";
 import { FormattedAmount } from "../components/FormattedAmount";
 import { Layout } from "../components/Layout";
 import { MtdSpendChart } from "../components/MtdSpendChart";
@@ -59,6 +59,21 @@ function HomeEmptyState({ variant }: EmptyStateProps): JSX.Element {
 
 function MetricCardSkeleton(): JSX.Element {
   return <div className="skeleton-card" style={{ height: "120px" }} />;
+}
+
+function formatShortDate(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleString("en", { month: "short", day: "numeric" });
+}
+
+// Shown in place of cached values that a date rollover has invalidated, while the refresh runs.
+function MetricRefreshing(): JSX.Element {
+  return (
+    <p className="home-metric-refreshing" role="status">
+      <Loader2 size={14} className="icon-spin" aria-hidden />
+      Updating…
+    </p>
+  );
 }
 
 interface DeviationProps {
@@ -168,13 +183,22 @@ export function HomePage(): JSX.Element {
     const entry = metricsCache.load(session.email, config.spreadsheetId);
 
     if (!entry) {
-      // No valid same-day cache for this sheet — load from the API immediately.
+      // No valid cache for this sheet — load from the API immediately.
       dataset.loadDataset().catch(() => {/* error surfaced via dataset.error */});
       return;
     }
 
-    // Cache hit — render it instantly and validate freshness with Drive in the background.
+    // Cache hit — render it instantly.
     setCachedEntry(entry);
+
+    if (entry.cacheDate !== today) {
+      // A date rollover invalidates TODAY/MTD regardless of sheet edits, so the Drive
+      // freshness check would buy nothing — refresh unconditionally.
+      dataset.loadDataset().catch(() => {/* error surfaced via dataset.error */});
+      return;
+    }
+
+    // Same-day cache — validate freshness with Drive in the background.
     googleSheetsService.getSheetModifiedTime()
       .then(({ modifiedTime }) => {
         driveModifiedTimeRef.current = modifiedTime;
@@ -189,7 +213,7 @@ export function HomePage(): JSX.Element {
       .catch(() => {
         dataset.loadDataset().catch(() => {/* error surfaced via dataset.error */});
       });
-  }, [session?.email, config?.spreadsheetId, isConfigLoading, dataset.status, dataset.loadDataset]);
+  }, [session?.email, config?.spreadsheetId, isConfigLoading, today, dataset.status, dataset.loadDataset]);
 
   // Clear the cached entry once live data is ready so live values take over.
   useEffect(() => {
@@ -240,8 +264,7 @@ export function HomePage(): JSX.Element {
   }, [dataset.status, todayStats, mtdStats, ytdStats, ytdForecast, rolling12mStats]);
 
   const monthName = new Date(year, month - 1, 1).toLocaleString("en", { month: "long" }).toUpperCase();
-  const dayLabel = new Date(year, month - 1, Number.parseInt(today.split("-")[2], 10))
-    .toLocaleString("en", { month: "short", day: "numeric" });
+  const dayLabel = formatShortDate(today);
   const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
 
   const isDatasetLoading = dataset.status === "idle" || dataset.status === "loading";
@@ -250,6 +273,12 @@ export function HomePage(): JSX.Element {
   const showEmptyData = !cachedEntry && !isLoading && config && dataset.status === "ready" && records.length === 0;
   const showDashboard = cachedEntry !== null || (!isLoading && config && dataset.status === "ready" && records.length > 0);
   const showDashboardSkeleton = !cachedEntry && !isConfigLoading && config && isDatasetLoading;
+
+  // A cached entry from an earlier day still carries valid YTD/rolling-12m totals, but its
+  // TODAY (and, across a month boundary, MTD) figures are definitively wrong.
+  const isStaleDay = cachedEntry !== null && cachedEntry.cacheDate !== today;
+  const isStaleMonth = cachedEntry !== null && cachedEntry.cacheDate.slice(0, 7) !== today.slice(0, 7);
+  const cacheDateLabel = isStaleDay ? formatShortDate(cachedEntry.cacheDate) : null;
 
   // Prefer live computed values; fall back to cache when dataset is still idle.
   const displayTodayStats = cachedEntry?.todayStats ?? todayStats;
@@ -298,7 +327,12 @@ export function HomePage(): JSX.Element {
             </button>
           </div>
         ) : showDashboard ? (
-          <div className="home-dashboard">
+          <div className={`home-dashboard${isStaleDay ? " home-dashboard--stale" : ""}`}>
+            {isStaleDay && (
+              <p className="home-stale-hint" role="status">
+                Updating… · as of {cacheDateLabel}
+              </p>
+            )}
             {/* TODAY */}
             <div className="home-metric-card">
               <div className="home-metric-header">
@@ -306,12 +340,16 @@ export function HomePage(): JSX.Element {
                   TODAY · {dayLabel}
                   <WidgetHelpButton label="TODAY" open={todayHelpOpen} onToggle={() => setTodayHelpOpen((v) => !v)} />
                 </span>
-                <Link to="/history" className="home-metric-link">
-                  {displayTodayStats.count} {displayTodayStats.count === 1 ? "entry" : "entries"} →
-                </Link>
+                {!isStaleDay && (
+                  <Link to="/history" className="home-metric-link">
+                    {displayTodayStats.count} {displayTodayStats.count === 1 ? "entry" : "entries"} →
+                  </Link>
+                )}
               </div>
               {todayHelpOpen && <p className="section-help-popover">{TODAY_HELP_TEXT}</p>}
-              {displayTodayStats.count === 0 ? (
+              {isStaleDay ? (
+                <MetricRefreshing />
+              ) : displayTodayStats.count === 0 ? (
                 <p className="home-metric-empty">No expense entries</p>
               ) : (
                 <p className="home-metric-amount">
@@ -335,12 +373,16 @@ export function HomePage(): JSX.Element {
                   {monthName} SO FAR
                   <WidgetHelpButton label={`${monthName} SO FAR`} open={mtdHelpOpen} onToggle={() => setMtdHelpOpen((v) => !v)} />
                 </span>
-                <Link to="/history" className="home-metric-link">
-                  {displayMtdStats.count} {displayMtdStats.count === 1 ? "entry" : "entries"} →
-                </Link>
+                {!isStaleMonth && (
+                  <Link to="/history" className="home-metric-link">
+                    {displayMtdStats.count} {displayMtdStats.count === 1 ? "entry" : "entries"} →
+                  </Link>
+                )}
               </div>
               {mtdHelpOpen && <p className="section-help-popover">{MTD_HELP_TEXT}</p>}
-              {displayMtdStats.count === 0 ? (
+              {isStaleMonth ? (
+                <MetricRefreshing />
+              ) : displayMtdStats.count === 0 ? (
                 <p className="home-metric-empty">No expense entries</p>
               ) : (
                 <>

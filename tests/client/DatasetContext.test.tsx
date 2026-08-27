@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useEffect } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { DatasetProvider, useDataset } from "../../app-web/contexts/DatasetContext";
 import { useConfig } from "../../app-web/contexts/ConfigContext";
@@ -152,5 +153,51 @@ describe("DatasetProvider — spreadsheet switch", () => {
 
     expect(screen.getByTestId("status").textContent).toBe("ready");
     expect(screen.getByTestId("records").textContent).toBe("1");
+  });
+
+  it("keeps a load started in the same commit where config first resolves (null → id)", async () => {
+    vi.mocked(googleSheetsService.loadExpenses).mockResolvedValue({
+      records: [makeRecord(1)],
+      payloadBytes: 10,
+      sheetCurrencies: [],
+      customColumns: [],
+      loadPhase: "full",
+      startRow: 2,
+      totalRows: 1,
+    });
+    mockConfig(null);
+
+    // Consumer mirrors HomePage: triggers a load from its own effect as soon as config is available.
+    function AutoLoadProbe(): JSX.Element {
+      const { status, snapshot, loadDataset } = useDataset();
+      const { config } = useConfig();
+      useEffect(() => {
+        if (!config || status !== "idle") return;
+        void loadDataset().catch(() => {});
+      }, [config, status, loadDataset]);
+      return (
+        <div>
+          <span data-testid="status">{status}</span>
+          <span data-testid="records">{snapshot?.records.length ?? "none"}</span>
+        </div>
+      );
+    }
+
+    const { rerender } = render(
+      <DatasetProvider>
+        <AutoLoadProbe />
+      </DatasetProvider>,
+    );
+
+    mockConfig(makeConfig("sheet-a"));
+    rerender(
+      <DatasetProvider>
+        <AutoLoadProbe />
+      </DatasetProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("ready"));
+    expect(screen.getByTestId("records").textContent).toBe("1");
+    expect(vi.mocked(googleSheetsService.loadExpenses)).toHaveBeenCalledTimes(1);
   });
 });
