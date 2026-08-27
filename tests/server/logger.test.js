@@ -8,7 +8,8 @@ vi.mock("../../app-server/email.js", () => ({
   sendWarningDigestEmail: vi.fn(),
 }));
 
-import logger, { sweepLogDirectory, logRouteError } from "../../app-server/logger.js";
+import logger, { contextFormat, sweepLogDirectory, logRouteError } from "../../app-server/logger.js";
+import { runWithContext } from "../../app-server/request-context.js";
 
 describe("sweepLogDirectory", () => {
   function makeFile(dir, name, sizeBytes, ageMsAgo) {
@@ -105,7 +106,7 @@ describe("flushWarningDigest", () => {
     flushWarningDigest();
 
     expect(sendWarningDigestEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ count: 2, samples: ["w1", "w2"] }),
+      expect.objectContaining({ count: 2, samples: [{ message: "w1", userId: 0 }, { message: "w2", userId: 0 }] }),
     );
 
     sendWarningDigestEmail.mockClear();
@@ -116,14 +117,14 @@ describe("flushWarningDigest", () => {
 });
 
 describe("logRouteError", () => {
-  it("logs the error with event/requestId/message/stack and marks it as logged", () => {
+  it("logs the error with event/message/stack and marks it as logged", () => {
     const spy = vi.spyOn(logger, "error").mockImplementation(() => {});
     const error = new Error("boom");
     const req = { requestId: "req-1" };
 
     logRouteError(req, "test_event", error);
 
-    expect(spy).toHaveBeenCalledWith("test_event", { event: "test_event", requestId: "req-1", error: "boom", stack: error.stack });
+    expect(spy).toHaveBeenCalledWith("test_event", { event: "test_event", error: "boom", stack: error.stack });
     expect(error.logged).toBe(true);
     spy.mockRestore();
   });
@@ -138,6 +139,22 @@ describe("logRouteError", () => {
 
     expect(spy).toHaveBeenCalledTimes(1);
     spy.mockRestore();
+  });
+});
+
+describe("contextFormat", () => {
+  it("uses userId 0 outside a request context", () => {
+    expect(contextFormat.transform({ level: "info", message: "startup" }).userId).toBe(0);
+  });
+
+  it("adds numeric user context without logging an email address", async () => {
+    const entry = await runWithContext(
+      { requestId: "req-1", userId: 7, ownerUserId: 3 },
+      () => contextFormat.transform({ level: "info", message: "request completed" }),
+    );
+
+    expect(entry).toMatchObject({ userId: 7, ownerUserId: 3, requestId: "req-1" });
+    expect(JSON.stringify(entry)).not.toContain("@");
   });
 });
 

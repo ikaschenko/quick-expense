@@ -11,6 +11,7 @@ import {
   requireOwner,
 } from "../../app-server/resilience.js";
 import winstonLogger from "../../app-server/logger.js";
+import { getContext, runWithContext } from "../../app-server/request-context.js";
 
 describe("destroySession", () => {
   it("resolves when the session destroy callback succeeds", async () => {
@@ -65,7 +66,7 @@ describe("createRequireAuthenticatedUser", () => {
   });
 
   it("attaches the user record and calls next when the session is valid (no share)", async () => {
-    const userRecord = { email: "user@test.com" };
+    const userRecord = { id: 7, email: "user@test.com" };
     const middleware = createRequireAuthenticatedUser({
       getUserSession: () => ({ email: "user@test.com" }),
       getUserRecord: vi.fn().mockResolvedValue(userRecord),
@@ -75,36 +76,46 @@ describe("createRequireAuthenticatedUser", () => {
     const res = createResponseRecorder();
     const next = vi.fn();
 
-    await middleware(req, res, next);
+    let observedContext;
+    await runWithContext({ userId: 0, ownerUserId: null }, async () => {
+      await middleware(req, res, next);
+      observedContext = getContext();
+    });
 
     expect(req.userRecord).toEqual(userRecord);
     expect(req.configRecord).toEqual(userRecord);
     expect(req.isGuest).toBe(false);
     expect(req.accessLevel).toBe("edit");
+    expect(observedContext).toMatchObject({ userId: 7, ownerUserId: null });
     expect(next).toHaveBeenCalledOnce();
   });
 
   it("resolves guest: sets configRecord to owner and accessLevel from share", async () => {
-    const guestRecord = { email: "guest@test.com" };
-    const ownerRecord = { email: "owner@test.com", spreadsheetId: "sheet1" };
+    const guestRecord = { id: 7, email: "guest@test.com" };
+    const ownerRecord = { id: 3, email: "owner@test.com", spreadsheetId: "sheet1" };
     const getUserRecord = vi.fn()
       .mockResolvedValueOnce(guestRecord)   // first call: guest
       .mockResolvedValueOnce(ownerRecord);  // second call: owner
     const middleware = createRequireAuthenticatedUser({
       getUserSession: () => ({ email: "guest@test.com" }),
       getUserRecord,
-      getShareForGuest: vi.fn().mockResolvedValue({ ownerEmail: "owner@test.com", accessLevel: "view" }),
+      getShareForGuest: vi.fn().mockResolvedValue({ ownerEmail: "owner@test.com", ownerUserId: 3, accessLevel: "view" }),
     });
     const req = { session: {} };
     const res = createResponseRecorder();
     const next = vi.fn();
 
-    await middleware(req, res, next);
+    let observedGuestContext;
+    await runWithContext({ userId: 0, ownerUserId: null }, async () => {
+      await middleware(req, res, next);
+      observedGuestContext = getContext();
+    });
 
     expect(req.userRecord).toEqual(guestRecord);
     expect(req.configRecord).toEqual(ownerRecord);
     expect(req.isGuest).toBe(true);
     expect(req.accessLevel).toBe("view");
+    expect(observedGuestContext).toMatchObject({ userId: 7, ownerUserId: 3 });
     expect(next).toHaveBeenCalledOnce();
   });
 

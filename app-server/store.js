@@ -2,6 +2,7 @@ import pool from "./db.js";
 
 function rowToUserRecord(row) {
   return {
+    id: Number(row.id),
     email: row.email,
     accessToken: row.access_token,
     accessTokenExpiresAt: Number(row.access_token_expires_at),
@@ -24,7 +25,7 @@ export async function updateUserRecord(email, updater) {
   const base = current ?? { email: normalizedEmail };
   const next = updater(base);
 
-  await pool.query(
+  const { rows } = await pool.query(
     `INSERT INTO users (email, access_token, access_token_expires_at, refresh_token,
                         spreadsheet_url, spreadsheet_id, last_authenticated_at, last_activity_at, updated_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
@@ -36,7 +37,8 @@ export async function updateUserRecord(email, updater) {
        spreadsheet_id = EXCLUDED.spreadsheet_id,
        last_authenticated_at = EXCLUDED.last_authenticated_at,
        last_activity_at = EXCLUDED.last_activity_at,
-       updated_at = now()`,
+       updated_at = now()
+     RETURNING id`,
     [
       normalizedEmail,
       next.accessToken,
@@ -49,13 +51,12 @@ export async function updateUserRecord(email, updater) {
     ],
   );
 
-  return next;
+  return { ...next, id: Number(rows[0].id) };
 }
 
 // ─── FX Rate Backups ──────────────────────────────────────────────────────────
 
-export async function saveFxRateBackup(email, spreadsheetId, backup) {
-  const normalizedEmail = email.toLowerCase();
+export async function saveFxRateBackup(userId, spreadsheetId, backup) {
   const submittedAt = new Date().toISOString();
 
   for (const [code, rateStr] of Object.entries(backup.rates ?? {})) {
@@ -65,27 +66,25 @@ export async function saveFxRateBackup(email, spreadsheetId, backup) {
     if (Number.isNaN(numericRate) || numericRate <= 0) continue;
 
     await pool.query(
-      `INSERT INTO fx_rate_backups (user_email, spreadsheet_id, expense_date, currency_code, fx_rate, submitted_at)
+      `INSERT INTO fx_rate_backups (user_id, spreadsheet_id, expense_date, currency_code, fx_rate, submitted_at)
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [normalizedEmail, spreadsheetId, backup.expenseDate, code, numericRate, submittedAt],
+      [userId, spreadsheetId, backup.expenseDate, code, numericRate, submittedAt],
     );
   }
 }
 
-export async function getLatestFxRateBackup(email, spreadsheetId) {
-  const normalizedEmail = email.toLowerCase();
-
+export async function getLatestFxRateBackup(userId, spreadsheetId) {
   const { rows } = await pool.query(
     `SELECT currency_code, fx_rate
      FROM fx_rate_backups
-     WHERE user_email = $1
+    WHERE user_id = $1
        AND (spreadsheet_id IS NULL OR spreadsheet_id = $2)
        AND submitted_at = (
          SELECT MAX(submitted_at) FROM fx_rate_backups
-         WHERE user_email = $1
+         WHERE user_id = $1
            AND (spreadsheet_id IS NULL OR spreadsheet_id = $2)
        )`,
-    [normalizedEmail, spreadsheetId],
+    [userId, spreadsheetId],
   );
 
   if (rows.length === 0) return null;
@@ -100,41 +99,38 @@ export async function getLatestFxRateBackup(email, spreadsheetId) {
 
 // ─── Column Visibility ────────────────────────────────────────────────────────
 
-export async function getHiddenColumns(email, spreadsheetId) {
-  const normalizedEmail = email.toLowerCase();
+export async function getHiddenColumns(userId, spreadsheetId) {
   const { rows } = await pool.query(
     `SELECT canonical_field_name FROM user_column_visibility
-     WHERE user_email = $1 AND spreadsheet_id = $2`,
-    [normalizedEmail, spreadsheetId],
+    WHERE user_id = $1 AND spreadsheet_id = $2`,
+      [userId, spreadsheetId],
   );
   return rows.map((r) => r.canonical_field_name);
 }
 
-export async function setColumnVisibility(email, spreadsheetId, fieldName, hidden) {
-  const normalizedEmail = email.toLowerCase();
+export async function setColumnVisibility(userId, spreadsheetId, fieldName, hidden) {
   if (hidden) {
     await pool.query(
-      `INSERT INTO user_column_visibility (user_email, spreadsheet_id, canonical_field_name)
+      `INSERT INTO user_column_visibility (user_id, spreadsheet_id, canonical_field_name)
        VALUES ($1, $2, $3)
-       ON CONFLICT (user_email, spreadsheet_id, canonical_field_name) DO NOTHING`,
-      [normalizedEmail, spreadsheetId, fieldName],
+      ON CONFLICT (user_id, spreadsheet_id, canonical_field_name) DO NOTHING`,
+          [userId, spreadsheetId, fieldName],
     );
   } else {
     await pool.query(
       `DELETE FROM user_column_visibility
-       WHERE user_email = $1 AND spreadsheet_id = $2 AND canonical_field_name = $3`,
-      [normalizedEmail, spreadsheetId, fieldName],
+      WHERE user_id = $1 AND spreadsheet_id = $2 AND canonical_field_name = $3`,
+          [userId, spreadsheetId, fieldName],
     );
   }
 }
 
-export async function renameVisibilityEntry(email, spreadsheetId, oldName, newName) {
-  const normalizedEmail = email.toLowerCase();
+export async function renameVisibilityEntry(userId, spreadsheetId, oldName, newName) {
   await pool.query(
     `UPDATE user_column_visibility
      SET canonical_field_name = $4
-     WHERE user_email = $1 AND spreadsheet_id = $2 AND canonical_field_name = $3`,
-    [normalizedEmail, spreadsheetId, oldName, newName],
+    WHERE user_id = $1 AND spreadsheet_id = $2 AND canonical_field_name = $3`,
+      [userId, spreadsheetId, oldName, newName],
   );
 }
 

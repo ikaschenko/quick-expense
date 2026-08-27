@@ -47,6 +47,7 @@ describe("getUserRecord", () => {
     mockQuery.mockResolvedValue({
       rows: [
         {
+          id: "7",
           email: "user@test.com",
           access_token: "at-123",
           access_token_expires_at: "1700000000000",
@@ -62,6 +63,7 @@ describe("getUserRecord", () => {
     const result = await getUserRecord("User@Test.com");
 
     expect(result).toEqual({
+      id: 7,
       email: "user@test.com",
       accessToken: "at-123",
       accessTokenExpiresAt: 1700000000000,
@@ -78,7 +80,7 @@ describe("getUserRecord", () => {
 describe("updateUserRecord", () => {
   it("upserts a new user when none exists", async () => {
     mockQuery.mockResolvedValueOnce({ rows: [] }); // getUserRecord SELECT
-    mockQuery.mockResolvedValueOnce({ rows: [] }); // INSERT ... ON CONFLICT
+    mockQuery.mockResolvedValueOnce({ rows: [{ id: "9" }] }); // INSERT ... ON CONFLICT
 
     const updater = (current) => ({
       ...current,
@@ -91,6 +93,7 @@ describe("updateUserRecord", () => {
     const result = await updateUserRecord("new@test.com", updater);
 
     expect(result.accessToken).toBe("new-token");
+    expect(result.id).toBe(9);
     expect(mockQuery).toHaveBeenCalledTimes(2);
     expect(mockQuery.mock.calls[1][0]).toContain("INSERT INTO users");
     expect(mockQuery.mock.calls[1][0]).toContain("ON CONFLICT");
@@ -111,7 +114,7 @@ describe("updateUserRecord", () => {
         },
       ],
     });
-    mockQuery.mockResolvedValueOnce({ rows: [] });
+    mockQuery.mockResolvedValueOnce({ rows: [{ id: "8" }] });
 
     const result = await updateUserRecord("existing@test.com", (current) => ({
       ...current,
@@ -120,6 +123,7 @@ describe("updateUserRecord", () => {
     }));
 
     expect(result.accessToken).toBe("refreshed-token");
+    expect(result.id).toBe(8);
     expect(result.refreshToken).toBe("rt-1");
   });
 
@@ -138,7 +142,7 @@ describe("updateUserRecord", () => {
         },
       ],
     });
-    mockQuery.mockResolvedValueOnce({ rows: [] });
+    mockQuery.mockResolvedValueOnce({ rows: [{ id: "10" }] });
 
     const result = await updateUserRecord("user@test.com", (current) => ({
       ...current,
@@ -160,7 +164,7 @@ describe("saveFxRateBackup", () => {
   it("inserts one row per non-null currency rate", async () => {
     mockQuery.mockResolvedValue({ rows: [] });
 
-    await saveFxRateBackup("user@test.com", "sheet-1", {
+    await saveFxRateBackup(7, "sheet-1", {
       expenseDate: "2026-03-17",
       rates: { PLN: "3,72", BYN: null, EUR: "1.16" },
     });
@@ -180,7 +184,7 @@ describe("saveFxRateBackup", () => {
   it("skips currencies with null or empty rates", async () => {
     mockQuery.mockResolvedValue({ rows: [] });
 
-    await saveFxRateBackup("user@test.com", "sheet-1", {
+    await saveFxRateBackup(7, "sheet-1", {
       expenseDate: "2026-03-17",
       rates: { PLN: null, BYN: "", EUR: null },
     });
@@ -193,7 +197,7 @@ describe("getLatestFxRateBackup", () => {
   it("returns null when no backups exist", async () => {
     mockQuery.mockResolvedValue({ rows: [] });
 
-    const result = await getLatestFxRateBackup("user@test.com", "sheet-1");
+    const result = await getLatestFxRateBackup(7, "sheet-1");
     expect(result).toBeNull();
   });
 
@@ -205,7 +209,7 @@ describe("getLatestFxRateBackup", () => {
       ],
     });
 
-    const result = await getLatestFxRateBackup("user@test.com", "sheet-1");
+    const result = await getLatestFxRateBackup(7, "sheet-1");
 
     expect(result).toEqual({
       rates: {
@@ -220,12 +224,12 @@ describe("getHiddenColumns", () => {
   it("returns an empty array when no hidden columns exist", async () => {
     mockQuery.mockResolvedValue({ rows: [] });
 
-    const result = await getHiddenColumns("user@test.com", "sheet-1");
+    const result = await getHiddenColumns(7, "sheet-1");
 
     expect(result).toEqual([]);
     expect(mockQuery).toHaveBeenCalledWith(
       expect.stringContaining("SELECT canonical_field_name"),
-      ["user@test.com", "sheet-1"],
+      [7, "sheet-1"],
     );
   });
 
@@ -237,17 +241,17 @@ describe("getHiddenColumns", () => {
       ],
     });
 
-    const result = await getHiddenColumns("user@test.com", "sheet-1");
+    const result = await getHiddenColumns(7, "sheet-1");
 
     expect(result).toEqual(["Comment", "PLN"]);
   });
 
-  it("normalizes email to lowercase before querying", async () => {
+  it("passes the numeric user ID through unchanged", async () => {
     mockQuery.mockResolvedValue({ rows: [] });
 
-    await getHiddenColumns("User@Test.COM", "sheet-1");
+    await getHiddenColumns(42, "sheet-1");
 
-    expect(mockQuery.mock.calls[0][1][0]).toBe("user@test.com");
+    expect(mockQuery.mock.calls[0][1][0]).toBe(42);
   });
 });
 
@@ -255,32 +259,32 @@ describe("setColumnVisibility", () => {
   it("inserts a row when hidden=true", async () => {
     mockQuery.mockResolvedValue({ rows: [] });
 
-    await setColumnVisibility("user@test.com", "sheet-1", "Comment", true);
+    await setColumnVisibility(7, "sheet-1", "Comment", true);
 
     expect(mockQuery).toHaveBeenCalledTimes(1);
     const [sql, params] = mockQuery.mock.calls[0];
     expect(sql).toContain("INSERT INTO user_column_visibility");
     expect(sql).toContain("ON CONFLICT");
-    expect(params).toEqual(["user@test.com", "sheet-1", "Comment"]);
+    expect(params).toEqual([7, "sheet-1", "Comment"]);
   });
 
   it("deletes the row when hidden=false", async () => {
     mockQuery.mockResolvedValue({ rows: [] });
 
-    await setColumnVisibility("user@test.com", "sheet-1", "PLN", false);
+    await setColumnVisibility(7, "sheet-1", "PLN", false);
 
     expect(mockQuery).toHaveBeenCalledTimes(1);
     const [sql, params] = mockQuery.mock.calls[0];
     expect(sql).toContain("DELETE FROM user_column_visibility");
-    expect(params).toEqual(["user@test.com", "sheet-1", "PLN"]);
+    expect(params).toEqual([7, "sheet-1", "PLN"]);
   });
 
-  it("normalizes email to lowercase", async () => {
+  it("passes the numeric user ID through unchanged", async () => {
     mockQuery.mockResolvedValue({ rows: [] });
 
-    await setColumnVisibility("UPPER@TEST.COM", "sheet-1", "Comment", true);
+    await setColumnVisibility(42, "sheet-1", "Comment", true);
 
-    expect(mockQuery.mock.calls[0][1][0]).toBe("upper@test.com");
+    expect(mockQuery.mock.calls[0][1][0]).toBe(42);
   });
 });
 
@@ -288,27 +292,27 @@ describe("renameVisibilityEntry", () => {
   it("issues an UPDATE with the new field name", async () => {
     mockQuery.mockResolvedValue({ rows: [] });
 
-    await renameVisibilityEntry("user@test.com", "sheet-1", "OldName", "NewName");
+    await renameVisibilityEntry(7, "sheet-1", "OldName", "NewName");
 
     expect(mockQuery).toHaveBeenCalledTimes(1);
     const [sql, params] = mockQuery.mock.calls[0];
     expect(sql).toContain("UPDATE user_column_visibility");
-    expect(params).toEqual(["user@test.com", "sheet-1", "OldName", "NewName"]);
+    expect(params).toEqual([7, "sheet-1", "OldName", "NewName"]);
   });
 
-  it("normalizes email to lowercase", async () => {
+  it("passes the numeric user ID through unchanged", async () => {
     mockQuery.mockResolvedValue({ rows: [] });
 
-    await renameVisibilityEntry("User@Test.COM", "sheet-1", "OldName", "NewName");
+    await renameVisibilityEntry(42, "sheet-1", "OldName", "NewName");
 
-    expect(mockQuery.mock.calls[0][1][0]).toBe("user@test.com");
+    expect(mockQuery.mock.calls[0][1][0]).toBe(42);
   });
 
   it("is a no-op when the old name does not exist", async () => {
     mockQuery.mockResolvedValue({ rowCount: 0 });
 
     await expect(
-      renameVisibilityEntry("user@test.com", "sheet-1", "DoesNotExist", "NewName"),
+      renameVisibilityEntry(7, "sheet-1", "DoesNotExist", "NewName"),
     ).resolves.toBeUndefined();
   });
 });

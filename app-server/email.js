@@ -48,9 +48,9 @@ export function sendShareRevokedEmail({ ownerEmail, guestEmail }) {
  * Alerts admins that an error-level log entry was recorded.
  * Fire-and-forget — do NOT await this call. Silently skipped when ALERT_EMAIL_TO is unset.
  */
-export function sendErrorAlertEmail({ message, event, requestId, timestamp, error, stack, path, method, statusCode }) {
+export function sendErrorAlertEmail({ message, event, requestId, userId, ownerUserId, timestamp, error, stack, path, method, statusCode }) {
   if (alertRecipients.length === 0) return;
-  const { subject, html, text } = errorAlertEmail({ message, event, requestId, timestamp, error, stack, path, method, statusCode });
+  const { subject, html, text } = errorAlertEmail({ message, event, requestId, userId, ownerUserId, timestamp, error, stack, path, method, statusCode });
   void send({ to: alertRecipients, subject, html, text });
 }
 

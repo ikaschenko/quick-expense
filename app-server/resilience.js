@@ -1,5 +1,6 @@
 import winstonLogger from "./logger.js";
 import { serializeError } from "./utils.js";
+import { getContext } from "./request-context.js";
 
 export function logInfrastructureError(context, error, logger = winstonLogger) {
   const { message, stack } = serializeError(error);
@@ -55,6 +56,7 @@ export function createRequireAuthenticatedUser({
       }
 
       req.userRecord = userRecord;
+      getContext().userId = userRecord.id;
 
       // Resolve shared setup: check if this user is a guest.
       const share = await getShareForGuest(sessionUser.email);
@@ -66,6 +68,7 @@ export function createRequireAuthenticatedUser({
           return;
         }
         req.configRecord = ownerRecord;
+        getContext().ownerUserId = ownerRecord.id;
         req.accessLevel = share.accessLevel;
         req.isGuest = true;
       } else {

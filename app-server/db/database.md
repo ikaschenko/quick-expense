@@ -101,6 +101,7 @@ psql -U postgres -d quickexpense -f app-server/db/008_rls_user_column_visibility
 psql -U postgres -d quickexpense -f app-server/db/009_setup_shares.sql
 psql -U postgres -d quickexpense -f app-server/db/010_rls_setup_shares.sql
 psql -U postgres -d quickexpense -f app-server/db/011_reset_hidden_comment.sql
+psql -U postgres -d quickexpense -f app-server/db/012_numeric_user_ids.sql
 ```
 
 > Migration 011 removes any previously hidden `Comment` entries — `Comment` is now a protected (non-hideable) field.

@@ -305,7 +305,8 @@ Stores authenticated user records: OAuth tokens, spreadsheet configuration, and 
 
 | Column | Type | Constraints |
 |---|---|---|
-| `email` | TEXT | PRIMARY KEY |
+| `id` | BIGINT | PRIMARY KEY, GENERATED ALWAYS AS IDENTITY |
+| `email` | TEXT | NOT NULL, UNIQUE |
 | `access_token` | TEXT | NOT NULL |
 | `access_token_expires_at` | BIGINT | NOT NULL |
 | `refresh_token` | TEXT | |
@@ -316,7 +317,7 @@ Stores authenticated user records: OAuth tokens, spreadsheet configuration, and 
 | `created_at` | TIMESTAMPTZ | DEFAULT now() |
 | `updated_at` | TIMESTAMPTZ | DEFAULT now() |
 
-- `email` is the natural primary key — used across sessions, API calls, and store lookups.
+- `id` is the stable numeric primary key used by all relational ownership foreign keys. Email remains unique and is used for login and guest invitation lookup.
 - Token-related BIGINT fields store epoch milliseconds (matching `Date.now()` in JavaScript).
 - `created_at`/`updated_at` use TIMESTAMPTZ for operational observability.
 
@@ -327,14 +328,14 @@ Stores FX rate conversion rates from expense submissions. One row per currency p
 | Column | Type | Constraints |
 |---|---|---|
 | `id` | SERIAL | PRIMARY KEY |
-| `user_email` | TEXT | NOT NULL, FK → users(email) |
+| `user_id` | BIGINT | NOT NULL, FK → users(id) |
 | `spreadsheet_id` | TEXT | |
 | `expense_date` | DATE | NOT NULL |
 | `currency_code` | VARCHAR(3) | NOT NULL, CHECK length = 3 |
 | `fx_rate` | NUMERIC(12,6) | NOT NULL |
 | `submitted_at` | TIMESTAMPTZ | NOT NULL |
 
-- Index on `(user_email, spreadsheet_id, submitted_at DESC)` for efficient latest-backup lookup.
+- Index on `(user_id, spreadsheet_id, submitted_at DESC)` for efficient latest-backup lookup.
 - A single backup submission with rates for any configured currencies creates one row per currency sharing the same `submitted_at` value.
 - Currency amounts are not stored (they are not read back by the frontend).
 
@@ -357,48 +358,63 @@ Stores each user's configurable (non-USD) currency selections with an audit trai
 | Column | Type | Constraints |
 |---|---|---|
 | `id` | SERIAL | PRIMARY KEY |
-| `user_email` | TEXT | NOT NULL, FK → users(email) |
+| `user_id` | BIGINT | NOT NULL, FK → users(id) |
 | `currency_code` | VARCHAR(3) | NOT NULL |
 | `added_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() |
 | `removed_at` | TIMESTAMPTZ | NULL |
 
-- Unique partial index on `(user_email, currency_code) WHERE removed_at IS NULL` prevents duplicates among active currencies.
+- Unique partial index on `(user_id, currency_code) WHERE removed_at IS NULL` prevents duplicates among active currencies.
 - When a user removes a currency, `removed_at` is set (soft-delete). The column remains in the spreadsheet for historical data.
 - On first load, if no records exist for a user, active currencies are auto-seeded from the sheet's existing header columns (legacy migration).
 
-#### e) `user_column_visibility` Table
+#### e) `user_custom_columns` Table
+
+Stores custom column metadata for a user's spreadsheet setup.
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | SERIAL | PRIMARY KEY |
+| `user_id` | BIGINT | NOT NULL, FK → users(id) |
+| `column_name` | VARCHAR(30) | NOT NULL |
+| `position` | SMALLINT | NOT NULL |
+| `added_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() |
+| `removed_at` | TIMESTAMPTZ | NULL |
+
+- Unique partial index on `(user_id, lower(column_name)) WHERE removed_at IS NULL` prevents duplicate active columns.
+
+#### f) `user_column_visibility` Table
 
 Stores per-user, per-spreadsheet column visibility preferences for the Add Expense form. A row's presence means the column is hidden; absence means visible.
 
 | Column | Type | Constraints |
 |---|---|---|
 | `id` | SERIAL | PRIMARY KEY |
-| `user_email` | TEXT | NOT NULL, FK → users(email) |
+| `user_id` | BIGINT | NOT NULL, FK → users(id) |
 | `spreadsheet_id` | TEXT | NOT NULL |
 | `canonical_field_name` | VARCHAR(30) | NOT NULL |
 | `hidden_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() |
 
-- Unique index on `(user_email, spreadsheet_id, canonical_field_name)` prevents duplicate entries.
+- Unique index on `(user_id, spreadsheet_id, canonical_field_name)` prevents duplicate entries.
 - Keyed by canonical QE field name (e.g. `"Comment"`, `"PLN"`) so column renames via the Setup UI automatically migrate the preference via `renameVisibilityEntry()`.
 - Only hideable columns may be toggled: `Date`, `USD`, and `Category` are never hidden (rejected at the API layer). `Spent By` and `Spent For` are mandatory fields but may still be hidden as a pair from the Add Expense form — both default to the signed-in user's email so validation still passes without visible input.
 - Tail and Search always show all columns regardless of visibility preferences.
 
-#### f) `setup_shares` Table
+#### g) `setup_shares` Table
 
 Stores sharing relationships between an owner user and their invited guests.
 
 | Column | Type | Constraints |
 |---|---|---|
 | `id` | SERIAL | PRIMARY KEY |
-| `owner_email` | TEXT | NOT NULL, FK → users(email) ON DELETE CASCADE |
+| `owner_user_id` | BIGINT | NOT NULL, FK → users(id) ON DELETE CASCADE |
 | `guest_email` | TEXT | NOT NULL |
 | `access_level` | VARCHAR(4) | NOT NULL, CHECK IN ('view','edit') |
 | `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT now() |
-| | | UNIQUE (owner_email, guest_email) |
+| | | UNIQUE (owner_user_id, guest_email) |
 
 - `guest_email` has no FK — an invited user may not have signed in yet.
-- `ON DELETE CASCADE` on `owner_email` means all guest references are automatically removed when an owner is deleted.
+- `ON DELETE CASCADE` on `owner_user_id` means all guest references are automatically removed when an owner is deleted.
 - Index on `(guest_email)` for efficient per-request guest resolution.
 - Access levels: `edit` — full read/write; `view` — read-only (History allowed; Add/Edit/Delete blocked at API and UI level).
 
@@ -461,6 +477,8 @@ Current migrations:
 | `008_rls_user_column_visibility.sql` | RLS policy for `user_column_visibility` |
 | `009_setup_shares.sql` | `setup_shares` table |
 | `010_rls_setup_shares.sql` | RLS policy for `setup_shares` |
+| `011_reset_hidden_comment.sql` | Remove hidden Comment entries |
+| `012_numeric_user_ids.sql` | Re-key users and ownership foreign keys to numeric IDs |
 
 ---
 
@@ -588,6 +606,10 @@ The backend validates all required env vars at startup and fails fast if any are
 ---
 
 ## 11. Deployment
+
+### Logging Context
+
+Every Winston log entry receives `requestId` from the request context, plus numeric `userId`. Anonymous and unauthenticated entries use `userId: 0`. Shared-setup requests also receive `ownerUserId` for the configured setup owner; the field is omitted when the acting user owns their own setup. The same fields are included in error alerts and warning-digest samples. Email remains available for authentication and API response contracts, but is not used as a log identity.
 
 ### Main App (`q-expense-app`)
 

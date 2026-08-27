@@ -86,6 +86,7 @@ import { sendShareGrantedEmail, sendShareRevokedEmail } from "./email.js";
 import logger, { startWarningDigestScheduler, listLogFiles, readLogEntries, logRouteError } from "./logger.js";
 import pool from "./db.js";
 import { serializeError } from "./utils.js";
+import { getContext, runWithContext } from "./request-context.js";
 
 const EMULATE_FAILURES = false;  // use 'true' if need to emulate some random errors in backend logic
 const FAILURE_PROBABILITY = 0.1; // % of requests will fail with a 500 error when EMULATE_FAILURES is true.
@@ -163,23 +164,25 @@ app.use((req, res, next) => {
   const requestId = crypto.randomUUID();
   const startedAt = process.hrtime.bigint();
 
-  req.requestId = requestId;
-  res.setHeader("X-Request-Id", requestId);
+  return runWithContext({ requestId, userId: 0, ownerUserId: null }, () => {
+    req.requestId = requestId;
+    res.setHeader("X-Request-Id", requestId);
 
-  res.on("finish", () => {
-    const elapsedMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
-    logger.info("http_request", {
-      event: "http_request",
-      requestId,
-      method: req.method,
-      path: req.path,
-      statusCode: res.statusCode,
-      durationMs: Number(elapsedMs.toFixed(2)),
-      shuttingDown: isShuttingDown,
+    res.on("finish", () => {
+      const elapsedMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+      logger.info("http_request", {
+        event: "http_request",
+        requestId,
+        method: req.method,
+        path: req.path,
+        statusCode: res.statusCode,
+        durationMs: Number(elapsedMs.toFixed(2)),
+        shuttingDown: isShuttingDown,
+      });
     });
-  });
 
-  next();
+    next();
+  });
 });
 
 app.get("/api/health", async (_req, res) => {
@@ -335,7 +338,7 @@ app.get("/api/auth/callback", async (req, res) => {
     const userInfo = await fetchGoogleUserInfo(tokenPayload.access_token);
     const now = Date.now();
 
-    await updateUserRecord(userInfo.email, (current) => ({
+    const updatedUser = await updateUserRecord(userInfo.email, (current) => ({
       ...current,
       email: userInfo.email,
       accessToken: tokenPayload.access_token,
@@ -347,12 +350,14 @@ app.get("/api/auth/callback", async (req, res) => {
       spreadsheetId: current.spreadsheetId ?? null,
     }));
 
+    getContext().userId = updatedUser.id;
     req.session.regenerate((err) => {
       if (err) {
         res.redirect(`${getFrontendBaseUrl()}/?error=${encodeURIComponent("Session regeneration failed.")}`);
         return;
       }
       req.session.userEmail = userInfo.email;
+      req.session.userId = updatedUser.id;
       req.session.userGivenName = userInfo.given_name ?? null;
       req.session.userFullName  = userInfo.name ?? null;
       req.session.userPicture = userInfo.picture ?? null;
@@ -441,7 +446,7 @@ app.get("/api/config", requireAuthenticatedUser, async (req, res) => {
 
     let hiddenColumns = [];
     try {
-      hiddenColumns = await getHiddenColumns(configRecord.email, configRecord.spreadsheetId);
+      hiddenColumns = await getHiddenColumns(configRecord.id, configRecord.spreadsheetId);
     } catch {
       // Table may not exist yet before migration — fall back to empty.
     }
@@ -495,8 +500,8 @@ app.patch("/api/config/column-visibility", requireAuthenticatedUser, requireOwne
   }
 
   try {
-    await setColumnVisibility(req.configRecord.email, req.configRecord.spreadsheetId, field, hidden);
-    const hiddenColumns = await getHiddenColumns(req.configRecord.email, req.configRecord.spreadsheetId);
+    await setColumnVisibility(req.configRecord.id, req.configRecord.spreadsheetId, field, hidden);
+    const hiddenColumns = await getHiddenColumns(req.configRecord.id, req.configRecord.spreadsheetId);
     res.json({ hiddenColumns });
   } catch (error) {
     logRouteError(req, "column_visibility_update_failed", error);
@@ -773,7 +778,7 @@ app.get("/api/expenses", requireAuthenticatedUser, async (req, res) => {
 });
 
 app.get("/api/fx-backup", requireAuthenticatedUser, async (req, res) => {
-  const backup = await getLatestFxRateBackup(req.userRecord.email, req.configRecord.spreadsheetId);
+  const backup = await getLatestFxRateBackup(req.userRecord.id, req.configRecord.spreadsheetId);
   res.json({ backup });
 });
 
@@ -857,7 +862,7 @@ app.post("/api/expenses", requireAuthenticatedUser, requireEditAccess, async (re
     const { record, insertMode } = await addExpenseRow(accessToken, req.configRecord.spreadsheetId, values, mapping);
 
     if (req.body?.fxRateBackup && typeof req.body.fxRateBackup === "object") {
-      await saveFxRateBackup(req.userRecord.email, req.configRecord.spreadsheetId, req.body.fxRateBackup);
+      await saveFxRateBackup(req.userRecord.id, req.configRecord.spreadsheetId, req.body.fxRateBackup);
     }
 
     res.status(201).json({ record, insertMode });
@@ -905,7 +910,7 @@ app.put("/api/expenses/:rowNumber", requireAuthenticatedUser, requireEditAccess,
     const { record, moveMode } = await moveExpenseRow(accessToken, req.configRecord.spreadsheetId, rowNumber, values, mapping);
 
     if (req.body?.fxRateBackup && typeof req.body.fxRateBackup === "object") {
-      await saveFxRateBackup(req.userRecord.email, req.configRecord.spreadsheetId, req.body.fxRateBackup);
+      await saveFxRateBackup(req.userRecord.id, req.configRecord.spreadsheetId, req.body.fxRateBackup);
     }
 
     res.status(200).json({ record, moveMode });
@@ -1055,7 +1060,7 @@ app.patch("/api/sheet/column/rename", requireAuthenticatedUser, requireOwner, as
     }
 
     await renameColumnInSheet(accessToken, req.configRecord.spreadsheetId, colIndex, newName);
-    await renameVisibilityEntry(req.configRecord.email, req.configRecord.spreadsheetId, currentName, newName);
+    await renameVisibilityEntry(req.configRecord.id, req.configRecord.spreadsheetId, currentName, newName);
     invalidateSheetStructureCache(req.configRecord.spreadsheetId);
 
     const updated = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
@@ -1188,7 +1193,7 @@ app.delete("/api/sheet/column", requireAuthenticatedUser, requireOwner, async (r
 app.get("/api/sharing", requireAuthenticatedUser, requireOwner, async (req, res) => {
   emulateFailure(req.path);
   try {
-    const shares = await listSharesForOwner(req.userRecord.email);
+    const shares = await listSharesForOwner(req.userRecord.id);
     res.json({ shares });
   } catch (error) {
     logRouteError(req, "sharing_list_failed", error);
@@ -1224,7 +1229,7 @@ app.post("/api/sharing", requireAuthenticatedUser, requireOwner, async (req, res
       return;
     }
 
-    await addShare(req.userRecord.email, guestEmail, accessLevel);
+    await addShare(req.userRecord.id, guestEmail, accessLevel);
 
     const ownerName = req.session.userFullName ?? req.session.userGivenName ?? req.userRecord.email;
     sendShareGrantedEmail({ ownerEmail: req.userRecord.email, ownerName, guestEmail });
@@ -1250,7 +1255,7 @@ app.patch("/api/sharing/:guestEmail", requireAuthenticatedUser, requireOwner, as
   }
 
   try {
-    const updated = await updateShareAccessLevel(req.userRecord.email, guestEmail, accessLevel);
+    const updated = await updateShareAccessLevel(req.userRecord.id, guestEmail, accessLevel);
     if (!updated) {
       res.status(404).json({ message: "Share not found." });
       return;
@@ -1266,7 +1271,7 @@ app.delete("/api/sharing/:guestEmail", requireAuthenticatedUser, requireOwner, a
   const guestEmail = String(req.params.guestEmail ?? "").trim().toLowerCase();
 
   try {
-    await removeShare(req.userRecord.email, guestEmail);
+    await removeShare(req.userRecord.id, guestEmail);
     sendShareRevokedEmail({ ownerEmail: req.userRecord.email, guestEmail });
     res.status(204).end();
   } catch (error) {

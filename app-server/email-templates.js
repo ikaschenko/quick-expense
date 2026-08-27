@@ -56,7 +56,7 @@ function subjectPrefix() {
  * @param {{ message: string, event?: string, requestId?: string, timestamp?: string }} params
  * @returns {{ subject: string, html: string, text: string }}
  */
-export function errorAlertEmail({ message, event, requestId, timestamp, error, stack, path, method, statusCode }) {
+export function errorAlertEmail({ message, event, requestId, userId = 0, ownerUserId, timestamp, error, stack, path, method, statusCode }) {
   const subject = `${subjectPrefix()} Error: ${event ?? "unknown"}`;
   const requestLine = method && path ? `${escapeHtml(String(method))} ${escapeHtml(String(path))}` : null;
   const html = wrapHtml(`
@@ -66,6 +66,8 @@ export function errorAlertEmail({ message, event, requestId, timestamp, error, s
     ${error != null ? `<p><strong>Error detail:</strong> ${escapeHtml(String(error))}</p>` : ""}
     ${requestLine != null ? `<p><strong>Request:</strong> ${requestLine}${statusCode != null ? ` — ${escapeHtml(String(statusCode))}` : ""}</p>` : ""}
     <p><strong>Request ID:</strong> ${escapeHtml(String(requestId ?? ""))}</p>
+    <p><strong>User ID:</strong> ${escapeHtml(String(userId))}</p>
+    ${ownerUserId != null ? `<p><strong>Owner User ID:</strong> ${escapeHtml(String(ownerUserId))}</p>` : ""}
     <p><strong>Time:</strong> ${escapeHtml(String(timestamp ?? ""))}</p>
     ${stack ? `<p><strong>Stack trace:</strong></p><pre style="white-space:pre-wrap;word-break:break-word;background:#f5f5f5;padding:12px;border-radius:6px;font-size:12px">${escapeHtml(String(stack))}</pre>` : ""}
   `);
@@ -77,6 +79,8 @@ export function errorAlertEmail({ message, event, requestId, timestamp, error, s
     ...(error != null ? [`Error detail: ${error}`] : []),
     ...(requestLine != null ? [`Request: ${method} ${path}${statusCode != null ? ` — ${statusCode}` : ""}`] : []),
     `Request ID: ${requestId ?? ""}`,
+    `User ID: ${userId}`,
+    ...(ownerUserId != null ? [`Owner User ID: ${ownerUserId}`] : []),
     `Time: ${timestamp ?? ""}`,
     ...(stack ? [``, `Stack trace:`, stack] : []),
   ];
@@ -90,11 +94,11 @@ export function errorAlertEmail({ message, event, requestId, timestamp, error, s
  */
 export function warningDigestEmail({ count, since, samples = [] }) {
   const subject = `${subjectPrefix()} ${count} warning${count === 1 ? "" : "s"} since last digest`;
-  const sampleItems = samples.map((s) => `<li>${escapeHtml(String(s))}</li>`).join("");
+  const sampleItems = samples.map((sample) => `<li>${escapeHtml(String(sample.message ?? sample))} (userId: ${escapeHtml(String(sample.userId ?? 0))})</li>`).join("");
   const html = wrapHtml(`
     <p>${count} warning${count === 1 ? "" : "s"} were logged on QuickExpense since ${escapeHtml(String(since ?? ""))}.</p>
     ${samples.length > 0 ? `<p><strong>Recent samples:</strong></p><ul>${sampleItems}</ul>` : ""}
   `);
-  const text = `${count} warning(s) were logged on QuickExpense since ${since ?? ""}.\n\n${samples.map((s) => `- ${s}`).join("\n")}`;
+  const text = `${count} warning(s) were logged on QuickExpense since ${since ?? ""}.\n\n${samples.map((sample) => `- ${sample.message ?? sample} (userId: ${sample.userId ?? 0})`).join("\n")}`;
   return { subject, html, text };
 }

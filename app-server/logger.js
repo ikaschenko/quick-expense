@@ -5,6 +5,7 @@ import "winston-daily-rotate-file";
 import Transport from "winston-transport";
 import { sendErrorAlertEmail, sendWarningDigestEmail } from "./email.js";
 import { serializeError } from "./utils.js";
+import { getContext } from "./request-context.js";
 
 export const LOG_DIR = process.env.LOG_DIR?.trim() || path.resolve(process.cwd(), "logs");
 const RETENTION_DAYS = process.env.LOG_RETENTION_DAYS?.trim() || "15";
@@ -58,6 +59,8 @@ export function handleAlertableEntry(info) {
         message: info.message,
         event: info.event,
         requestId: info.requestId,
+        userId: info.userId,
+        ownerUserId: info.ownerUserId,
         timestamp: info.timestamp ?? new Date().toISOString(),
         error: info.error,
         stack: info.stack,
@@ -71,7 +74,7 @@ export function handleAlertableEntry(info) {
     if (warningSamples.length >= MAX_WARNING_SAMPLES) {
       warningSamples.shift();
     }
-    warningSamples.push(info.message);
+    warningSamples.push({ message: info.message, userId: info.userId ?? 0 });
   }
 }
 
@@ -119,9 +122,21 @@ const errorRotate = new winston.transports.DailyRotateFile({
 });
 errorRotate.on("rotate", () => sweepLogDirectory());
 
+export const contextFormat = winston.format((info) => {
+  const context = getContext();
+  info.userId = context.userId ?? 0;
+  if (context.ownerUserId != null) info.ownerUserId = context.ownerUserId;
+  if (context.requestId != null) info.requestId = context.requestId;
+  return info;
+})();
+
 const logger = winston.createLogger({
   level: "info",
-  format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
+  format: winston.format.combine(
+    contextFormat,
+    winston.format.timestamp(),
+    winston.format.json(),
+  ),
   transports: [new winston.transports.Console(), combinedRotate, errorRotate, new AlertTransport()],
 });
 
@@ -129,7 +144,7 @@ const logger = winston.createLogger({
 export function logRouteError(req, event, error) {
   if (error?.logged) return;
   const { message, stack } = serializeError(error);
-  logger.error(event, { event, requestId: req?.requestId, error: message, stack });
+  logger.error(event, { event, error: message, stack });
   if (error && typeof error === "object") {
     error.logged = true;
   }

@@ -39,19 +39,19 @@ describe("getShareForGuest", () => {
 
     expect(result).toBeNull();
     expect(mockQuery).toHaveBeenCalledWith(
-      "SELECT owner_email, access_level FROM setup_shares WHERE guest_email = $1",
+      expect.stringContaining("owner_user_id"),
       ["guest@test.com"],
     );
   });
 
   it("returns ownerEmail and accessLevel when a share exists", async () => {
     mockQuery.mockResolvedValue({
-      rows: [{ owner_email: "owner@test.com", access_level: "edit" }],
+      rows: [{ owner_email: "owner@test.com", owner_user_id: "3", access_level: "edit" }],
     });
 
     const result = await getShareForGuest("guest@test.com");
 
-    expect(result).toEqual({ ownerEmail: "owner@test.com", accessLevel: "edit" });
+    expect(result).toEqual({ ownerEmail: "owner@test.com", ownerUserId: 3, accessLevel: "edit" });
   });
 
   it("normalises the guest email to lowercase", async () => {
@@ -70,7 +70,7 @@ describe("listSharesForOwner", () => {
   it("returns an empty array when there are no shares", async () => {
     mockQuery.mockResolvedValue({ rows: [] });
 
-    const result = await listSharesForOwner("owner@test.com");
+    const result = await listSharesForOwner(3);
 
     expect(result).toEqual([]);
   });
@@ -83,7 +83,7 @@ describe("listSharesForOwner", () => {
       ],
     });
 
-    const result = await listSharesForOwner("owner@test.com");
+    const result = await listSharesForOwner(3);
 
     expect(result).toEqual([
       { guestEmail: "a@test.com", accessLevel: "edit" },
@@ -96,21 +96,21 @@ describe("addShare", () => {
   it("inserts a new share row", async () => {
     mockQuery.mockResolvedValue({ rowCount: 1 });
 
-    await addShare("owner@test.com", "guest@test.com", "view");
+    await addShare(3, "guest@test.com", "view");
 
     expect(mockQuery).toHaveBeenCalledWith(
       expect.stringContaining("INSERT INTO setup_shares"),
-      ["owner@test.com", "guest@test.com", "view"],
+      [3, "guest@test.com", "view"],
     );
   });
 
   it("normalises emails to lowercase on insert", async () => {
     mockQuery.mockResolvedValue({ rowCount: 1 });
 
-    await addShare("Owner@Test.COM", "Guest@Test.COM", "edit");
+    await addShare(3, "Guest@Test.COM", "edit");
 
     const [, params] = mockQuery.mock.calls[0];
-    expect(params[0]).toBe("owner@test.com");
+    expect(params[0]).toBe(3);
     expect(params[1]).toBe("guest@test.com");
   });
 });
@@ -119,7 +119,7 @@ describe("updateShareAccessLevel", () => {
   it("returns true when a row was updated", async () => {
     mockQuery.mockResolvedValue({ rowCount: 1 });
 
-    const result = await updateShareAccessLevel("owner@test.com", "guest@test.com", "view");
+    const result = await updateShareAccessLevel(3, "guest@test.com", "view");
 
     expect(result).toBe(true);
   });
@@ -127,7 +127,7 @@ describe("updateShareAccessLevel", () => {
   it("returns false when the share was not found", async () => {
     mockQuery.mockResolvedValue({ rowCount: 0 });
 
-    const result = await updateShareAccessLevel("owner@test.com", "nobody@test.com", "edit");
+    const result = await updateShareAccessLevel(3, "nobody@test.com", "edit");
 
     expect(result).toBe(false);
   });
@@ -137,7 +137,7 @@ describe("removeShare", () => {
   it("returns true when a row was deleted", async () => {
     mockQuery.mockResolvedValue({ rowCount: 1 });
 
-    const result = await removeShare("owner@test.com", "guest@test.com");
+    const result = await removeShare(3, "guest@test.com");
 
     expect(result).toBe(true);
   });
@@ -145,7 +145,7 @@ describe("removeShare", () => {
   it("returns false when the share was not found", async () => {
     mockQuery.mockResolvedValue({ rowCount: 0 });
 
-    const result = await removeShare("owner@test.com", "nobody@test.com");
+    const result = await removeShare(3, "nobody@test.com");
 
     expect(result).toBe(false);
   });

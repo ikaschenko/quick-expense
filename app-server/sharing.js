@@ -8,21 +8,23 @@ import pool from "./db.js";
  */
 export async function getShareForGuest(guestEmail) {
   const { rows } = await pool.query(
-    "SELECT owner_email, access_level FROM setup_shares WHERE guest_email = $1",
+    `SELECT s.owner_user_id, u.email AS owner_email, s.access_level
+     FROM setup_shares s JOIN users u ON u.id = s.owner_user_id
+     WHERE s.guest_email = $1`,
     [guestEmail.toLowerCase()],
   );
   if (rows.length === 0) return null;
-  return { ownerEmail: rows[0].owner_email, accessLevel: rows[0].access_level };
+  return { ownerEmail: rows[0].owner_email, ownerUserId: Number(rows[0].owner_user_id), accessLevel: rows[0].access_level };
 }
 
 /**
  * Lists all shares owned by a given owner email.
  * @returns {{ guestEmail: string, accessLevel: 'view' | 'edit' }[]}
  */
-export async function listSharesForOwner(ownerEmail) {
+export async function listSharesForOwner(ownerUserId) {
   const { rows } = await pool.query(
-    "SELECT guest_email, access_level FROM setup_shares WHERE owner_email = $1 ORDER BY created_at ASC",
-    [ownerEmail.toLowerCase()],
+    "SELECT guest_email, access_level FROM setup_shares WHERE owner_user_id = $1 ORDER BY created_at ASC",
+    [ownerUserId],
   );
   return rows.map((r) => ({ guestEmail: r.guest_email, accessLevel: r.access_level }));
 }
@@ -30,11 +32,11 @@ export async function listSharesForOwner(ownerEmail) {
 /**
  * Adds a new share.  Throws on duplicate (unique constraint), caller should catch and map to 409.
  */
-export async function addShare(ownerEmail, guestEmail, accessLevel) {
+export async function addShare(ownerUserId, guestEmail, accessLevel) {
   await pool.query(
-    `INSERT INTO setup_shares (owner_email, guest_email, access_level)
+    `INSERT INTO setup_shares (owner_user_id, guest_email, access_level)
      VALUES ($1, $2, $3)`,
-    [ownerEmail.toLowerCase(), guestEmail.toLowerCase(), accessLevel],
+    [ownerUserId, guestEmail.toLowerCase(), accessLevel],
   );
 }
 
@@ -42,11 +44,11 @@ export async function addShare(ownerEmail, guestEmail, accessLevel) {
  * Updates the access level for an existing share.
  * @returns {boolean} true if a row was updated, false if not found.
  */
-export async function updateShareAccessLevel(ownerEmail, guestEmail, accessLevel) {
+export async function updateShareAccessLevel(ownerUserId, guestEmail, accessLevel) {
   const { rowCount } = await pool.query(
     `UPDATE setup_shares SET access_level = $3, updated_at = now()
-     WHERE owner_email = $1 AND guest_email = $2`,
-    [ownerEmail.toLowerCase(), guestEmail.toLowerCase(), accessLevel],
+    WHERE owner_user_id = $1 AND guest_email = $2`,
+      [ownerUserId, guestEmail.toLowerCase(), accessLevel],
   );
   return rowCount > 0;
 }
@@ -55,10 +57,10 @@ export async function updateShareAccessLevel(ownerEmail, guestEmail, accessLevel
  * Removes a share by owner + guest pair.
  * @returns {boolean} true if a row was deleted.
  */
-export async function removeShare(ownerEmail, guestEmail) {
+export async function removeShare(ownerUserId, guestEmail) {
   const { rowCount } = await pool.query(
-    "DELETE FROM setup_shares WHERE owner_email = $1 AND guest_email = $2",
-    [ownerEmail.toLowerCase(), guestEmail.toLowerCase()],
+    "DELETE FROM setup_shares WHERE owner_user_id = $1 AND guest_email = $2",
+    [ownerUserId, guestEmail.toLowerCase()],
   );
   return rowCount > 0;
 }
