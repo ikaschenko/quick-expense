@@ -102,7 +102,7 @@ describe("MonthDetailsPanel — controls", () => {
     expect(screen.getAllByRole("row")).toHaveLength(7);
   });
 
-  it("merges colliding-prefix categories into one row when Group is toggled on", async () => {
+  it("merges categories with the same first whole word when Group is toggled on", async () => {
     const user = userEvent.setup();
     const records = [makeRecord("2026-08-01", "5", "Food"), makeRecord("2026-08-02", "7", "Food - dining out")];
     render(
@@ -112,7 +112,7 @@ describe("MonthDetailsPanel — controls", () => {
     expect(screen.getByText("Food - dining out")).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "Group" }));
-    expect(screen.getByText("Foo...")).toBeTruthy();
+    expect(screen.getByText("Food...")).toBeTruthy();
     expect(screen.queryByText("Food - dining out")).toBeNull();
   });
 });

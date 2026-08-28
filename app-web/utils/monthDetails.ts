@@ -71,8 +71,8 @@ export function computePriorMonthRange(
   return { startDate: shiftBackOneMonth(startDate), endDate: shiftBackOneMonth(endDate) };
 }
 
-/** Default grouping rule: matches the first 3 characters of a category name. */
-const GROUP_PREFIX_REGEX = /^.{1,3}/u;
+/** Default grouping rule: matches the first whole word of a category name. */
+const GROUP_PREFIX_REGEX = /^\S+/u;
 
 function groupPrefixOf(name: string): string {
   return name.match(GROUP_PREFIX_REGEX)?.[0] ?? name;
@@ -82,8 +82,8 @@ function groupPrefixOf(name: string): string {
  * Category breakdown for [startDate, endDate] vs the same day-of-month range in the prior
  * calendar month. When `grouped` is true, current-period categories whose `GROUP_PREFIX_REGEX`
  * match collides with at least one other distinct current-period category are merged under
- * `{matched prefix of the first-encountered record's original casing}...`; categories with no
- * such collision keep their original name unchanged. Rows are sorted descending by
+ * `{matched first word of the first-encountered record's original casing}...`; categories with
+ * no such collision keep their original name unchanged. Rows are sorted descending by
  * current-period amount.
  */
 export function getCategoryBreakdown(

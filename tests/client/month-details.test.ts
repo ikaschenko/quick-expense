@@ -114,18 +114,34 @@ describe("getCategoryBreakdown", () => {
     expect(food.deviationPct).toBeCloseTo(15);
   });
 
-  it("groups colliding categories by first-3-characters, letting a grouped total outrank an ungrouped competitor", () => {
+  it("groups categories with the same first whole word, letting a grouped total outrank an ungrouped competitor", () => {
     const records = [
       makeRecord("2026-08-01", "5", "Food"),
-      makeRecord("2026-08-02", "7", "Food - dining out"),
+      makeRecord("2026-08-02", "7", "Food - Dining out"),
       makeRecord("2026-08-03", "10", "Utilities"),
     ];
     const rows = getCategoryBreakdown(records, "2026-08-01", "2026-08-05", iso, { grouped: true });
-    expect(rows[0]).toMatchObject({ label: "Foo...", currentAmount: 12 });
+    expect(rows[0]).toMatchObject({ label: "Food...", currentAmount: 12 });
     expect(rows[1]).toMatchObject({ label: "Utilities", currentAmount: 10 });
   });
 
-  it("leaves a category unchanged when its 3-char prefix has no match with any other category", () => {
+  it.each([
+    ["Gifts", "Subscriptions"],
+    ["Bar", "Barber"],
+    ["Car", "Carpet"],
+    ["Manicures (Personal Care)", "Management fees"],
+    ["Pets", "Petrol"],
+    ["Taxes", "Taxi"],
+  ])("does not group %s and %s when only their first letters overlap", (firstCategory, secondCategory) => {
+    const records = [
+      makeRecord("2026-08-01", "10", firstCategory),
+      makeRecord("2026-08-02", "5", secondCategory),
+    ];
+    const rows = getCategoryBreakdown(records, "2026-08-01", "2026-08-05", iso, { grouped: true });
+    expect(rows.map((r) => r.label)).toEqual([firstCategory, secondCategory]);
+  });
+
+  it("leaves categories unchanged when their first whole word has no match", () => {
     const records = [
       makeRecord("2026-08-01", "10", "Groceries"),
       makeRecord("2026-08-02", "5", "Transport"),
@@ -150,7 +166,7 @@ describe("getCategoryBreakdown", () => {
     ];
     const rows = getCategoryBreakdown(records, "2026-08-01", "2026-08-05", iso, { grouped: true });
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ label: "foo...", currentAmount: 12 });
+    expect(rows[0]).toMatchObject({ label: "food...", currentAmount: 12 });
   });
 });
 
