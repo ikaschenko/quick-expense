@@ -80,6 +80,20 @@ describe("MonthDetailsPanel — controls", () => {
     expect(screen.getAllByRole("cell", { name: "0.0%" })).toHaveLength(2);
   });
 
+  it("keeps the current amount and deviation together with a non-breaking space", () => {
+    const records = [
+      makeRecord("2026-08-01", "115", "Food"),
+      makeRecord("2026-07-01", "100", "Food"),
+    ];
+    render(
+      <MonthDetailsPanel records={records} toIso={toIso} startDate="2026-08-01" endDate="2026-08-31" />,
+    );
+
+    const currentCell = screen.getByRole("row", { name: /Food/ }).querySelectorAll("td")[2];
+    expect(currentCell.textContent).toContain("\u00a0(+15%)");
+    expect(currentCell.querySelector(".month-details-current-value")?.className).toBe("month-details-current-value");
+  });
+
   it("shows 'No expenses in this period.' when the range has no records", () => {
     render(
       <MonthDetailsPanel records={[]} toIso={toIso} startDate="2026-08-01" endDate="2026-08-06" />,

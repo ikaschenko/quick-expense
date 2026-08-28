@@ -1041,6 +1041,10 @@ button { cursor: pointer; }
   text-align: left;
 }
 
+.month-details-table td:not(:first-child) {
+  white-space: nowrap;
+}
+
 .month-details-table th {
   color: var(--color-text-secondary);
   font-weight: 600;
@@ -1058,6 +1062,10 @@ button { cursor: pointer; }
   display: inline-block;
   min-width: 8ch;
   text-align: right;
+}
+
+.month-details-current-value {
+  white-space: nowrap;
 }
 
 .month-details-percent {

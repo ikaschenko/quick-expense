@@ -114,18 +114,20 @@ export function MonthDetailsPanel({ records, toIso, startDate, endDate, isLoadin
                     </span>
                   </td>
                   <td>
-                    <span className="month-details-amount">
-                      <FormattedAmount prefix="$" value={row.currentAmount} />
-                    </span>
-                    {row.deviationPct !== null && (
-                      <span
-                        className={`month-details-deviation${
-                          row.deviationPct > 0 ? " yoy-up" : row.deviationPct < 0 ? " yoy-down" : ""
-                        }`}
-                      >
-                        {" "}({row.deviationPct >= 0 ? "+" : "-"}{formatPctChange(Math.abs(row.deviationPct))}%)
+                    <span className="month-details-current-value">
+                      <span className="month-details-amount">
+                        <FormattedAmount prefix="$" value={row.currentAmount} />
                       </span>
-                    )}
+                      {row.deviationPct !== null && (
+                        <span
+                          className={`month-details-deviation${
+                            row.deviationPct > 0 ? " yoy-up" : row.deviationPct < 0 ? " yoy-down" : ""
+                          }`}
+                        >
+                          {"\u00a0"}({row.deviationPct >= 0 ? "+" : "-"}{formatPctChange(Math.abs(row.deviationPct))}%)
+                        </span>
+                      )}
+                    </span>
                   </td>
                   <td>
                     <span className="month-details-amount">
