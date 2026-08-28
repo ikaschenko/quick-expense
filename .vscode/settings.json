@@ -11,7 +11,7 @@
         "/^git add\\b/": true,
         "/^git log\\b/": true,
 
-        "/^npm(?:\\.cmd)?\\s+test(?:\\s+--)?(?:\\s+.*)?$/": true,
+        "/^npm(?:\\.cmd)?\\s+test\\b/": true,
         "/^npx(?:\\.cmd)?\\s+vitest\\s+run\\b/": true,
 
         "/^node(?:\\.exe)?\\s+--check\\b/": true

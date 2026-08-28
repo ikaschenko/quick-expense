@@ -356,7 +356,7 @@ To eliminate the 5–8 second reload on repeated Home visits, the dashboard pers
 
 **Cache write timing:** After Phase 1 of the two-phase dataset load (recent 24 months). Phase 2 (history > 24 months) may rewrite the cache a second time when it completes, updating YoY comparisons.
 
-**UX on cache hit:** The dashboard renders instantly with cached values while a background `GET /api/sheet/modifiedtime` request validates freshness. A subtle "Refreshing…" status indicator is shown during validation. If the sheet is unchanged, the indicator disappears and the cached view remains. If the sheet changed, a full reload occurs silently and the cache is updated.
+**UX on cache hit:** The dashboard renders instantly with cached values while a background `GET /api/sheet/modifiedtime` request validates freshness. A subtle "Refreshing…" status indicator is shown during validation. If the sheet is unchanged, the cached view remains until live records are needed; navigating the MTD card to another month loads the shared dataset and shows an updating placeholder until those records arrive. If the sheet changed, a full reload occurs silently and the cache is updated.
 
 **UX on a cross-day cache hit:** After hours or days of inactivity the dashboard still appears instantly instead of a loading skeleton. The cards are dimmed, an `Updating… · as of <MMM D>` hint states how old the figures are, and a full refresh starts immediately. Because a date rollover invalidates period-relative figures, the TODAY card — and the current-month card when the cache predates the current month — shows an `Updating…` placeholder (with its entry-count link hidden) rather than a wrong number; the year-to-date, forecast and rolling-12-month cards keep showing cached values. When live data arrives, dimming, hint and placeholders disappear together.
 
@@ -372,7 +372,7 @@ Tooltip copy per widget:
 
 ### 2.7.9 Month details drill-down (issue #89)
 
-Below the MTD chart, a **"Month details"** toggle button expands/collapses a details panel for the current calendar month (tap again to collapse; collapsed by default).
+Below the MTD chart, a **"Month details"** toggle button expands/collapses a details panel for the selected calendar month (tap again to collapse; collapsed by default). The MTD month navigation loads live records when a fresh metrics-cache view does not yet have the dataset, so prior-month totals and charts are available without first expanding the panel.
 
 - **Average spent per day:** total USD spend for the month-to-date range ÷ the inclusive number of calendar days elapsed so far (days with $0 spend still count).
 - **Category breakdown table:** one row per category, the category's percentage of the displayed rows' current-month USD total (one fractional digit), current-month USD total vs. the same date range in the prior calendar month, sorted descending by current-month amount. When the displayed current-month total is zero, the percentage is shown as 0.0%.

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronUp, FileSpreadsheet, Info, Loader2, Receipt } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, FileSpreadsheet, Info, Loader2, Receipt } from "lucide-react";
 import { FormattedAmount } from "../components/FormattedAmount";
 import { Layout } from "../components/Layout";
 import { MtdSpendChart } from "../components/MtdSpendChart";
@@ -14,12 +14,15 @@ import {
   buildIsoNormalizer,
   getTodayStats,
   getMtdStats,
+  getMonthRange,
+  getMonthStats,
   getYtdStats,
   getYtdForecast,
   getRolling12mStats,
   getMtdDailyAmounts,
   getMtdWeekBoundaryPositions,
   formatPctChange,
+  shiftMonth,
 } from "../utils/dashboardStats";
 import { metricsCache, type MetricsCacheEntry } from "../services/metricsCache";
 import { googleSheetsService } from "../services/googleSheets";
@@ -144,6 +147,8 @@ export function HomePage(): JSX.Element {
   const location = useLocation();
   const navigate = useNavigate();
   const today = useMemo(() => getTodayLocalDate(), []);
+  const currentMonth = today.slice(0, 7);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
 
   const [cachedEntry, setCachedEntry] = useState<MetricsCacheEntry | null>(null);
   const driveModifiedTimeRef = useRef<string | null>(null);
@@ -228,21 +233,30 @@ export function HomePage(): JSX.Element {
     }
   }, [monthDetailsOpen, dataset.status, dataset.loadDataset]);
 
+  useEffect(() => {
+    if (selectedMonth !== currentMonth && dataset.status === "idle") {
+      dataset.loadDataset().catch(() => {/* error surfaced via dataset.error */});
+    }
+  }, [selectedMonth, currentMonth, dataset.status, dataset.loadDataset]);
+
   const records = dataset.snapshot?.records ?? [];
 
   const toIso = useMemo(() => buildIsoNormalizer(records), [records]);
 
   const todayStats = useMemo(() => getTodayStats(records, today, toIso), [records, today, toIso]);
   const mtdStats = useMemo(() => getMtdStats(records, today, toIso), [records, today, toIso]);
+  const selectedMonthStats = useMemo(() => getMonthStats(records, selectedMonth, toIso), [records, selectedMonth, toIso]);
   const ytdStats = useMemo(() => getYtdStats(records, today, toIso), [records, today, toIso]);
   const ytdForecast = useMemo(() => getYtdForecast(records, today, toIso), [records, today, toIso]);
   const rolling12mStats = useMemo(() => getRolling12mStats(records, today, toIso), [records, today, toIso]);
-  const mtdDailyAmounts = useMemo(() => getMtdDailyAmounts(records, today, toIso), [records, today, toIso]);
+  const currentMtdDailyAmounts = useMemo(() => getMtdDailyAmounts(records, currentMonth, toIso), [records, currentMonth, toIso]);
+  const selectedMtdDailyAmounts = useMemo(() => getMtdDailyAmounts(records, selectedMonth, toIso), [records, selectedMonth, toIso]);
 
-  const [year, month] = today.split("-").map(Number);
+  const [year, month] = selectedMonth.split("-").map(Number);
+  const [currentYear, currentMonthNumber] = currentMonth.split("-").map(Number);
   const weekBoundaryPositions = useMemo(
-    () => getMtdWeekBoundaryPositions(year, month),
-    [year, month],
+    () => getMtdWeekBoundaryPositions(currentYear, currentMonthNumber),
+    [currentYear, currentMonthNumber],
   );
 
   // Write metrics to localStorage whenever live data is ready or mutated.
@@ -257,7 +271,7 @@ export function HomePage(): JSX.Element {
       ytdStats,
       ytdForecast,
       rolling12mStats,
-      mtdDailyAmounts,
+      mtdDailyAmounts: currentMtdDailyAmounts,
       weekBoundaryPositions,
     });
     driveModifiedTimeRef.current = null;
@@ -265,7 +279,7 @@ export function HomePage(): JSX.Element {
 
   const monthName = new Date(year, month - 1, 1).toLocaleString("en", { month: "long" }).toUpperCase();
   const dayLabel = formatShortDate(today);
-  const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
+  const selectedMonthRange = getMonthRange(selectedMonth);
 
   const isDatasetLoading = dataset.status === "idle" || dataset.status === "loading";
   const isLoading = isConfigLoading || isDatasetLoading;
@@ -273,6 +287,14 @@ export function HomePage(): JSX.Element {
   const showEmptyData = !cachedEntry && !isLoading && config && dataset.status === "ready" && records.length === 0;
   const showDashboard = cachedEntry !== null || (!isLoading && config && dataset.status === "ready" && records.length > 0);
   const showDashboardSkeleton = !cachedEntry && !isConfigLoading && config && isDatasetLoading;
+  const earliestLoadedMonth = records.reduce<string | null>((earliest, record) => {
+    const iso = toIso(record.Date);
+    const recordMonth = iso?.slice(0, 7) ?? null;
+    return recordMonth && (!earliest || recordMonth < earliest) ? recordMonth : earliest;
+  }, null);
+  const isSelectedMonthLoading =
+    (selectedMonth !== currentMonth && dataset.status !== "ready") ||
+    (dataset.isLoadingHistory && (!earliestLoadedMonth || selectedMonth < earliestLoadedMonth));
 
   // A cached entry from an earlier day still carries valid YTD/rolling-12m totals, but its
   // TODAY (and, across a month boundary, MTD) figures are definitively wrong.
@@ -283,10 +305,13 @@ export function HomePage(): JSX.Element {
   // Prefer live computed values; fall back to cache when dataset is still idle.
   const displayTodayStats = cachedEntry?.todayStats ?? todayStats;
   const displayMtdStats = cachedEntry?.mtdStats ?? mtdStats;
+  const displaySelectedMtdStats = selectedMonth === currentMonth && dataset.status !== "ready"
+    ? cachedEntry?.mtdStats ?? selectedMonthStats
+    : selectedMonthStats;
   const displayYtdStats = cachedEntry?.ytdStats ?? ytdStats;
   const displayYtdForecast = cachedEntry?.ytdForecast ?? ytdForecast;
   const displayRolling12mStats = cachedEntry?.rolling12mStats ?? rolling12mStats;
-  const displayMtdDailyAmounts = cachedEntry?.mtdDailyAmounts ?? mtdDailyAmounts;
+  const displayMtdDailyAmounts = cachedEntry?.mtdDailyAmounts ?? currentMtdDailyAmounts;
   const displayWeekBoundaryPositions = cachedEntry?.weekBoundaryPositions ?? weekBoundaryPositions;
 
   return (
@@ -370,27 +395,48 @@ export function HomePage(): JSX.Element {
             <div className="home-metric-card">
               <div className="home-metric-header">
                 <span className="home-metric-title">
-                  {monthName} SO FAR
-                  <WidgetHelpButton label={`${monthName} SO FAR`} open={mtdHelpOpen} onToggle={() => setMtdHelpOpen((v) => !v)} />
+                  {monthName} TOTAL
+                  <WidgetHelpButton label={`${monthName} TOTAL`} open={mtdHelpOpen} onToggle={() => setMtdHelpOpen((v) => !v)} />
                 </span>
-                {!isStaleMonth && (
+                <span className="home-month-nav" aria-label="Month navigation">
+                  <button
+                    type="button"
+                    className="home-month-nav-button"
+                    aria-label="Previous month"
+                    title="Previous month"
+                    onClick={() => setSelectedMonth((value) => shiftMonth(value, -1))}
+                  >
+                    <ChevronLeft size={16} aria-hidden />
+                  </button>
+                  <button
+                    type="button"
+                    className="home-month-nav-button"
+                    aria-label="Next month"
+                    title="Next month"
+                    disabled={selectedMonth === currentMonth}
+                    onClick={() => setSelectedMonth((value) => shiftMonth(value, 1))}
+                  >
+                    <ChevronRight size={16} aria-hidden />
+                  </button>
+                </span>
+                {!isStaleMonth && selectedMonth === currentMonth && (
                   <Link to="/history" className="home-metric-link">
                     {displayMtdStats.count} {displayMtdStats.count === 1 ? "entry" : "entries"} →
                   </Link>
                 )}
               </div>
               {mtdHelpOpen && <p className="section-help-popover">{MTD_HELP_TEXT}</p>}
-              {isStaleMonth ? (
+              {isStaleMonth || isSelectedMonthLoading || (dataset.status !== "ready" && !cachedEntry) ? (
                 <MetricRefreshing />
-              ) : displayMtdStats.count === 0 ? (
+              ) : displaySelectedMtdStats.count === 0 ? (
                 <p className="home-metric-empty">No expense entries</p>
               ) : (
                 <>
-                  <p className="home-metric-amount"><FormattedAmount prefix="$" value={displayMtdStats.usdTotal} /></p>
-                  {displayMtdStats.deviation && <DeviationLine deviation={displayMtdStats.deviation} />}
+                  <p className="home-metric-amount"><FormattedAmount prefix="$" value={displaySelectedMtdStats.usdTotal} /></p>
+                  {displaySelectedMtdStats.deviation && <DeviationLine deviation={displaySelectedMtdStats.deviation} />}
                   <MtdSpendChart
-                    dailyAmounts={displayMtdDailyAmounts}
-                    weekBoundaryPositions={displayWeekBoundaryPositions}
+                    dailyAmounts={selectedMonth === currentMonth ? displayMtdDailyAmounts : selectedMtdDailyAmounts}
+                    weekBoundaryPositions={selectedMonth === currentMonth ? displayWeekBoundaryPositions : getMtdWeekBoundaryPositions(year, month)}
                     year={year}
                     month={month}
                   />
@@ -408,9 +454,9 @@ export function HomePage(): JSX.Element {
                 <MonthDetailsPanel
                   records={records}
                   toIso={toIso}
-                  startDate={monthStart}
-                  endDate={today}
-                  isLoading={dataset.status !== "ready"}
+                  startDate={selectedMonthRange.startDate}
+                  endDate={selectedMonthRange.endDate}
+                  isLoading={dataset.status !== "ready" || isSelectedMonthLoading}
                 />
               )}
             </div>

@@ -8,6 +8,8 @@ import {
   getRolling12mStats,
   getMtdDailyAmounts,
   getMtdWeekBoundaryPositions,
+  getMonthRange,
+  shiftMonth,
   buildIsoNormalizer,
   formatPctChange,
   type IsoNormalizer,
@@ -107,7 +109,7 @@ describe("getTodayStats", () => {
 // ─── getMtdStats ──────────────────────────────────────────────────────────────
 
 describe("getMtdStats", () => {
-  it("counts only records in current month up to today", () => {
+  it("counts all records in the selected calendar month, including future-dated records", () => {
     const records = [
       makeRecord("2026-06-01", "10"),
       makeRecord("2026-06-09", "20"),
@@ -115,8 +117,8 @@ describe("getMtdStats", () => {
       makeRecord("2026-05-31", "8"), // prior month
     ];
     const stats = getMtdStats(records, TODAY, iso);
-    expect(stats.count).toBe(2);
-    expect(stats.usdTotal).toBeCloseTo(30);
+    expect(stats.count).toBe(3);
+    expect(stats.usdTotal).toBeCloseTo(35);
   });
 
   it("returns null deviation when no prior-month data exists", () => {
@@ -431,11 +433,11 @@ describe("getMtdDailyAmounts", () => {
     expect(amounts).toHaveLength(30); // June has 30 days
   });
 
-  it("fills past days with 0 and future days with null", () => {
+  it("fills every day in the month with a numeric amount", () => {
     const amounts = getMtdDailyAmounts([], TODAY, iso);
     expect(amounts[0]).toBe(0);          // June 1 (past)
     expect(amounts[8]).toBe(0);          // June 9 (today)
-    expect(amounts[9]).toBeNull();       // June 10 (future)
+    expect(amounts[9]).toBe(0);          // June 10 (future)
   });
 
   it("accumulates USD per day correctly", () => {

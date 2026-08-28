@@ -766,6 +766,38 @@ button { cursor: pointer; }
   padding: 0;
 }
 
+.home-month-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+
+.home-month-nav-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.home-month-nav-button:hover:not(:disabled) {
+  color: var(--color-accent);
+  border-color: var(--color-border);
+  background: var(--color-surface-raised);
+}
+
+.home-month-nav-button:disabled {
+  color: var(--color-text-placeholder);
+  cursor: not-allowed;
+}
+
 .home-metric-amount {
   font-size: var(--font-size-3xl);
   font-weight: 700;

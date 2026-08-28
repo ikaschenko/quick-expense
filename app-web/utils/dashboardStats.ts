@@ -35,6 +35,31 @@ function daysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
 }
 
+export interface MonthRange {
+  startDate: string;
+  endDate: string;
+}
+
+function formatIsoDate(year: number, month: number, day: number): string {
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/** Returns the inclusive range for a calendar month identified by YYYY-MM. */
+export function getMonthRange(monthKey: string): MonthRange {
+  const [year, month] = monthKey.split("-").map(Number);
+  return {
+    startDate: formatIsoDate(year, month, 1),
+    endDate: formatIsoDate(year, month, daysInMonth(year, month)),
+  };
+}
+
+/** Moves a YYYY-MM month key by the requested number of calendar months. */
+export function shiftMonth(monthKey: string, offset: number): string {
+  const [year, month] = monthKey.split("-").map(Number);
+  const shifted = new Date(year, month - 1 + offset, 1);
+  return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, "0")}`;
+}
+
 /** TODAY card stats. */
 export function getTodayStats(
   records: ExpenseRecord[],
@@ -54,19 +79,23 @@ export function getMtdStats(
   todayStr: string,
   toIso: IsoNormalizer,
 ): PeriodStats {
-  const [year, month, day] = todayStr.split("-").map(Number);
-  const monthPad = String(month).padStart(2, "0");
-  const monthStart = `${year}-${monthPad}-01`;
+  const monthKey = todayStr.slice(0, 7);
+  return getMonthStats(records, monthKey, toIso);
+}
 
-  const current = filterPeriod(records, monthStart, todayStr, toIso);
+/** Full calendar-month stats compared with the full preceding calendar month. */
+export function getMonthStats(
+  records: ExpenseRecord[],
+  monthKey: string,
+  toIso: IsoNormalizer,
+): PeriodStats {
+  const { startDate, endDate } = getMonthRange(monthKey);
+  const current = filterPeriod(records, startDate, endDate, toIso);
   const usdTotal = sumUsd(current);
 
-  const prevMonth = month === 1 ? 12 : month - 1;
-  const prevYear = month === 1 ? year - 1 : year;
-  const prevMonthPad = String(prevMonth).padStart(2, "0");
-  const clampedDay = Math.min(day, daysInMonth(prevYear, prevMonth));
-  const priorStart = `${prevYear}-${prevMonthPad}-01`;
-  const priorEnd = `${prevYear}-${prevMonthPad}-${String(clampedDay).padStart(2, "0")}`;
+  const priorMonthKey = shiftMonth(monthKey, -1);
+  const { startDate: priorStart, endDate: priorEnd } = getMonthRange(priorMonthKey);
+  const [prevYear, prevMonth] = priorMonthKey.split("-").map(Number);
   const prevMonthLabel = new Date(prevYear, prevMonth - 1, 1).toLocaleString("en", { month: "short" });
   const prior = filterPeriod(records, priorStart, priorEnd, toIso);
 
@@ -220,20 +249,20 @@ export function getRolling12mStats(
  */
 export function getMtdDailyAmounts(
   records: ExpenseRecord[],
-  todayStr: string,
+  monthKey: string,
   toIso: IsoNormalizer,
 ): (number | null)[] {
-  const [year, month, day] = todayStr.split("-").map(Number);
+  const [year, month] = monthKey.split("-").map(Number);
+  const { startDate, endDate } = getMonthRange(monthKey);
   const totalDays = daysInMonth(year, month);
 
-  const amounts = new Array<number | null>(totalDays).fill(null);
-  for (let d = 1; d <= day; d++) amounts[d - 1] = 0;
+  const amounts = new Array<number | null>(totalDays).fill(0);
 
   for (const r of records) {
     const iso = toIso(r.Date);
     if (!iso) continue;
     const [ry, rm, rd] = iso.split("-").map(Number);
-    if (ry !== year || rm !== month || rd > day) continue;
+    if (iso < startDate || iso > endDate || ry !== year || rm !== month) continue;
     amounts[rd - 1] = (amounts[rd - 1] ?? 0) + parseUsd(r);
   }
 

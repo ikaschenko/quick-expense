@@ -158,7 +158,7 @@ describe("HomePage — widget info tooltips", () => {
     mockDataset({});
     renderHome();
 
-    await user.click(screen.getByRole("button", { name: /Show info about [A-Z]+ SO FAR$/ }));
+    await user.click(screen.getByRole("button", { name: /Show info about [A-Z]+ TOTAL$/ }));
     expect(
       screen.getByText(
         "Total amount of expenses for the ongoing month, compared to the same date range for the previous month (shown only when comparable prior-month data exists).",
@@ -380,6 +380,109 @@ describe("HomePage — Month details expand", () => {
 
     expect(loadDataset).toHaveBeenCalled();
     expect(screen.getByText("Loading…")).toBeTruthy();
+  });
+});
+
+describe("HomePage — month navigation", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("starts on the current month and disables navigation into the future", () => {
+    const today = formatLocalDate(new Date());
+    mockDataset({ snapshot: {
+      records: [makeRecord(1, today, "25")],
+      distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} },
+      loadedAt: 0,
+      payloadBytes: 0,
+      loadPhase: "full",
+    } });
+    renderHome();
+
+    expect(screen.getByText(`${new Date().toLocaleString("en", { month: "long" }).toUpperCase()} TOTAL`)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Next month" })).toHaveProperty("disabled", true);
+  });
+
+  it("navigates to the previous month and back without changing other widgets", async () => {
+    const user = userEvent.setup();
+    const today = formatLocalDate(new Date());
+    const previous = new Date();
+    previous.setMonth(previous.getMonth() - 1, 15);
+    const previousDate = formatLocalDate(previous);
+    mockDataset({ snapshot: {
+      records: [makeRecord(1, today, "25"), makeRecord(2, previousDate, "40")],
+      distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} },
+      loadedAt: 0,
+      payloadBytes: 0,
+      loadPhase: "full",
+    } });
+    renderHome();
+
+    await user.click(screen.getByRole("button", { name: "Previous month" }));
+
+    expect(screen.getByText(`${previous.toLocaleString("en", { month: "long" }).toUpperCase()} TOTAL`)).toBeTruthy();
+    expect(screen.getAllByText("$40").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Next month" })).toHaveProperty("disabled", false);
+    const todayCard = Array.from(document.querySelectorAll(".home-metric-card"))
+      .find((card) => card.textContent?.includes("TODAY"));
+    expect(todayCard?.textContent).toContain("25");
+
+    await user.click(screen.getByRole("button", { name: "Next month" }));
+    expect(screen.getByText(`${new Date().toLocaleString("en", { month: "long" }).toUpperCase()} TOTAL`)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Next month" })).toHaveProperty("disabled", true);
+  });
+
+  it("loads live records when navigating from a fresh cache with details collapsed", async () => {
+    const user = userEvent.setup();
+    const today = formatLocalDate(new Date());
+    const previous = new Date();
+    previous.setMonth(previous.getMonth() - 1, 15);
+    const previousDate = formatLocalDate(previous);
+    const loadDataset = vi.fn().mockResolvedValue(undefined);
+
+    metricsCache.save("test@example.com", {
+      cacheDate: today,
+      spreadsheetId: "abc123",
+      sheetLastModifiedTime: "2026-01-01T00:00:00.000Z",
+      todayStats: { count: 1, usdTotal: 25, dualCurrency: null },
+      mtdStats: { count: 1, usdTotal: 25, deviation: null },
+      ytdStats: { count: 1, usdTotal: 25, deviation: null },
+      ytdForecast: { amountUsd: 300, deviation: null },
+      rolling12mStats: { count: 1, usdTotal: 25, deviation: null },
+      mtdDailyAmounts: [25],
+      weekBoundaryPositions: [],
+    });
+    vi.mocked(googleSheetsService.getSheetModifiedTime).mockResolvedValueOnce({
+      modifiedTime: "2026-01-01T00:00:00.000Z",
+    });
+    mockDataset({ status: "idle", snapshot: null, loadDataset });
+    const { rerender } = renderHome();
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Previous month" })).toBeTruthy());
+    await user.click(screen.getByRole("button", { name: "Previous month" }));
+
+    expect(loadDataset).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Updating…")).toBeTruthy();
+
+    mockDataset({
+      status: "ready",
+      snapshot: {
+        records: [makeRecord(1, today, "25"), makeRecord(2, previousDate, "40")],
+        distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} },
+        loadedAt: 0,
+        payloadBytes: 0,
+        loadPhase: "full",
+      },
+      loadDataset,
+    });
+    rerender(
+      <MemoryRouter initialEntries={["/home"]}>
+        <HomePage />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText(`${previous.toLocaleString("en", { month: "long" }).toUpperCase()} TOTAL`)).toBeTruthy();
+    expect(screen.getAllByText("$40").length).toBeGreaterThan(0);
   });
 });
 
