@@ -40,6 +40,7 @@ export function MonthDetailsPanel({ records, toIso, startDate, endDate, isLoadin
     [records, startDate, endDate, toIso, grouped],
   );
   const rows = topFilter === "top5" ? breakdown.slice(0, 5) : breakdown;
+  const currentTotal = rows.reduce((sum, row) => sum + row.currentAmount, 0);
   const pieSlices = useMemo(() => buildPieSlices(rows, topFilter), [rows, topFilter]);
 
   const currentLabel = monthLabel(startDate);
@@ -98,6 +99,7 @@ export function MonthDetailsPanel({ records, toIso, startDate, endDate, isLoadin
             <thead>
               <tr>
                 <th>Category</th>
+                <th>%</th>
                 <th>{currentLabel}</th>
                 <th>{priorLabel}</th>
               </tr>
@@ -106,6 +108,11 @@ export function MonthDetailsPanel({ records, toIso, startDate, endDate, isLoadin
               {rows.map((row) => (
                 <tr key={row.label}>
                   <td>{row.label}</td>
+                  <td>
+                    <span className="month-details-percent">
+                      {currentTotal !== 0 ? ((row.currentAmount / currentTotal) * 100).toFixed(1) : "0.0"}%
+                    </span>
+                  </td>
                   <td>
                     <span className="month-details-amount">
                       <FormattedAmount prefix="$" value={row.currentAmount} />

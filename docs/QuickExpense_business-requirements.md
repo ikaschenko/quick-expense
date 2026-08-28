@@ -375,7 +375,7 @@ Tooltip copy per widget:
 Below the MTD chart, a **"Month details"** toggle button expands/collapses a details panel for the current calendar month (tap again to collapse; collapsed by default).
 
 - **Average spent per day:** total USD spend for the month-to-date range ÷ the inclusive number of calendar days elapsed so far (days with $0 spend still count).
-- **Category breakdown table:** one row per category, current-month USD total vs. the same date range in the prior calendar month, sorted descending by current-month amount.
+- **Category breakdown table:** one row per category, the category's percentage of the displayed rows' current-month USD total (one fractional digit), current-month USD total vs. the same date range in the prior calendar month, sorted descending by current-month amount. When the displayed current-month total is zero, the percentage is shown as 0.0%.
   - A row shows the prior-month amount as **"-"** and omits the deviation percentage when the category has no comparable prior-month spend.
   - When the prior-month amount for a category is exactly $0, the deviation percentage is also omitted (avoids showing a meaningless +∞%).
   - When both amounts exist, a signed deviation percentage is shown (▲ red for an increase, ▼ green for a decrease).

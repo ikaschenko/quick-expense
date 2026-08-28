@@ -173,7 +173,7 @@ quick-expense/
 | Front-end framework | React 18 + TypeScript | SPA, client-side routing via react-router-dom v6 |
 | Build tool | Vite 7 | Dev server on port 5173, proxies `/api` to backend |
 | Test runner | Vitest 4 + jsdom | `npm test` runs `vitest run` |
-| Charts | chart.js + react-chartjs-2 | MTD area chart on Home dashboard (tree-shakeable, MIT) |
+| Charts | chart.js + react-chartjs-2 and echarts | Chart.js powers the MTD area chart; ECharts powers the category pie chart in `CategoryPieChart` |
 | Icons | lucide-react | |
 | Back-end runtime | Node.js 22, Express 4 | ES modules (`"type": "module"` in package.json) |
 | Session management | express-session + connect-pg-simple | PostgreSQL-backed sessions |
@@ -661,7 +661,7 @@ Every Winston log entry receives `requestId` from the request context, plus nume
 
 19. **Append vs. insert mode for new expenses** — `POST /api/expenses` reads the date column first: dates ≥ last row (or no data / bad format / out-of-order) append via `appendExpenseRow`; an earlier date on a well-ordered sheet inserts at the correct position via `addExpenseRow` (client does a full reload after insert). `alignValuesToHeaders()` handles legacy ordering + column mapping on both paths.
 
-20. **Month details drill-down** (issue #89) — `MonthDetailsPanel.tsx`, a deliberately generic (`{ records, toIso, startDate, endDate }`) expand/collapse panel below the MTD chart, reusable by a future YTD consumer. All math lives in `app-web/utils/monthDetails.ts`, computed via `useMemo` from the in-memory dataset — no API/DB changes. `CategoryPieChart.tsx` labels only the `MAX_PIE_LABELS` (10) largest slices — beyond that callouts overlap unreadably — and surfaces per-slice details (name / amount / share) via a click-or-tap ECharts tooltip; this supersedes the read-only, `silent: true` decision from issue #94.
+20. **Month details drill-down** (issue #89) — `MonthDetailsPanel.tsx`, a deliberately generic (`{ records, toIso, startDate, endDate }`) expand/collapse panel below the MTD chart, reusable by a future YTD consumer. The category table includes each displayed row's share of the displayed current-month total, formatted to one fractional digit and right-aligned; a zero displayed total renders 0.0%. All other math lives in `app-web/utils/monthDetails.ts`, computed via `useMemo` from the in-memory dataset — no API/DB changes. `CategoryPieChart.tsx` labels only the `MAX_PIE_LABELS` (10) largest slices — beyond that callouts overlap unreadably — and surfaces per-slice details (name / amount / share) via a click-or-tap ECharts tooltip; this supersedes the read-only, `silent: true` decision from issue #94.
 
 21. **Row repositioning on edit** — `PUT /api/expenses/:rowNumber` delegates to `moveExpenseRow` (`app-server/google-sheets.js`): in-place `updateExpenseRow` when the new date keeps the row between its neighbors, else `addExpenseRow` then delete the original (insert-before-delete = no data loss). Client reloads on `moveMode: true`, identical to insert-mode add.
 

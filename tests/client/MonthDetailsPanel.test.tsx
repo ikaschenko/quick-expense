@@ -48,6 +48,38 @@ describe("MonthDetailsPanel — isLoading", () => {
 });
 
 describe("MonthDetailsPanel — controls", () => {
+  it("shows each category's share of the displayed current-month total to one decimal place", () => {
+    const records = [
+      makeRecord("2026-08-01", "10", "Food"),
+      makeRecord("2026-08-02", "20", "Rent"),
+      makeRecord("2026-08-03", "0", "Other"),
+    ];
+    render(
+      <MonthDetailsPanel records={records} toIso={toIso} startDate="2026-08-01" endDate="2026-08-06" />,
+    );
+
+    const table = screen.getByRole("table");
+    expect(table.textContent).toContain("33.3%");
+    expect(table.textContent).toContain("66.7%");
+    expect(table.textContent).toContain("0.0%");
+    expect(screen.getAllByRole("columnheader").map((header) => header.textContent)).toEqual([
+      "Category",
+      "%",
+      "Aug 2026",
+      "Jul 2026",
+    ]);
+  });
+
+  it("shows 0.0% for every category when the displayed current-month total is zero", () => {
+    const records = [makeRecord("2026-08-01", "0", "Food"), makeRecord("2026-08-02", "0", "Rent")];
+    render(
+      <MonthDetailsPanel records={records} toIso={toIso} startDate="2026-08-01" endDate="2026-08-06" />,
+    );
+
+    expect(screen.getByRole("table").textContent).toContain("0.0%");
+    expect(screen.getAllByRole("cell", { name: "0.0%" })).toHaveLength(2);
+  });
+
   it("shows 'No expenses in this period.' when the range has no records", () => {
     render(
       <MonthDetailsPanel records={[]} toIso={toIso} startDate="2026-08-01" endDate="2026-08-06" />,

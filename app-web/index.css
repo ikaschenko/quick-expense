@@ -991,15 +991,8 @@ button { cursor: pointer; }
 
 .month-details-pie {
   width: 100%;
-  height: 220px;
+  height: 260px;
   margin-bottom: var(--space-4);
-}
-
-.month-details-pie-hint {
-  margin: calc(-1 * var(--space-3)) 0 var(--space-4);
-  text-align: center;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-placeholder);
 }
 
 .month-details-table {
@@ -1032,6 +1025,12 @@ button { cursor: pointer; }
 .month-details-amount {
   display: inline-block;
   min-width: 8ch;
+  text-align: right;
+}
+
+.month-details-percent {
+  display: inline-block;
+  min-width: 5ch;
   text-align: right;
 }
 
