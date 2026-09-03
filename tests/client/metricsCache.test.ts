@@ -5,7 +5,7 @@ const TODAY = "2026-06-24";
 
 function makeEntry(overrides: Partial<MetricsCacheEntry> = {}): MetricsCacheEntry {
   return {
-    schemaVersion: 8,
+    schemaVersion: 9,
     cacheDate: TODAY,
     spreadsheetId: "sheet-abc123",
     sheetLastModifiedTime: "2026-06-24T10:00:00.000Z",

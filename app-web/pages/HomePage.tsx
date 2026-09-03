@@ -305,9 +305,7 @@ export function HomePage(): JSX.Element {
   // Prefer live computed values; fall back to cache when dataset is still idle.
   const displayTodayStats = cachedEntry?.todayStats ?? todayStats;
   const displayMtdStats = cachedEntry?.mtdStats ?? mtdStats;
-  const displaySelectedMtdStats = selectedMonth === currentMonth && dataset.status !== "ready"
-    ? cachedEntry?.mtdStats ?? selectedMonthStats
-    : selectedMonthStats;
+  const displaySelectedMtdStats = selectedMonth === currentMonth ? displayMtdStats : selectedMonthStats;
   const displayYtdStats = cachedEntry?.ytdStats ?? ytdStats;
   const displayYtdForecast = cachedEntry?.ytdForecast ?? ytdForecast;
   const displayRolling12mStats = cachedEntry?.rolling12mStats ?? rolling12mStats;

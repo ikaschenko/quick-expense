@@ -310,8 +310,8 @@ Dashboard data is loaded via the same mechanism as History (shared in-memory dat
 
 - Header: **"{MONTH NAME} SO FAR"** (e.g. "JUNE SO FAR")
 - Right side: **"N entries →"** link to Tail/History
-- Body: USD total for Jan 1 – today's date of the current month
-- **Year-over-year deviation** (shown only when prior-year data exists in the dataset for the same calendar-month period): `▲ +X% · +$Y vs Jun '25` or `▼ -X%...`. Omitted entirely when no prior-year data is present.
+- Body: USD total for the current month from day 1 through today, extended through the latest current-month expense date when a future-dated expense exists.
+- **Previous-month deviation** (shown only when comparable previous-month data exists): `▲ +X% · +$Y vs May '26` or `▼ -X%...`. The previous-month comparison uses day 1 through the same cutoff day as the current MTD range, clamped to the previous month's last day.
 - **Mini ECharts line/area chart:** daily USD totals for each day in the selected month, plotted as exact connected daily points using accumulated spend. For the current month, actual data includes today and any future-dated expenses; remaining days are null and shown with a gray forecast area and dashed reference line. Completed months are entirely actual, including zero-spend days. Gray vertical lines mark week boundaries (each Monday). Tapping a data point shows a tooltip with the date, daily amount, and accumulated total.
 
 ### 2.7.4 YEARLY VIEW widget (issue #81)

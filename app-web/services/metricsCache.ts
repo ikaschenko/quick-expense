@@ -1,7 +1,7 @@
 import { type TodayStats, type PeriodStats, type YtdForecast } from "../utils/dashboardStats";
 import { readJsonStorage, writeJsonStorage } from "../utils/storage";
 
-const CURRENT_SCHEMA_VERSION = 8;
+const CURRENT_SCHEMA_VERSION = 9;
 const MAX_DAYS_IN_MONTH = 31;
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_DATETIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;

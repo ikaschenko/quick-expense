@@ -121,6 +121,23 @@ describe("getMtdStats", () => {
     expect(stats.usdTotal).toBeCloseTo(35);
   });
 
+  it("compares deviation against the previous month only through the current MTD cutoff day", () => {
+    const records = [
+      makeRecord("2026-06-01", "10"),
+      makeRecord("2026-06-12", "25"), // future-dated current-month expense extends MTD cutoff
+      makeRecord("2026-05-01", "10"),
+      makeRecord("2026-05-12", "20"),
+      makeRecord("2026-05-13", "1000"), // after cutoff — excluded from comparison
+    ];
+
+    const stats = getMtdStats(records, TODAY, iso);
+    expect(stats.count).toBe(2);
+    expect(stats.usdTotal).toBeCloseTo(35);
+    expect(stats.deviation).not.toBeNull();
+    expect(stats.deviation!.priorTotal).toBeCloseTo(30);
+    expect(stats.deviation!.absChange).toBeCloseTo(5);
+  });
+
   it("returns null deviation when no prior-month data exists", () => {
     const stats = getMtdStats([makeRecord(TODAY, "100")], TODAY, iso);
     expect(stats.deviation).toBeNull();

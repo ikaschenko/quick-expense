@@ -80,7 +80,25 @@ export function getMtdStats(
   toIso: IsoNormalizer,
 ): PeriodStats {
   const monthKey = todayStr.slice(0, 7);
-  return getMonthStats(records, monthKey, toIso);
+  const [year, month] = monthKey.split("-").map(Number);
+  const { startDate } = getMonthRange(monthKey);
+  const actualThroughDay = getMtdActualThroughDay(records, monthKey, toIso, todayStr);
+  const currentEnd = formatIsoDate(year, month, actualThroughDay);
+  const current = filterPeriod(records, startDate, currentEnd, toIso);
+  const usdTotal = sumUsd(current);
+
+  const priorMonthKey = shiftMonth(monthKey, -1);
+  const [prevYear, prevMonth] = priorMonthKey.split("-").map(Number);
+  const priorStart = formatIsoDate(prevYear, prevMonth, 1);
+  const priorEnd = formatIsoDate(prevYear, prevMonth, Math.min(actualThroughDay, daysInMonth(prevYear, prevMonth)));
+  const prevMonthLabel = new Date(prevYear, prevMonth - 1, 1).toLocaleString("en", { month: "short" });
+  const prior = filterPeriod(records, priorStart, priorEnd, toIso);
+
+  return {
+    count: current.length,
+    usdTotal,
+    deviation: buildDeviation(usdTotal, sumUsd(prior), prior.length, `${prevMonthLabel} '${String(prevYear).slice(2)}`),
+  };
 }
 
 /** Full calendar-month stats compared with the full preceding calendar month. */
@@ -257,17 +275,7 @@ export function getMtdDailyAmounts(
   const [year, month] = monthKey.split("-").map(Number);
   const { startDate, endDate } = getMonthRange(monthKey);
   const totalDays = daysInMonth(year, month);
-
-  const currentMonthKey = todayStr.slice(0, 7);
-  let actualThroughDay = totalDays;
-  if (monthKey === currentMonthKey) {
-    actualThroughDay = Number(todayStr.slice(8, 10));
-    for (const r of records) {
-      const iso = toIso(r.Date);
-      if (!iso || iso < startDate || iso > endDate || iso.slice(0, 7) !== monthKey) continue;
-      actualThroughDay = Math.max(actualThroughDay, Number(iso.slice(8, 10)));
-    }
-  }
+  const actualThroughDay = getMtdActualThroughDay(records, monthKey, toIso, todayStr);
 
   const amounts = new Array<number | null>(totalDays)
     .fill(null)
@@ -282,6 +290,26 @@ export function getMtdDailyAmounts(
   }
 
   return amounts;
+}
+
+function getMtdActualThroughDay(
+  records: ExpenseRecord[],
+  monthKey: string,
+  toIso: IsoNormalizer,
+  todayStr: string,
+): number {
+  const [year, month] = monthKey.split("-").map(Number);
+  const { startDate, endDate } = getMonthRange(monthKey);
+  const totalDays = daysInMonth(year, month);
+  if (monthKey !== todayStr.slice(0, 7)) return totalDays;
+
+  let actualThroughDay = Number(todayStr.slice(8, 10));
+  for (const r of records) {
+    const iso = toIso(r.Date);
+    if (!iso || iso < startDate || iso > endDate || iso.slice(0, 7) !== monthKey) continue;
+    actualThroughDay = Math.max(actualThroughDay, Number(iso.slice(8, 10)));
+  }
+  return actualThroughDay;
 }
 
 /**
