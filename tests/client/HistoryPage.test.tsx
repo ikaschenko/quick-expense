@@ -187,7 +187,7 @@ describe("HistoryPage — Add for this date", () => {
 
     renderHistory();
 
-    const addButton = screen.getByRole("button", { name: /add expense for this date/i });
+    const addButton = screen.getByRole("button", { name: /add the expense for this date/i });
     await user.click(addButton);
 
     expect(mockNavigate).toHaveBeenCalledWith("/add", {

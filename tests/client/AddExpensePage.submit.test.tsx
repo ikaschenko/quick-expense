@@ -610,13 +610,20 @@ describe("AddExpensePage — repeat mode FX rates", () => {
       config: { ...eurConfig.config, currencies: ["PLN"] },
     });
     vi.mocked(currencyService.fetchLiveRates).mockResolvedValue({ PLN: 3.68 });
+    // The stale backup rate must never shadow the live rate for the prefilled historical date.
+    vi.mocked(googleSheetsService.getLatestFxRateBackup).mockResolvedValueOnce({ rates: { PLN: "9.99" } });
 
     renderAddPageWithPrefillDate("8/25/2026");
 
     await waitFor(() => {
       expect(vi.mocked(currencyService.fetchLiveRates)).toHaveBeenLastCalledWith(["PLN"], "2026-08-25");
     });
-    expect(vi.mocked(googleSheetsService.getLatestFxRateBackup)).not.toHaveBeenCalled();
+    await waitFor(() => {
+      const fxRateInput = screen.getByRole("textbox", {
+        name: /exchange rate: PLN per 1 USD/i,
+      }) as HTMLInputElement;
+      expect(fxRateInput.value).toBe("3.68");
+    });
   });
 });
 
