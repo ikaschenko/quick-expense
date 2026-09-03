@@ -308,7 +308,7 @@ Dashboard data is loaded via the same mechanism as History (shared in-memory dat
 
 ### 2.7.3 JUNE SO FAR (MTD) card
 
-- Header: **"{MONTH NAME} SO FAR"** (e.g. "JUNE SO FAR")
+- Header: **"{MONTH NAME} SO FAR"** (e.g. "JUNE SO FAR") while viewing the current, still-in-progress month. When navigated (via prev/next) to a completed past month, the header instead reads **"{MONTH NAME} TOTAL"**.
 - Right side: **"N entries →"** link to Tail/History
 - Body: USD total for the current month from day 1 through today, extended through the latest current-month expense date when a future-dated expense exists.
 - **Previous-month deviation** (shown only when comparable previous-month data exists): `▲ +X% · +$Y vs May '26` or `▼ -X%...`. The previous-month comparison uses day 1 through the same cutoff day as the current MTD range, clamped to the previous month's last day.

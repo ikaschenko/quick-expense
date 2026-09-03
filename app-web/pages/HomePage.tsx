@@ -278,6 +278,7 @@ export function HomePage(): JSX.Element {
   }, [dataset.status, todayStats, mtdStats, ytdStats, ytdForecast, rolling12mStats]);
 
   const monthName = new Date(year, month - 1, 1).toLocaleString("en", { month: "long" }).toUpperCase();
+  const mtdTitle = `${monthName} ${selectedMonth === currentMonth ? "SO FAR" : "TOTAL"}`;
   const dayLabel = formatShortDate(today);
   const selectedMonthRange = getMonthRange(selectedMonth);
 
@@ -393,8 +394,8 @@ export function HomePage(): JSX.Element {
             <div className="home-metric-card">
               <div className="home-metric-header">
                 <span className="home-metric-title">
-                  {monthName} TOTAL
-                  <WidgetHelpButton label={`${monthName} TOTAL`} open={mtdHelpOpen} onToggle={() => setMtdHelpOpen((v) => !v)} />
+                  {mtdTitle}
+                  <WidgetHelpButton label={mtdTitle} open={mtdHelpOpen} onToggle={() => setMtdHelpOpen((v) => !v)} />
                 </span>
                 <span className="home-month-nav" aria-label="Month navigation">
                   <button

@@ -158,7 +158,7 @@ describe("HomePage — widget info tooltips", () => {
     mockDataset({});
     renderHome();
 
-    await user.click(screen.getByRole("button", { name: /Show info about [A-Z]+ TOTAL$/ }));
+    await user.click(screen.getByRole("button", { name: /Show info about [A-Z]+ SO FAR$/ }));
     expect(
       screen.getByText(
         "Total amount of expenses for the ongoing month, compared to the same date range for the previous month (shown only when comparable prior-month data exists).",
@@ -399,7 +399,7 @@ describe("HomePage — month navigation", () => {
     } });
     renderHome();
 
-    expect(screen.getByText(`${new Date().toLocaleString("en", { month: "long" }).toUpperCase()} TOTAL`)).toBeTruthy();
+    expect(screen.getByText(`${new Date().toLocaleString("en", { month: "long" }).toUpperCase()} SO FAR`)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Next month" })).toHaveProperty("disabled", true);
   });
 
@@ -428,7 +428,7 @@ describe("HomePage — month navigation", () => {
     expect(todayCard?.textContent).toContain("25");
 
     await user.click(screen.getByRole("button", { name: "Next month" }));
-    expect(screen.getByText(`${new Date().toLocaleString("en", { month: "long" }).toUpperCase()} TOTAL`)).toBeTruthy();
+    expect(screen.getByText(`${new Date().toLocaleString("en", { month: "long" }).toUpperCase()} SO FAR`)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Next month" })).toHaveProperty("disabled", true);
   });
 
