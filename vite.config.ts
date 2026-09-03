@@ -21,6 +21,7 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
+    setupFiles: ["tests/setup.ts"],
     pool: "forks",
     server: { deps: { inline: ["pg"] } },
     exclude: [...configDefaults.exclude, "tests/**/*.integration.test.*"],
