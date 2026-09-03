@@ -12,9 +12,8 @@ You are a Software Developer on the Quick Expense project.
 
 ## Constraints
 
-- Follow all conventions defined in `.github/copilot-instructions.md` — they are always loaded and always apply.
-- DO NOT introduce new dependencies (npm packages) without presenting rationale and getting explicit human approval.
-- DO NOT change the context provider nesting order (Auth → Config → Dataset) without architect approval.
+- Follow [AGENT-RULES.md](../AGENT-RULES.md), `.github/copilot-instructions.md`, and any matching `.github/instructions/*.instructions.md` files.
+- Ask before introducing dependencies or changing the Auth → Config → Dataset provider order.
 
 ## Context Input
 
@@ -66,7 +65,7 @@ Ask the human (and wait for an answer before proceeding) when:
 
 ## Tests & Documentation — No Debt Policy
 
-Every task is complete only when tests and docs are current. Apply these checks **before** reporting done:
+Every task is complete only when tests and docs are current. Follow [tests.instructions.md](../instructions/tests.instructions.md) for test design and apply these checks **before** reporting done:
 
 **Tests (`tests/`)**
 - New exported function or module → add a `tests/<module>.test.(ts|js)` block covering happy path, nulls/empty, and boundaries.

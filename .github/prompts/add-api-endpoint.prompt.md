@@ -61,7 +61,7 @@ Connect the new service function to the component or context that will use it.
 Add test coverage in `tests/`:
 - Test the service function's request shape if non-trivial.
 - Test any new pure utility logic introduced.
-- Follow Vitest conventions: `describe()`/`it()`/`expect()`.
+- Follow [tests.instructions.md](../instructions/tests.instructions.md).
 
 ---
 

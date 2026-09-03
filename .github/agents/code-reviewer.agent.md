@@ -28,8 +28,8 @@ Check the diff against:
 
 1. **Acceptance criteria** — does the code actually satisfy each numbered criterion? Flag unmet or partially-met criteria.
 2. **Plan adherence** — does the diff match the agreed plan/Dev Summary steps? Flag scope creep (unrelated changes) and undocumented deviations.
-3. **Security (OWASP Top 10)** — injection, auth/access-control gaps, secrets exposure, missing input validation, unsafe deserialization, SSRF, CSRF on mutating routes.
-4. **Pattern conformance** — matches `.github/copilot-instructions.md` and the relevant `instructions/*.md` for the touched area (frontend/server/tests/css). Flag violations (e.g. raw `fetch` in a component, a `.ts` file under `app-server/`, a direct `setup_shares` query outside `sharing.js`).
+3. **Security** — check [SECURITY-CHECKLIST.md](../SECURITY-CHECKLIST.md).
+4. **Pattern conformance** — matches `.github/copilot-instructions.md` and the relevant `instructions/*.md` for the touched area. Flag violations (e.g. raw `fetch` in a component, a `.ts` file under `app-server/`, a direct `setup_shares` query outside `sharing.js`).
 5. **Correctness/logic bugs** — off-by-one, unhandled null/empty, incorrect state mutation, race conditions.
 6. **Duplication** — net-new code that duplicates an existing utility/helper.
 

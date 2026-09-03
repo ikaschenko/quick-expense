@@ -17,22 +17,14 @@ This is a solo-built product. The human tests manually and covers happy paths on
 
 ## Constraints
 
-- Test files in `tests/` as `<module>.test.ts` or `<module>.test.js`, grouped into `tests/client/` (frontend) and `tests/server/` (backend).
-- Component tests (`*.tsx`) use Vitest + jsdom; follow patterns in `tests/client/AddExpensePage.test.tsx` and `tests/client/ExpenseTable.test.tsx`.
-- Do NOT modify production code (`app-web/`, `app-server/`) — only test files.
-- Use Vitest with `describe()` / `it()` conventions.
+- Follow [AGENT-RULES.md](../AGENT-RULES.md) and [tests.instructions.md](../instructions/tests.instructions.md).
+- Component tests (`*.tsx`) use Vitest + jsdom; follow existing `tests/client/` patterns.
 
 ## Modes
 
 ### Mode 1 — Feature Test (default)
 
-When a feature or function is described, write tests covering:
-
-1. Happy path — expected inputs produce expected outputs.
-2. Null / empty — `null`, `undefined`, `""`, empty arrays, missing required fields.
-3. Boundary values — zero, negative numbers, max-length strings, single-element arrays.
-4. Malformed input — wrong types, invalid formats (bad date, non-numeric amount, invalid URL).
-5. Error paths — API failure, network error, auth expiry (where applicable).
+When a feature or function is described, write tests using the risk categories in [tests.instructions.md](../instructions/tests.instructions.md).
 
 ### Mode 2 — Coverage Gap Audit
 

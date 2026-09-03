@@ -29,8 +29,7 @@ description: "Use when designing test scenarios, writing unit or integration tes
        expect(functionUnderTest(input)).toBe(expected);
      });
      ```
-   - Test null/undefined coercion paths and empty strings.
-   - Test boundary values (empty arrays, zero, negative numbers, single elements).
+   - Follow the risk categories in [tests.instructions.md](../../instructions/tests.instructions.md).
 4. **Verify.** Run `npm test` — all tests must pass.
 
 ## Integration Test Procedure
@@ -49,15 +48,7 @@ description: "Use when designing test scenarios, writing unit or integration tes
 
 ## Test Design Checklist
 
-For each function, verify coverage of:
-
-| Category | Examples |
-|----------|----------|
-| Happy path | Normal inputs producing expected output |
-| Null/empty | `null`, `undefined`, `""`, missing fields |
-| Boundary | Zero-length arrays, max-length strings, single element |
-| Malformed input | Invalid URLs, non-string where string expected, wrong date format |
-| Return type | Correct type returned (string, array, object, number) |
+For each function, use the risk categories in [tests.instructions.md](../../instructions/tests.instructions.md) as the authoritative checklist.
 
 ## Reference Patterns
 
@@ -68,4 +59,4 @@ Existing tests to follow as examples:
 
 ## Rules
 
-Follow [tests.instructions.md](../../instructions/tests.instructions.md): Vitest (not Jest), one behavior per test, inline minimal data, don't mock what you can call directly, and never modify production code (`app-web/`, `app-server/`) — only test files.
+Follow [tests.instructions.md](../../instructions/tests.instructions.md) for Vitest conventions, risk categories, fixture style, and write boundaries.

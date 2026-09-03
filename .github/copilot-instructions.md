@@ -10,18 +10,12 @@
 
 Quick Expense is a React 18 + Vite SPA with an Express 4 backend for recording personal/family expenses via Google Sheets. Frontend is TypeScript (`app-web/`), backend is plain JS with ES modules (`app-server/`). See [architecture.md](../architecture.md) for the full system design, data model, and technology stack.
 
-## Quick Commands
+## Workflow Defaults
 
-| Action | Command |
-|--------|---------|
-| Install deps | `npm install` |
-| Dev (client + server) | `npm run dev` |
-| Build (TS compile + Vite) | `npm run build` |
-| Unit tests (Vitest) | `npm test` |
-| Integration tests | `npm run test:integration` |
-| Security audit | `npm run security:audit` |
-
-Run `npm run build` after TypeScript changes and `npm test` after any logic change — both must pass before a task is complete.
+- Command reference lives in [README.md](../README.md). Common gates: `npm run build` after TypeScript changes and `npm test` after logic changes.
+- For ambiguous work, ask all blocking questions first. For clear work, make the smallest verifiable change and validate it.
+- Favor reuse, lower LOC, low cyclomatic complexity, and long-term readability. Ask before adding dependencies or making architectural trade-offs.
+- Split complex tasks into chunks with a validation step per chunk. See [PHILOSOPHY.md](PHILOSOPHY.md) for the full AI development philosophy.
 
 ## Dev Environment
 
@@ -29,23 +23,6 @@ Run `npm run build` after TypeScript changes and `npm test` after any logic chan
 - PostgreSQL is required — see [database.md](../app-server/db/database.md) for local setup (native or Docker).
 - Vite dev server runs on `:5173` and proxies `/api` to the Express backend on `:3001`.
 - Node.js `22.12.0` (pinned in `.nvmrc`). Supported range: `^22.12.0`.
-
-## Core Engineering Principles
-
-- **Root cause, not symptom.** If a fix feels like a workaround, dig deeper.
-- **Domain-driven.** Model the domain first (entities/relationships) before store, API, or UI. Name things after domain concepts.
-- **SOLID / low coupling, high cohesion.** One reason to change per module; extend via composition; contexts own state, services own API calls, utils are pure; frontend and backend communicate only via `/api` — never import across the boundary.
-- **Do more with less.** Less code is the quality metric — prefer the simplest correct solution. Reuse existing utils/helpers before writing new (zero duplication); suggest tactical refactorings with LOC impact when they reduce net code. Prefer proven libraries over hand-rolled code, but get human approval before adding any dependency.
-- **Maintainability first.** Every change leaves the codebase equal or better — no dead code, orphaned files, or commented-out blocks. Flag rot; don't ignore it.
-- **Ask before deciding.** On architectural choices, trade-offs, or ambiguity, ask with options + a recommendation.
-
-## Behavioral Guidelines
-
-- **Resolve open questions before generating output.** If planning a deliverable surfaces open questions, ask them all first — never produce content against unresolved assumptions.
-- **Think before coding.** State assumptions explicitly. If multiple interpretations exist, surface them — don't pick silently. If a simpler approach exists, say so.
-- **Goal-driven execution.** Turn tasks into verifiable goals ("fix the bug" → "write a failing test that reproduces it, then make it pass"). For multi-step work, state a brief plan with a verify step per step.
-- **Surgical changes.** Touch only what the task requires; match existing style; remove imports/vars your change orphaned; don't touch pre-existing dead code unless asked. Exception: apply deduplication that reduces net code (LOC impact noted) after approval.
-- **Be concise.** Short bullets and brief rationale — no verbose prose or restating the obvious.
 
 ## Project-Specific Conventions
 

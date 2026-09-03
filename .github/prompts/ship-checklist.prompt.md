@@ -32,6 +32,7 @@ Run `npm run security:audit`.
 
 - If vulnerabilities are found, report each one (package, severity, description).
 - Fix any high/critical severity findings. Flag moderate/low for human review.
+- For source-level review, use [SECURITY-CHECKLIST.md](../SECURITY-CHECKLIST.md).
 
 ---
 
@@ -41,7 +42,7 @@ Use @workspace to identify files changed in the current feature (check git diff 
 
 For each changed file:
 - Does a test in `tests/` exercise the changed behavior?
-- If a new exported function was added, does it have at least a happy path + one error/boundary test?
+- If a new exported function was added, does it cover the relevant categories in [tests.instructions.md](../instructions/tests.instructions.md)?
 
 List: ✅ covered | ⚠️ partial | ❌ missing — for each changed file.
 
