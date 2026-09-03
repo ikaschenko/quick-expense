@@ -306,6 +306,65 @@ describe("AddExpensePage — repeat mode pre-fill", () => {
   });
 });
 
+describe("AddExpensePage — repeat currency during configuration loading", () => {
+  it("selects the repeated record currency once configuration is available", async () => {
+    const repeatRecord: ExpenseRecord = {
+      Date: "2025-03-15",
+      USD: "15.40",
+      Category: "Tax",
+      spentBy: "alice@example.com",
+      spentFor: "bob@example.com",
+      Comment: "Property tax",
+      currencyAmounts: { BYN: "47.43" },
+      customFields: {},
+      rowNumber: 7,
+    };
+    const configuredContext = {
+      config: {
+        email: "test@example.com",
+        spreadsheetId: "abc123",
+        spreadsheetUrl: "https://docs.google.com/spreadsheets/d/abc123/edit",
+        sheetName: "Expenses" as const,
+        currencies: ["PLN", "BYN"],
+        customColumns: [],
+        configMode: "default" as const,
+        predefinedCategories: [],
+        hiddenColumns: [],
+        isGuest: false,
+        accessLevel: "edit" as const,
+        ownerEmail: null,
+      },
+      isConfigLoading: false,
+      error: null,
+      fileName: null,
+      isFileNameLoading: false,
+      saveConfig: vi.fn(),
+      clearConfig: vi.fn(),
+      clearError: vi.fn(),
+      refreshConfig: vi.fn(),
+      updateStructure: vi.fn(),
+      toggleColumnVisibility: vi.fn(),
+    };
+    vi.mocked(useConfig).mockReturnValue({ ...configuredContext, config: null, isConfigLoading: true });
+
+    const view = renderAddPageWithRepeat(repeatRecord);
+
+    vi.mocked(useConfig).mockReturnValue(configuredContext);
+    view.rerender(
+      <MemoryRouter initialEntries={[{ pathname: "/add", state: { repeatRecord } }]}>
+        <Routes>
+          <Route path="/add" element={<AddExpensePage />} />
+          <Route path="/home" element={<div>Home</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const amountInput = await screen.findByRole("textbox", { name: /Amount in BYN/i }) as HTMLInputElement;
+    expect(amountInput.value).toBe("47.43");
+    expect(screen.getByRole("tab", { name: "BYN" }).getAttribute("aria-selected")).toBe("true");
+  });
+});
+
 describe("AddExpensePage — history date pre-fill", () => {
   it("normalizes a historical sheet date instead of falling back to today", () => {
     vi.mocked(useDataset).mockReturnValue({

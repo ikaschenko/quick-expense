@@ -276,21 +276,21 @@ export function AddExpensePage(): JSX.Element {
       setActiveNonUsdCurrency(getPreferredCurrency(normalizedRecord, visibleCurrencies));
       setHasManuallySelectedCurrency(true);
       hasInitializedRecordPrefill.current = true;
-    } else if (repeatRecord) {
+    } else if (repeatRecord && config && !isConfigLoading) {
       setDraft(createDraftFromRecord({ ...repeatRecord, Date: getTodayLocalDate() }, activeCurrencies, customColumns));
       setActiveNonUsdCurrency(getPreferredCurrency(repeatRecord, visibleCurrencies));
       setHasManuallySelectedCurrency(true);
       hasInitializedRecordPrefill.current = true;
     }
-  }, [activeCurrencies, customColumns, detectedDateFormat, editRecord, isEditMode, repeatRecord, visibleCurrencies]);
+  }, [activeCurrencies, config, customColumns, detectedDateFormat, editRecord, isConfigLoading, isEditMode, repeatRecord, visibleCurrencies]);
 
   useEffect(() => {
-    if (hasManuallySelectedCurrency || !dataset.snapshot) {
+    if (hasManuallySelectedCurrency || repeatRecord || !dataset.snapshot) {
       return;
     }
 
     setActiveNonUsdCurrency(latestSavedCurrency);
-  }, [dataset.snapshot, hasManuallySelectedCurrency, latestSavedCurrency]);
+  }, [dataset.snapshot, hasManuallySelectedCurrency, latestSavedCurrency, repeatRecord]);
 
   useEffect(() => {
     if (!config) {
