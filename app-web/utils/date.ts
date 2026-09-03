@@ -9,6 +9,32 @@ export function getTodayLocalDate(): string {
   return formatLocalDate(new Date());
 }
 
+export function normalizeDateToIso(dateValue: string): string {
+  if (!dateValue) return dateValue;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) return dateValue;
+
+  const parts = dateValue.split(/[/-]/);
+  if (parts.length !== 3) return dateValue;
+
+  const [first, second, third] = parts;
+  const firstNum = Number.parseInt(first, 10);
+  const secondNum = Number.parseInt(second, 10);
+  const thirdNum = Number.parseInt(third, 10);
+  if (![firstNum, secondNum, thirdNum].every((num) => Number.isFinite(num))) return dateValue;
+
+  if (third.length === 4) {
+    if (firstNum > 12 && secondNum <= 12) return `${third}-${String(secondNum).padStart(2, "0")}-${String(firstNum).padStart(2, "0")}`;
+    if (secondNum > 12 && firstNum <= 12) return `${third}-${String(firstNum).padStart(2, "0")}-${String(secondNum).padStart(2, "0")}`;
+    return `${third}-${String(firstNum).padStart(2, "0")}-${String(secondNum).padStart(2, "0")}`;
+  }
+
+  if (first.length === 4) {
+    return `${first}-${String(secondNum).padStart(2, "0")}-${String(thirdNum).padStart(2, "0")}`;
+  }
+
+  return dateValue;
+}
+
 /**
  * Infers a date formatter from a list of date strings sampled from the sheet.
  * Detects separator (/ - .), year position (first or last), and day/month order

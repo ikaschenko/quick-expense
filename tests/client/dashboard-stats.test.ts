@@ -429,15 +429,15 @@ describe("getYtdForecast deviation", () => {
 
 describe("getMtdDailyAmounts", () => {
   it("has length equal to days in the month", () => {
-    const amounts = getMtdDailyAmounts([], TODAY, iso);
+    const amounts = getMtdDailyAmounts([], "2026-06", iso, TODAY);
     expect(amounts).toHaveLength(30); // June has 30 days
   });
 
-  it("fills every day in the month with a numeric amount", () => {
-    const amounts = getMtdDailyAmounts([], TODAY, iso);
+  it("uses null for days after today in the current month", () => {
+    const amounts = getMtdDailyAmounts([], "2026-06", iso, TODAY);
     expect(amounts[0]).toBe(0);          // June 1 (past)
     expect(amounts[8]).toBe(0);          // June 9 (today)
-    expect(amounts[9]).toBe(0);          // June 10 (future)
+    expect(amounts[9]).toBeNull();       // June 10 (future)
   });
 
   it("accumulates USD per day correctly", () => {
@@ -446,14 +446,27 @@ describe("getMtdDailyAmounts", () => {
       makeRecord("2026-06-01", "10"),
       makeRecord("2026-06-09", "42"),
     ];
-    const amounts = getMtdDailyAmounts(records, TODAY, iso);
+    const amounts = getMtdDailyAmounts(records, "2026-06", iso, TODAY);
     expect(amounts[0]).toBeCloseTo(25); // June 1
     expect(amounts[8]).toBeCloseTo(42); // June 9
   });
 
+  it("extends actual data through a future-dated expense", () => {
+    const amounts = getMtdDailyAmounts([makeRecord("2026-06-12", "42")], "2026-06", iso, TODAY);
+    expect(amounts[8]).toBe(0);          // today
+    expect(amounts[11]).toBe(42);        // future expense is actual
+    expect(amounts[12]).toBeNull();      // later day remains forecast
+  });
+
+  it("returns every day as actual data for a completed month", () => {
+    const amounts = getMtdDailyAmounts([], "2026-05", iso, TODAY);
+    expect(amounts).toHaveLength(31);
+    expect(amounts.every((amount) => amount === 0)).toBe(true);
+  });
+
   it("ignores records outside current month", () => {
     const records = [makeRecord("2026-05-31", "100"), makeRecord("2026-07-01", "100")];
-    const amounts = getMtdDailyAmounts(records, TODAY, iso);
+    const amounts = getMtdDailyAmounts(records, TODAY, iso, TODAY);
     expect(amounts.slice(0, 9).every((v) => v === 0)).toBe(true);
   });
 });

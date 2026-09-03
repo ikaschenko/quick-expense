@@ -166,6 +166,40 @@ describe("HistoryPage — per-day totals", () => {
   });
 });
 
+describe("HistoryPage — Add for this date", () => {
+  beforeEach(() => {
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+    mockNavigate.mockReset();
+  });
+
+  it("shows the quick-add button and sends the selected date back into Add mode", async () => {
+    const user = userEvent.setup();
+    const record = makeRecord(1, "2026-06-09", "25");
+    mockDataset({
+      snapshot: {
+        records: [record],
+        distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} },
+        loadedAt: 0,
+        payloadBytes: 0,
+        loadPhase: "full",
+      },
+    });
+
+    renderHistory();
+
+    const addButton = screen.getByRole("button", { name: /add expense for this date/i });
+    await user.click(addButton);
+
+    expect(mockNavigate).toHaveBeenCalledWith("/add", {
+      state: {
+        prefillDate: "2026-06-09",
+        returnTo: "/history",
+        returnDate: "2026-06-09",
+      },
+    });
+  });
+});
+
 describe("HistoryPage — Repeat button", () => {
   beforeEach(() => {
     window.HTMLElement.prototype.scrollIntoView = vi.fn();

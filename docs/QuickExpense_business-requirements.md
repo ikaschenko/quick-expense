@@ -183,7 +183,7 @@ For the conversion of currency, here are key guidelines:
 * When adding an expense dated **today**, the form fetches the current market rate from a free key-less exchange-rate API and displays it as a tappable hint next to the rate input: *"Market: X.XX"*. Tapping the hint copies the rate into the input field. If the fetch fails for any reason, the hint is not shown and the form falls back to fully manual entry. The hint is not shown when editing historical expenses.
 * Converted USD value must be rounded to 2 decimal places.
 * Missing or invalid manual rate input must block Save when a non-USD amount is entered and USD is not entered directly.
-* The last-used FX rate for each currency is backed up in the database and pre-filled on the next Add.
+* The last-used FX rate for each currency is backed up in the database and pre-filled on the next Add. When Add is opened for a date from History, the form instead pre-fills each currency's average rate from that day's expenses; if the selected currency was not used that day, its rate is blank.
 
 What format for currency fields? Answer:
 
@@ -312,7 +312,7 @@ Dashboard data is loaded via the same mechanism as History (shared in-memory dat
 - Right side: **"N entries →"** link to Tail/History
 - Body: USD total for Jan 1 – today's date of the current month
 - **Year-over-year deviation** (shown only when prior-year data exists in the dataset for the same calendar-month period): `▲ +X% · +$Y vs Jun '25` or `▼ -X%...`. Omitted entirely when no prior-year data is present.
-- **Mini area chart:** daily USD totals for each day in the current month (past days filled, future days empty). Gray vertical lines mark week boundaries (each Monday). Tapping a data point shows a tooltip `{date} · ${amount}`.
+- **Mini ECharts line/area chart:** daily USD totals for each day in the selected month, plotted as exact connected daily points using accumulated spend. For the current month, actual data includes today and any future-dated expenses; remaining days are null and shown with a gray forecast area and dashed reference line. Completed months are entirely actual, including zero-spend days. Gray vertical lines mark week boundaries (each Monday). Tapping a data point shows a tooltip with the date, daily amount, and accumulated total.
 
 ### 2.7.4 YEARLY VIEW widget (issue #81)
 

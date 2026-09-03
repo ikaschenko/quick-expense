@@ -20,6 +20,7 @@ import {
   Check,
   Lock,
   Repeat2,
+  Plus,
 } from "lucide-react";
 import { ExpenseRecord } from "../types/expense";
 import { COMMENT_PREVIEW_LENGTH, getCustomColumnLabel, groupByDate, hasDetails } from "../utils/expenseTable";
@@ -48,6 +49,8 @@ interface ExpenseTableProps {
   savedRowNumber?: number | null;
   /** Called when the user requests repeating a record. */
   onRepeatRequest?: (record: ExpenseRecord) => void;
+  /** Called when the user wants to add a new expense for a specific date. */
+  onAddForDate?: (date: string) => void;
   /** When true, Edit and Delete controls are locked for View-only guests. */
   isViewOnly?: boolean;
   /** Per-day USD/dual-currency totals, keyed by date group key. Omitted when totals should not be shown (e.g. filtered views). */
@@ -292,6 +295,7 @@ export function ExpenseTable({
   onDeleteRequest,
   onEditRequest,
   onRepeatRequest,
+  onAddForDate,
   highlightedRowNumber,
   savedRowNumber,
   isViewOnly,
@@ -315,7 +319,23 @@ export function ExpenseTable({
         return (
         <div key={group.date} className="expense-date-group">
           <div className="expense-date-header">
-            <span>{formatGroupDate(group.date)}</span>
+            <span className="expense-date-left">
+              <span>{formatGroupDate(group.date)}</span>
+              {onAddForDate ? (
+                <button
+                  className="btn btn-secondary btn-inline expense-date-add-button"
+                  type="button"
+                  aria-label="Add the expense for this date"
+                  title="Add the expense for this date"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddForDate(group.date);
+                  }}
+                >
+                  + Add
+                </button>
+              ) : null}
+            </span>
             {dayTotal ? (
               <span className="expense-date-totals">
                 {dayTotal.dualCurrency ? (

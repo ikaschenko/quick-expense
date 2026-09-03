@@ -1508,6 +1508,7 @@ button { cursor: pointer; }
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-2);
   font-size: var(--font-size-xs);
   font-weight: 600;
   text-transform: uppercase;
@@ -1517,12 +1518,31 @@ button { cursor: pointer; }
   margin-bottom: var(--space-2);
 }
 
+.expense-date-left {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
 .expense-date-totals {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--space-2);
+  margin-left: auto;
   text-transform: none;
   letter-spacing: normal;
+}
+
+.expense-date-add-button {
+  padding: 6px 8px;
+  min-height: 28px;
+  font-size: var(--font-size-xs);
+  line-height: 1.2;
+  border-radius: var(--radius-sm);
 }
 
 .expense-date-badge {

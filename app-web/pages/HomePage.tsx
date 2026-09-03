@@ -249,8 +249,8 @@ export function HomePage(): JSX.Element {
   const ytdStats = useMemo(() => getYtdStats(records, today, toIso), [records, today, toIso]);
   const ytdForecast = useMemo(() => getYtdForecast(records, today, toIso), [records, today, toIso]);
   const rolling12mStats = useMemo(() => getRolling12mStats(records, today, toIso), [records, today, toIso]);
-  const currentMtdDailyAmounts = useMemo(() => getMtdDailyAmounts(records, currentMonth, toIso), [records, currentMonth, toIso]);
-  const selectedMtdDailyAmounts = useMemo(() => getMtdDailyAmounts(records, selectedMonth, toIso), [records, selectedMonth, toIso]);
+  const currentMtdDailyAmounts = useMemo(() => getMtdDailyAmounts(records, currentMonth, toIso, today), [records, currentMonth, toIso, today]);
+  const selectedMtdDailyAmounts = useMemo(() => getMtdDailyAmounts(records, selectedMonth, toIso, today), [records, selectedMonth, toIso, today]);
 
   const [year, month] = selectedMonth.split("-").map(Number);
   const [currentYear, currentMonthNumber] = currentMonth.split("-").map(Number);

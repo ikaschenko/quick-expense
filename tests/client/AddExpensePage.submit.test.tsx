@@ -83,7 +83,9 @@ vi.mock("../../app-web/services/currency", () => ({
 }));
 
 import { googleSheetsService } from "../../app-web/services/googleSheets";
+import { currencyService } from "../../app-web/services/currency";
 import { useConfig } from "../../app-web/contexts/ConfigContext";
+import { useDataset } from "../../app-web/contexts/DatasetContext";
 import { ExpenseRecord } from "../../app-web/types/expense";
 import { getTodayLocalDate } from "../../app-web/utils/date";
 
@@ -104,6 +106,28 @@ function renderAddPageWithRepeat(repeatRecord: ExpenseRecord) {
       <Routes>
         <Route path="/add" element={<AddExpensePage />} />
         <Route path="/home" element={<div>Home</div>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+function renderAddPageWithPrefillDate(prefillDate: string) {
+  return render(
+    <MemoryRouter initialEntries={[{ pathname: "/add", state: { prefillDate } }]}>
+      <Routes>
+        <Route path="/add" element={<AddExpensePage />} />
+        <Route path="/home" element={<div>Home</div>} />
+      </Routes>
+    </MemoryRouter>
+  );
+}
+
+function renderEditPage(record: ExpenseRecord) {
+  return render(
+    <MemoryRouter initialEntries={[{ pathname: `/edit/${record.rowNumber}`, state: { record, origin: "/history" } }]}>
+      <Routes>
+        <Route path="/edit/:rowNumber" element={<AddExpensePage />} />
+        <Route path="/history" element={<div>History</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -282,6 +306,48 @@ describe("AddExpensePage — repeat mode pre-fill", () => {
   });
 });
 
+describe("AddExpensePage — history date pre-fill", () => {
+  it("normalizes a historical sheet date instead of falling back to today", () => {
+    vi.mocked(useDataset).mockReturnValue({
+      snapshot: {
+        records: [{
+          Date: "15/06/2026",
+          USD: "25",
+          Category: "Misc",
+          spentBy: "test@example.com",
+          spentFor: "test@example.com",
+          Comment: "",
+          currencyAmounts: {},
+          customFields: {},
+          rowNumber: 1,
+        }],
+        distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} },
+        loadedAt: 0,
+        payloadBytes: 0,
+        loadPhase: "full",
+        dateOrderIssueRows: [],
+      },
+      status: "ready",
+      error: null,
+      isLoadingHistory: false,
+      loadDataset: vi.fn(),
+      reloadDataset: vi.fn(),
+      appendToDataset: vi.fn(),
+      updateInDataset: vi.fn(),
+      removeLastFromDataset: vi.fn(),
+      distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} },
+      searchFilters: { comment: "", categories: [], amountFrom: "", amountTo: "", spentBy: "", spentFor: "", customFields: {} },
+      setSearchFilters: vi.fn(),
+      invalidateDataset: vi.fn(),
+      clearError: vi.fn(),
+    });
+
+    renderAddPageWithPrefillDate("15/06/2026");
+
+    expect((screen.getByRole("textbox", { name: "Expense date" }) as HTMLInputElement).value).toBe("2026-06-15");
+  });
+});
+
 describe("AddExpensePage — repeat mode submit", () => {
   const repeatRecord: ExpenseRecord = {
     Date: "2025-03-15",
@@ -329,6 +395,75 @@ describe("AddExpensePage — repeat mode submit", () => {
   });
 });
 
+describe("AddExpensePage — edit mode FX rate derivation", () => {
+  const eurConfig = {
+    config: {
+      email: "test@example.com",
+      spreadsheetId: "abc123",
+      spreadsheetUrl: "https://docs.google.com/spreadsheets/d/abc123/edit",
+      sheetName: "Expenses" as const,
+      currencies: ["EUR"],
+      customColumns: [],
+      configMode: "default" as const,
+      predefinedCategories: [],
+      hiddenColumns: [],
+      isGuest: false,
+      accessLevel: "edit" as const,
+      ownerEmail: null,
+    },
+    isConfigLoading: false,
+    error: null,
+    fileName: null,
+    isFileNameLoading: false,
+    saveConfig: vi.fn(),
+    clearConfig: vi.fn(),
+    clearError: vi.fn(),
+    refreshConfig: vi.fn(),
+    updateStructure: vi.fn(),
+    toggleColumnVisibility: vi.fn(),
+  };
+
+  beforeEach(() => {
+    vi.mocked(useConfig).mockReturnValue(eurConfig);
+  });
+
+  it("derives the FX rate on initial historical edit render when USD and EUR values are already present", async () => {
+    vi.mocked(useDataset).mockReturnValue({
+      snapshot: { records: [], distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} }, loadedAt: 0, payloadBytes: 0, loadPhase: "full", dateOrderIssueRows: [] },
+      status: "ready",
+      error: null,
+      isLoadingHistory: false,
+      loadDataset: vi.fn(),
+      reloadDataset: vi.fn(),
+      appendToDataset: vi.fn(),
+      updateInDataset: vi.fn(),
+      removeLastFromDataset: vi.fn(),
+      distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} },
+      searchFilters: { comment: "", categories: [], amountFrom: "", amountTo: "", spentBy: "", spentFor: "", customFields: {} },
+      setSearchFilters: vi.fn(),
+      invalidateDataset: vi.fn(),
+      clearError: vi.fn(),
+    });
+
+    renderEditPage({
+      Date: "2024-10-18",
+      USD: "100.00",
+      Category: "Food",
+      spentBy: "test@example.com",
+      spentFor: "test@example.com",
+      Comment: "",
+      currencyAmounts: { EUR: "40.00" },
+      customFields: {},
+      rowNumber: 12,
+    });
+
+    await waitFor(() => {
+      expect((screen.getByRole("textbox", { name: /Exchange rate: EUR per 1 USD/i }) as HTMLInputElement).value).toBe("0.40");
+    });
+  });
+
+});
+
 describe("AddExpensePage — repeat mode FX rates", () => {
   const repeatRecord: ExpenseRecord = {
     Date: "2025-03-15",
@@ -371,6 +506,8 @@ describe("AddExpensePage — repeat mode FX rates", () => {
 
   beforeEach(() => {
     vi.mocked(useConfig).mockReturnValue(eurConfig);
+    vi.mocked(googleSheetsService.getLatestFxRateBackup).mockClear();
+    vi.mocked(currencyService.fetchLiveRates).mockClear();
   });
 
   afterEach(() => {
@@ -412,6 +549,38 @@ describe("AddExpensePage — repeat mode FX rates", () => {
       name: /exchange rate: EUR per 1 USD/i,
     })) as HTMLInputElement;
     expect(fxRateInput.value).toBe("");
+  });
+
+  it("fetches live FX for the selected historical date instead of deriving it from old rows", async () => {
+    vi.mocked(useDataset).mockReturnValue({
+      snapshot: { records: [], distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} }, loadedAt: 0, payloadBytes: 0, loadPhase: "full", dateOrderIssueRows: [] },
+      status: "ready",
+      error: null,
+      isLoadingHistory: false,
+      loadDataset: vi.fn(),
+      reloadDataset: vi.fn(),
+      appendToDataset: vi.fn(),
+      updateInDataset: vi.fn(),
+      removeLastFromDataset: vi.fn(),
+      distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} },
+      searchFilters: { comment: "", categories: [], amountFrom: "", amountTo: "", spentBy: "", spentFor: "", customFields: {} },
+      setSearchFilters: vi.fn(),
+      invalidateDataset: vi.fn(),
+      clearError: vi.fn(),
+    });
+
+    vi.mocked(useConfig).mockReturnValue({
+      ...eurConfig,
+      config: { ...eurConfig.config, currencies: ["PLN"] },
+    });
+    vi.mocked(currencyService.fetchLiveRates).mockResolvedValue({ PLN: 3.68 });
+
+    renderAddPageWithPrefillDate("8/25/2026");
+
+    await waitFor(() => {
+      expect(vi.mocked(currencyService.fetchLiveRates)).toHaveBeenLastCalledWith(["PLN"], "2026-08-25");
+    });
+    expect(vi.mocked(googleSheetsService.getLatestFxRateBackup)).not.toHaveBeenCalled();
   });
 });
 

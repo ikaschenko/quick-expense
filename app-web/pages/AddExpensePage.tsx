@@ -17,7 +17,7 @@ import {
   FxRateBackupPayload,
   ManualFxRates,
 } from "../types/expense";
-import { formatLocalDate, getTodayLocalDate, detectDateFormat } from "../utils/date";
+import { formatLocalDate, getTodayLocalDate, detectDateFormat, normalizeDateToIso } from "../utils/date";
 import { buildCommentSuggestions, expenseDraftToRowValues } from "../utils/spreadsheet";
 import { findDuplicateExpenses } from "../utils/expenseTable";
 import { parseOptionalDecimal, parsePositiveDecimal, validateExpenseDraft } from "../utils/validation";
@@ -93,6 +93,15 @@ function deriveInitialFxRates(record: ExpenseRecord, currencies: string[]): Manu
   return rates;
 }
 
+function deriveFxRateFromAmountPair(usdValue: string, nonUsdValue: string): string {
+  const usd = Number.parseFloat(usdValue);
+  const amount = Number.parseFloat(nonUsdValue);
+  if (!Number.isFinite(usd) || usd === 0 || !Number.isFinite(amount) || amount === 0) {
+    return "";
+  }
+  return (Math.abs(amount) / Math.abs(usd)).toFixed(2);
+}
+
 function getPreferredCurrency(
   record: { currencyAmounts?: Record<string, string> } | null | undefined,
   currencies: string[],
@@ -153,10 +162,19 @@ export function AddExpensePage(): JSX.Element {
 
   const isEditMode = !!rowNumberParam;
   const editRowNumber = rowNumberParam ? Number.parseInt(rowNumberParam, 10) : null;
-  const editState = (location.state as { record?: ExpenseRecord; origin?: string; repeatRecord?: ExpenseRecord } | null);
+  const editState = (location.state as {
+    record?: ExpenseRecord;
+    origin?: string;
+    repeatRecord?: ExpenseRecord;
+    prefillDate?: string;
+    returnTo?: string;
+    returnDate?: string;
+  } | null);
   const editRecord = editState?.record ?? null;
   const editOrigin = editState?.origin ?? "/history";
   const repeatRecord = editState?.repeatRecord ?? null;
+  const prefillDate = editState?.prefillDate ?? null;
+  const returnTo = editState?.returnTo ?? "/home";
 
   const handleEditBack = useCallback(() => {
     navigate(editOrigin, { state: { editResult: { rowNumber: editRowNumber, saved: false } }, replace: true });
@@ -176,9 +194,21 @@ export function AddExpensePage(): JSX.Element {
     [customColumns, hiddenColumns],
   );
 
-  const [draft, setDraft] = useState<ExpenseDraft>(
-    createInitialDraft(auth.session?.givenName ?? auth.session?.email ?? "", activeCurrencies, customColumns),
+  const detectedDateFormat = useMemo(
+    () => detectDateFormat(dataset.snapshot?.records.map((r) => r.Date) ?? []),
+    [dataset.snapshot],
   );
+
+  const [draft, setDraft] = useState<ExpenseDraft>(() => {
+    const baseDraft = createInitialDraft(auth.session?.givenName ?? auth.session?.email ?? "", activeCurrencies, customColumns);
+    const normalizedPrefillDate = prefillDate ? detectedDateFormat?.toIso(prefillDate) ?? prefillDate : null;
+    return normalizedPrefillDate ? { ...baseDraft, Date: normalizedPrefillDate } : baseDraft;
+  });
+
+  const handleAddBack = useCallback(() => {
+    navigate(returnTo, { state: { returnDate: draft.Date }, replace: true });
+  }, [draft.Date, navigate, returnTo]);
+
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -195,11 +225,15 @@ export function AddExpensePage(): JSX.Element {
   const [activeNonUsdCurrency, setActiveNonUsdCurrency] = useState<string | null>(
     visibleCurrencies[0] ?? null,
   );
+  const normalizedDraftDate = useMemo(
+    () => detectedDateFormat?.toIso(draft.Date) ?? normalizeDateToIso(draft.Date),
+    [detectedDateFormat, draft.Date],
+  );
   const [hasManuallySelectedCurrency, setHasManuallySelectedCurrency] = useState(false);
   const [currencyDictionary, setCurrencyDictionary] = useState<CurrencyDictionary | null>(null);
   const amountInputRef = useRef<HTMLInputElement>(null);
   const pendingSaveMode = useRef<'continue' | 'close'>('continue');
-  const hasFetchedLiveRates = useRef(false);
+  const hasFetchedLiveRates = useRef<string | null>(null);
   const isSavingRef = useRef(false);
   const pendingNormalizedDraft = useRef<ExpenseDraft | null>(null);
 
@@ -223,20 +257,22 @@ export function AddExpensePage(): JSX.Element {
     return getPreferredCurrency(latestRecord, visibleCurrencies);
   }, [dataset.snapshot, visibleCurrencies]);
 
-  const detectedDateFormat = useMemo(
-    () => detectDateFormat(dataset.snapshot?.records.map((r) => r.Date) ?? []),
-    [dataset.snapshot],
-  );
-
   // Pre-fill draft from the edit record once on mount; normalise the sheet date to ISO.
   // Add mode: the useState initialiser already sets a blank draft with today's ISO date.
   // Both modes init once — background config changes no longer reset in-progress input.
   useEffect(() => {
     if (isEditMode && editRecord) {
       const normalizedDate = detectedDateFormat?.toIso(editRecord.Date) ?? editRecord.Date;
-      setDraft(createDraftFromRecord({ ...editRecord, Date: normalizedDate }, activeCurrencies, customColumns));
-      setManualFxRates(deriveInitialFxRates(editRecord, activeCurrencies));
-      setActiveNonUsdCurrency(getPreferredCurrency(editRecord, visibleCurrencies));
+      const normalizedRecord = { ...editRecord, Date: normalizedDate };
+      const nextDraft = createDraftFromRecord(normalizedRecord, activeCurrencies, customColumns);
+      const nextRates = deriveInitialFxRates(normalizedRecord, activeCurrencies);
+      setDraft(nextDraft);
+      setManualFxRates((current) => ({
+        ...createEmptyFxRates(activeCurrencies),
+        ...current,
+        ...nextRates,
+      }));
+      setActiveNonUsdCurrency(getPreferredCurrency(normalizedRecord, visibleCurrencies));
       setHasManuallySelectedCurrency(true);
     } else if (repeatRecord) {
       setDraft(createDraftFromRecord({ ...repeatRecord, Date: getTodayLocalDate() }, activeCurrencies, customColumns));
@@ -269,6 +305,10 @@ export function AddExpensePage(): JSX.Element {
       return;
     }
 
+    if (prefillDate) {
+      return;
+    }
+
     let isActive = true;
     setIsLoadingFxBackup(true);
 
@@ -298,28 +338,61 @@ export function AddExpensePage(): JSX.Element {
     };
   }, [isEditMode, config?.spreadsheetId, activeCurrencies]);
 
-  // Fetch live FX rates from the market when the form opens for today's date.
-  // Uses visibleCurrencies (not activeCurrencies) so hidden/archived currencies
-  // (e.g. legacy codes not present in VALID_CURRENCY_CODES) are excluded from the request.
-  // Deps include visibleCurrencies.length so the effect re-fires once config loads
-  // (config is often not ready on the first render, so visibleCurrencies is []).
-  // The ref ensures the fetch happens only once regardless of subsequent re-renders.
+  // Fetch live FX rates for the selected form date. This covers both today and
+  // historical Add flows without the dead code path that tried to average same-day expenses.
   useEffect(() => {
-    if (hasFetchedLiveRates.current || visibleCurrencies.length === 0 || draft.Date !== getTodayLocalDate()) return;
+    if (isEditMode || visibleCurrencies.length === 0 || !normalizedDraftDate) return;
+    if (hasFetchedLiveRates.current === normalizedDraftDate) return;
 
-    hasFetchedLiveRates.current = true;
+    hasFetchedLiveRates.current = normalizedDraftDate;
     let isActive = true;
     setIsFetchingLiveRates(true);
 
     void currencyService
-      .fetchLiveRates(visibleCurrencies)
-      .then((rates) => { if (isActive) setLiveFxRates(rates); })
+      .fetchLiveRates(visibleCurrencies, normalizedDraftDate)
+      .then((rates) => {
+        if (!isActive) return;
+        setLiveFxRates(rates);
+        setManualFxRates((current) => {
+          const next = { ...current };
+          for (const code of visibleCurrencies) {
+            const value = rates[code];
+            next[code] = value !== undefined ? value.toFixed(2) : current[code] ?? "";
+          }
+          return next;
+        });
+      })
       .finally(() => { if (isActive) setIsFetchingLiveRates(false); });
 
     return () => { isActive = false; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleCurrencies.length]); // re-run when currencies become available; ref guards against re-fetch
+  }, [isEditMode, normalizedDraftDate, visibleCurrencies]);
   const draftCurrencyDeps = activeCurrencies.map((c) => draft.currencyAmounts[c]).join("|");
+  useEffect(() => {
+    if (!isEditMode || activeCurrencies.length === 0) return;
+
+    const nextRates = { ...manualFxRates };
+    let changed = false;
+
+    for (const code of activeCurrencies) {
+      const currentRate = nextRates[code] ?? "";
+      const currentRateValue = Number.parseFloat(currentRate);
+      const hasUsableRate = currentRate.trim() !== "" && Number.isFinite(currentRateValue) && currentRateValue !== 0;
+      if (hasUsableRate) continue;
+
+      const usdValue = draft.USD.trim();
+      const nonUsdValue = (draft.currencyAmounts[code] ?? "").trim();
+      const derivedRate = deriveFxRateFromAmountPair(usdValue, nonUsdValue);
+      if (!derivedRate) continue;
+
+      nextRates[code] = derivedRate;
+      changed = true;
+    }
+
+    if (changed) {
+      setManualFxRates(nextRates);
+    }
+  }, [draft.USD, draftCurrencyDeps, activeCurrencies, isEditMode, manualFxRates]);
+
   useEffect(() => {
     if (activeCurrencies.length === 0) return;
 
@@ -500,7 +573,10 @@ export function AddExpensePage(): JSX.Element {
       trackEvent("expense_added", { currency: submittedCurrency ?? "USD" });
       if (pendingSaveMode.current === 'close') {
         trackEvent("expense_added_close", { currency: submittedCurrency ?? "USD" });
-        navigate('/home', { state: { expenseSaved: true } });
+        navigate(returnTo, {
+          state: { returnDate: normalizedDraft.Date, expenseSaved: true },
+          replace: true,
+        });
         return;
       }
     } catch (submitError) {
@@ -631,7 +707,7 @@ export function AddExpensePage(): JSX.Element {
   }, [draft.Date]);
 
   return (
-    <Layout title={isEditMode ? "Edit Expense" : "Add Expense"} onBack={isEditMode ? handleEditBack : undefined}>
+    <Layout title={isEditMode ? "Edit Expense" : "Add Expense"} onBack={isEditMode ? handleEditBack : (!prefillDate ? undefined : handleAddBack)}>
       {isInsertingHistorical ? (
         <div className="add-insert-overlay" role="status" aria-live="polite">
           <LoadingBlock label="Recording an entry with an earlier date. This may take a moment while the history is being updated…" />
@@ -732,6 +808,7 @@ export function AddExpensePage(): JSX.Element {
         {/* FX Conversion Card — for active non-USD currency */}
         {activeNonUsdCurrency && (
           manualFxRates[activeNonUsdCurrency] ||
+          prefillDate ||
           draft.currencyAmounts[activeNonUsdCurrency] ||
           liveFxRates[activeNonUsdCurrency] !== undefined ||
           isFetchingLiveRates

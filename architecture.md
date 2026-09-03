@@ -112,7 +112,7 @@ quick-expense/
 │   │   ├── Layout.tsx         ← app shell: topbar + footer + page slot; Setup badge
 │   │   ├── LoadingBlock.tsx   ← spinner component
 │   │   ├── MonthDetailsPanel.tsx ← generic { records, toIso, startDate, endDate } drill-down panel: avg/day + category-vs-prior-month breakdown (reusable beyond Home MTD)
-│   │   ├── MtdSpendChart.tsx  ← Chart.js area chart for MTD daily spend (Home dashboard)
+│   │   ├── MtdSpendChart.tsx  ← ECharts line/area chart for MTD daily spend (Home dashboard)
 │   │   ├── ProtectedRoute.tsx ← redirect to login if unauthenticated
 │   │   ├── StatusBanner.tsx   ← error/success/info banner
 │   │   └── SharedConfigInvalidModal.tsx ← blocking modal shown when a guest's shared setup becomes invalid
@@ -173,7 +173,7 @@ quick-expense/
 | Front-end framework | React 18 + TypeScript | SPA, client-side routing via react-router-dom v6 |
 | Build tool | Vite 7 | Dev server on port 5173, proxies `/api` to backend |
 | Test runner | Vitest 4 + jsdom | `npm test` runs `vitest run` |
-| Charts | chart.js + react-chartjs-2 and echarts | Chart.js powers the MTD area chart; ECharts powers the category pie chart in `CategoryPieChart` |
+| Charts | echarts | ECharts powers the MTD line/area chart and category pie chart; MTD actual data uses straight daily segments and remaining current-month days use a gray forecast region |
 | Icons | lucide-react | |
 | Back-end runtime | Node.js 22, Express 4 | ES modules (`"type": "module"` in package.json) |
 | Session management | express-session + connect-pg-simple | PostgreSQL-backed sessions |
@@ -651,7 +651,7 @@ Every Winston log entry receives `requestId` from the request context, plus nume
 11. **No auto-creation of Config sheet** — the Config sheet is created only when the user explicitly saves a column mapping via `POST /api/config/mapping`. It is never auto-created during setup or validation flows.
 12. **Explicit consent gate for column mapping** — `POST /api/config/mapping` requires `confirmed: true` in the request body. This prevents accidental overwrites of existing Config sheet data from programmatic or double-submit scenarios.
 13. **Two-path setup model** — users choose between (a) creating a fresh spreadsheet from a template (default mode, no Config sheet) or (b) connecting an existing spreadsheet and optionally configuring a column mapping (config-driven mode). This design separates simple onboarding from advanced customization.
-14. **Home screen is a spending dashboard** — when a user is authenticated and has expense data, `/home` renders three metric cards: TODAY (today's entries + dual-currency display), JUNE SO FAR (MTD total + YoY deviation + mini area chart), and YEAR SO FAR (YTD total + YoY deviation). Dashboard data comes from `DatasetContext.loadDataset()` — no extra API call; in-memory cache is reused if valid. All aggregations cover all rows (all `WhoSpent` values). Implemented in `app-web/utils/dashboardStats.ts` and `app-web/components/MtdSpendChart.tsx`.
+14. **Home screen is a spending dashboard** — when a user is authenticated and has expense data, `/home` renders three metric cards: TODAY (today's entries + dual-currency display), JUNE SO FAR (MTD total + YoY deviation + mini ECharts line/area chart), and YEAR SO FAR (YTD total + YoY deviation). Dashboard data comes from `DatasetContext.loadDataset()` — no extra API call; in-memory cache is reused if valid. All aggregations cover all rows (all `WhoSpent` values). The MTD chart uses exact straight daily cumulative segments and points; current-month actual data extends through the later of today or the latest dated expense, while the remaining days are shown as a gray forecast region. Completed months are entirely actual. Implemented in `app-web/utils/dashboardStats.ts` and `app-web/components/MtdSpendChart.tsx`.
 15. **Setup status badge** — `Layout.tsx` overlays a green ✓ (`CheckCircle`) or red ⚠ (`AlertCircle`) badge on the Setup gear icon in the global bottom nav. Badge is computed from `ConfigContext.config.configMode`: green = sheet connected and valid; red = no sheet, or `configMode === 'config-invalid'`.
 16. **Two-phase progressive dataset load** — `GET /api/expenses` binary-searches the date column (`findExpenseStartRow`); with ≥20 historical rows it returns only the last `EXPENSE_RECENT_MONTHS` months (default 24) in Phase 1, then the client (`DatasetContext`) fetches the remainder via `GET /api/expenses/history?endRow=N` in the background. `DatasetSnapshot.loadPhase` (`"recent"` | `"full"`) tracks completion.
 

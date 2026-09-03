@@ -57,9 +57,20 @@ export function HistoryPage(): JSX.Element {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const historyState = (location.state as {
+    editResult?: { rowNumber: number; saved: boolean };
+    returnDate?: string;
+    returnTo?: string;
+  } | null) ?? null;
+
   const [highlightedRowNumber] = useState<number | null>(
-    (location.state as { editResult?: { rowNumber: number; saved: boolean } } | null)?.editResult?.rowNumber ?? null,
+    historyState?.editResult?.rowNumber ?? null,
   );
+  const dateFocusRowNumber = useMemo(() => {
+    if (!historyState?.returnDate || !dataset.snapshot) return null;
+    return dataset.snapshot.records.find((record) => record.Date === historyState.returnDate)?.rowNumber ?? null;
+  }, [dataset.snapshot, historyState?.returnDate]);
+  const effectiveHighlightedRowNumber = dateFocusRowNumber ?? highlightedRowNumber;
   const [savedRowNumber, setSavedRowNumber] = useState<number | null>(
     (location.state as { editResult?: { rowNumber: number; saved: boolean } } | null)?.editResult?.saved
       ? ((location.state as { editResult: { rowNumber: number } }).editResult.rowNumber)
@@ -173,6 +184,19 @@ export function HistoryPage(): JSX.Element {
   const handleRepeatRequest = useCallback(
     (record: ExpenseRecord) => {
       navigate("/add", { state: { repeatRecord: record } });
+    },
+    [navigate],
+  );
+
+  const handleAddForDate = useCallback(
+    (date: string) => {
+      navigate("/add", {
+        state: {
+          prefillDate: date,
+          returnTo: "/history",
+          returnDate: date,
+        },
+      });
     },
     [navigate],
   );
@@ -456,7 +480,8 @@ export function HistoryPage(): JSX.Element {
                   customColumns={config?.customColumns}
                   onEditRequest={handleEditRequest}
                   onRepeatRequest={handleRepeatRequest}
-                  highlightedRowNumber={highlightedRowNumber}
+                  onAddForDate={handleAddForDate}
+                  highlightedRowNumber={effectiveHighlightedRowNumber}
                   savedRowNumber={savedRowNumber}
                   isViewOnly={isViewOnly}
                 />
@@ -478,7 +503,8 @@ export function HistoryPage(): JSX.Element {
               onDeleteRequest={setConfirmRecord}
               onEditRequest={handleEditRequest}
               onRepeatRequest={handleRepeatRequest}
-              highlightedRowNumber={highlightedRowNumber}
+              onAddForDate={handleAddForDate}
+              highlightedRowNumber={effectiveHighlightedRowNumber}
               savedRowNumber={savedRowNumber}
               isViewOnly={isViewOnly}
               dayTotals={dayTotals ?? undefined}

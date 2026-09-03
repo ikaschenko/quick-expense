@@ -244,19 +244,34 @@ export function getRolling12mStats(
 }
 
 /**
- * Per-day USD totals for the current month.
- * Array length = days in month. Future days are null; past/today are actual totals (0 if no records).
+ * Per-day USD totals for a calendar month.
+ * The current month is actual through today or the latest dated expense, whichever is later;
+ * remaining days are null. Completed months are actual for every day (0 if no records).
  */
 export function getMtdDailyAmounts(
   records: ExpenseRecord[],
   monthKey: string,
   toIso: IsoNormalizer,
+  todayStr: string,
 ): (number | null)[] {
   const [year, month] = monthKey.split("-").map(Number);
   const { startDate, endDate } = getMonthRange(monthKey);
   const totalDays = daysInMonth(year, month);
 
-  const amounts = new Array<number | null>(totalDays).fill(0);
+  const currentMonthKey = todayStr.slice(0, 7);
+  let actualThroughDay = totalDays;
+  if (monthKey === currentMonthKey) {
+    actualThroughDay = Number(todayStr.slice(8, 10));
+    for (const r of records) {
+      const iso = toIso(r.Date);
+      if (!iso || iso < startDate || iso > endDate || iso.slice(0, 7) !== monthKey) continue;
+      actualThroughDay = Math.max(actualThroughDay, Number(iso.slice(8, 10)));
+    }
+  }
+
+  const amounts = new Array<number | null>(totalDays)
+    .fill(null)
+    .map((amount, index) => index < actualThroughDay ? 0 : amount);
 
   for (const r of records) {
     const iso = toIso(r.Date);
