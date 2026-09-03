@@ -11,8 +11,11 @@
         "/^git add\\b/": true,
         "/^git log\\b/": true,
 
+        "npm run build": true,
+        "/^npm\\stest\\s--.+/": true, 
         "/^npm(?:\\.cmd)?\\s+test\\b/": true,
         "/^npx(?:\\.cmd)?\\s+vitest\\s+run\\b/": true,
+        "/^npm\\stest\\s.*": true,
 
         "/^node(?:\\.exe)?\\s+--check\\b/": true
     }

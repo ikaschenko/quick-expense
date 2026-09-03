@@ -20,6 +20,7 @@ import {
 import { formatLocalDate, getTodayLocalDate, detectDateFormat, normalizeDateToIso } from "../utils/date";
 import { buildCommentSuggestions, expenseDraftToRowValues } from "../utils/spreadsheet";
 import { findDuplicateExpenses } from "../utils/expenseTable";
+import { parseRawNumber } from "../utils/currencyTotals";
 import { parseOptionalDecimal, parsePositiveDecimal, validateExpenseDraft } from "../utils/validation";
 import { AutosuggestInput } from "../components/AutosuggestInput";
 import { ExpenseCard } from "../components/ExpenseTable";
@@ -94,8 +95,8 @@ function deriveInitialFxRates(record: ExpenseRecord, currencies: string[]): Manu
 }
 
 function deriveFxRateFromAmountPair(usdValue: string, nonUsdValue: string): string {
-  const usd = Number.parseFloat(usdValue);
-  const amount = Number.parseFloat(nonUsdValue);
+  const usd = parseRawNumber(usdValue);
+  const amount = parseRawNumber(nonUsdValue);
   if (!Number.isFinite(usd) || usd === 0 || !Number.isFinite(amount) || amount === 0) {
     return "";
   }
@@ -234,6 +235,7 @@ export function AddExpensePage(): JSX.Element {
   const amountInputRef = useRef<HTMLInputElement>(null);
   const pendingSaveMode = useRef<'continue' | 'close'>('continue');
   const hasFetchedLiveRates = useRef<string | null>(null);
+  const hasInitializedRecordPrefill = useRef(false);
   const isSavingRef = useRef(false);
   const pendingNormalizedDraft = useRef<ExpenseDraft | null>(null);
 
@@ -257,11 +259,10 @@ export function AddExpensePage(): JSX.Element {
     return getPreferredCurrency(latestRecord, visibleCurrencies);
   }, [dataset.snapshot, visibleCurrencies]);
 
-  // Pre-fill draft from the edit record once on mount; normalise the sheet date to ISO.
-  // Add mode: the useState initialiser already sets a blank draft with today's ISO date.
-  // Both modes init once — background config changes no longer reset in-progress input.
+  // Pre-fill record-driven forms once all config-dependent currency fields are available.
   useEffect(() => {
-    if (isEditMode && editRecord) {
+    if (hasInitializedRecordPrefill.current) return;
+    if (isEditMode && editRecord && activeCurrencies.length > 0) {
       const normalizedDate = detectedDateFormat?.toIso(editRecord.Date) ?? editRecord.Date;
       const normalizedRecord = { ...editRecord, Date: normalizedDate };
       const nextDraft = createDraftFromRecord(normalizedRecord, activeCurrencies, customColumns);
@@ -274,13 +275,14 @@ export function AddExpensePage(): JSX.Element {
       }));
       setActiveNonUsdCurrency(getPreferredCurrency(normalizedRecord, visibleCurrencies));
       setHasManuallySelectedCurrency(true);
+      hasInitializedRecordPrefill.current = true;
     } else if (repeatRecord) {
       setDraft(createDraftFromRecord({ ...repeatRecord, Date: getTodayLocalDate() }, activeCurrencies, customColumns));
       setActiveNonUsdCurrency(getPreferredCurrency(repeatRecord, visibleCurrencies));
       setHasManuallySelectedCurrency(true);
+      hasInitializedRecordPrefill.current = true;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally run once on mount
+  }, [activeCurrencies, customColumns, detectedDateFormat, editRecord, isEditMode, repeatRecord, visibleCurrencies]);
 
   useEffect(() => {
     if (hasManuallySelectedCurrency || !dataset.snapshot) {
@@ -305,10 +307,6 @@ export function AddExpensePage(): JSX.Element {
       return;
     }
 
-    if (prefillDate) {
-      return;
-    }
-
     let isActive = true;
     setIsLoadingFxBackup(true);
 
@@ -324,7 +322,13 @@ export function AddExpensePage(): JSX.Element {
           const raw = backup.rates[code];
           rates[code] = raw ? Number(raw).toFixed(2) : "";
         }
-        setManualFxRates(rates);
+        setManualFxRates((current) => {
+          const next = { ...current };
+          for (const code of activeCurrencies) {
+            if (!next[code]?.trim()) next[code] = rates[code];
+          }
+          return next;
+        });
       })
       .catch(() => undefined)
       .finally(() => {

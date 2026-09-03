@@ -462,6 +462,42 @@ describe("AddExpensePage — edit mode FX rate derivation", () => {
     });
   });
 
+  it("derives formatted FX amounts after currencies become available", async () => {
+    vi.mocked(useConfig).mockReturnValue({
+      ...eurConfig,
+      config: { ...eurConfig.config, currencies: [] },
+    });
+
+    const view = renderEditPage({
+      Date: "2024-10-18",
+      USD: "$1,000.00",
+      Category: "Food",
+      spentBy: "test@example.com",
+      spentFor: "test@example.com",
+      Comment: "",
+      currencyAmounts: { EUR: "850,00" },
+      customFields: {},
+      rowNumber: 12,
+    });
+
+    vi.mocked(useConfig).mockReturnValue(eurConfig);
+    view.rerender(
+      <MemoryRouter initialEntries={[{ pathname: "/edit/12", state: { record: {
+        Date: "2024-10-18", USD: "$1,000.00", Category: "Food", spentBy: "test@example.com",
+        spentFor: "test@example.com", Comment: "", currencyAmounts: { EUR: "850,00" }, customFields: {}, rowNumber: 12,
+      }, origin: "/history" } }]}
+      >
+        <Routes>
+          <Route path="/edit/:rowNumber" element={<AddExpensePage />} />
+          <Route path="/history" element={<div>History</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect((screen.getByRole("textbox", { name: /Exchange rate: EUR per 1 USD/i }) as HTMLInputElement).value).toBe("0.85");
+    });
+  });
 });
 
 describe("AddExpensePage — repeat mode FX rates", () => {

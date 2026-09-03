@@ -179,11 +179,11 @@ Currency conversion: Here are key cases:
 
 For the conversion of currency, here are key guidelines:
 
-* Currency conversion rates are entered manually by the user in the Add flow.
-* When adding an expense dated **today**, the form fetches the current market rate from a free key-less exchange-rate API and displays it as a tappable hint next to the rate input: *"Market: X.XX"*. Tapping the hint copies the rate into the input field. If the fetch fails for any reason, the hint is not shown and the form falls back to fully manual entry. The hint is not shown when editing historical expenses.
+* Currency conversion rates can be entered manually by the user in the Add flow.
+* When adding an expense, the form fetches the market rate for the selected date from a free key-less exchange-rate API and pre-fills the rate input. For today, the rate is also displayed as a tappable hint: *"Market: X.XX"*. Tapping the hint copies the rate into the input field. If the fetch fails for any reason, the form falls back to fully manual entry. Edit mode derives the rate from the existing USD and non-USD amounts when both are available.
 * Converted USD value must be rounded to 2 decimal places.
 * Missing or invalid manual rate input must block Save when a non-USD amount is entered and USD is not entered directly.
-* The last-used FX rate for each currency is backed up in the database and pre-filled on the next Add. When Add is opened for a date from History, the form instead pre-fills each currency's average rate from that day's expenses; if the selected currency was not used that day, its rate is blank.
+* The last-used FX rate for each currency is backed up in the database and used as a fallback when a market rate is unavailable for a normal Add flow.
 
 What format for currency fields? Answer:
 
