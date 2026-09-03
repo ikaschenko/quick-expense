@@ -8,14 +8,15 @@
         "/^git status\\b/": true,
         "/^git fetch\\b/": true,
         "/^git switch\\b/": true,
-        "/^git add\\b/": true,
-        "/^git log\\b/": true,
+        "/^git add\\b/i": true,
+        "/^git log\\b/i": true,
+        "/^git show\\b/i": true,
 
         "npm run build": true,
-        "/^npm\\stest\\s--.+/": true, 
-        "/^npm(?:\\.cmd)?\\s+test\\b/": true,
+        "/^npm\\stest\\s--.+/i": true, 
+        "/^npm(?:\\.cmd)?\\s+test\\b/i": true,
         "/^npx(?:\\.cmd)?\\s+vitest\\s+run\\b/": true,
-        "/^npm\\stest\\s.*": true,
+        "/^npm\\stest\\s.*/i": true,
 
         "/^node(?:\\.exe)?\\s+--check\\b/": true
     }
