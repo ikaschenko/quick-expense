@@ -44,7 +44,7 @@ if (missing.length > 0) {
 
 const EXPENSE_HEADERS = [
   "Date", "PLN", "BYN", "EUR", "USD",
-  "Category", "WhoSpent", "ForWhom", "Comment", "PaymentChannel", "Theme",
+  "Category", "Spent By", "Spent For", "Comment", "Channel", "Theme",
 ];
 const INVALID_HEADERS = [
   "Date", "USD", "PLN", "BYN", "EUR",
@@ -229,10 +229,10 @@ describe("validateSpreadsheet — integration", () => {
   it("auto-creates Expenses tab and headers on blank spreadsheet", async () => {
     const report = await validateSpreadsheet(accessToken, BLANK);
 
-    expect(report).toEqual({
-      tabAction: "created",
-      headersAction: "created",
-    });
+    expect(report.tabAction).toBe("created");
+    expect(report.headersAction).toBe("created");
+    expect(report.sheetCurrencies).toEqual([]);
+    expect(report.customColumns).toEqual(["Channel", "Theme"]);
 
     // Verify the tab and headers actually exist now
     const sheets = await getSheetList(accessToken, BLANK);
@@ -244,9 +244,8 @@ describe("validateSpreadsheet — integration", () => {
       await validateSpreadsheet(accessToken, INVALID);
       expect.unreachable("Should have thrown");
     } catch (error) {
-      expect(error.message).toContain("header must match");
+      expect(error.message).toContain("header must start with");
       expect(error.headerDetails).toBeDefined();
-      expect(error.headerDetails.expected).toEqual(EXPENSE_HEADERS);
       expect(error.headerDetails.actual).toEqual(INVALID_HEADERS);
     }
   }, 15_000);
@@ -254,9 +253,9 @@ describe("validateSpreadsheet — integration", () => {
   it("validates successfully on spreadsheet with correct headers", async () => {
     const report = await validateSpreadsheet(accessToken, VALID);
 
-    expect(report).toEqual({
-      tabAction: "found",
-      headersAction: "valid",
-    });
+    expect(report.tabAction).toBe("found");
+    expect(report.headersAction).toBe("valid");
+    expect(report.sheetCurrencies).toEqual(["PLN", "BYN", "EUR"]);
+    expect(report.customColumns).toEqual(["Channel", "Theme"]);
   }, 15_000);
 });

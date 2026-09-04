@@ -9,20 +9,23 @@ Run a pre-ship quality check on the Quick Expense codebase. Work through each ga
 
 ---
 
-## Gate 1 — Tests
+## Gate 1 — Build
+
+Run `npm run build`. Compilation must succeed with no errors.
+
+- If it fails, fix the TypeScript or Vite errors and re-run.
+
+---
+
+## Gate 2 — Tests
 
 Run `npm test`. All tests must pass.
 
 - If any tests fail, fix them and re-run before continuing.
 - Report: total passing, total failing.
-
----
-
-## Gate 2 — Build
-
-Run `npm run build`. Compilation must succeed with no errors.
-
-- If it fails, fix the TypeScript or Vite errors and re-run.
+- Then run `npm run test:integration`. All integration tests must pass.
+- If any integration tests fail, fix them and re-run before continuing.
+- Report: total passing, total failing.
 
 ---
 
