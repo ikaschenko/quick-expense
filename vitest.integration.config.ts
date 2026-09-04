@@ -18,7 +18,9 @@ function loadDotenv(): Record<string, string> {
       env[key] = value;
     }
     return env;
-  } catch {
+  } catch (error) {
+    // Silent {} here previously masked missing/unreadable .env as "not configured".
+    console.warn(`[vitest.integration.config] Could not read .env at ${process.cwd()}:`, error);
     return {};
   }
 }

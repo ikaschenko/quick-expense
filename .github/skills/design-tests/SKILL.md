@@ -41,10 +41,10 @@ description: "Use when designing test scenarios, writing unit or integration tes
    - A note not to delete/rename the resource.
 4. **Structure tests.**
    - Load config with try/catch fallback.
-   - Skip the suite if credentials are missing.
+   - Fail loudly with a clear error listing missing vars if credentials are missing (see `google-sheets.integration.test.js`) — do not skip silently.
    - Inline expected values as constants at the top of the file.
    - Use generous timeouts for network tests (30–120 s per test).
-5. **Verify.** Run `npm run test:integration`.
+5. **Verify.** Run `npm run test:integration` directly — never infer configuration state from a shell env-var check.
 
 ## Test Design Checklist
 

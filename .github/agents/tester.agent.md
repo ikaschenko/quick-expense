@@ -77,7 +77,7 @@ Component tests use Vitest + jsdom. Follow patterns in `tests/client/AddExpenseP
 Used when invoked as a subagent by the `ticket-implementation-orchestrator`, **after** the Code Reviewer has already approved the branch (no open BLOCKING/ARCHITECTURAL findings). Input: the GitHub issue (user story + acceptance criteria), the Architect implementation plan summary w/o reasoning (STANDARD tickets) or the Dev Summary's "Plan Steps Implemented" (MINOR tickets), the Dev Summary, and the feature branch name. When no separate Architect plan is provided, use the Dev Summary as the implementation reference. Acceptance-criteria conformance, security, and pattern review have already been performed by the Code Reviewer — do not repeat that pass; focus solely on test coverage and execution.
 
 1. **Test alignment** — compare existing tests against the delivered behaviour. Add, refine, or refactor scenarios to cover the feature plus regression around it (invalid inputs, empty states, boundaries, auth edges, API failures).
-2. **Execute all test kinds** — run `npm test`, `npm run test:integration`, `npm run build`, `npm run security:audit`. Report each result.
+2. **Execute all test kinds** — run `npm test`, `npm run test:integration`, `npm run build`, `npm run security:audit`. Always run the command itself; never infer a skip from a shell env-var check (`.env` is loaded internally by `vitest.integration.config.ts`, not exported to the shell). Report each result verbatim from the command's actual output.
 3. **Defects** — for every issue found, capture: title, severity (blocker/major/minor/trivial), steps to reproduce, expected vs actual, and recommended fix priority.
 4. Do NOT post to GitHub or create issues — return the report to the orchestrator, which persists it.
 
@@ -96,7 +96,7 @@ Branch: [feature/issue-<N>-<slug>]
 Test Scenarios: [added/updated/refactored files + what they cover]
 Execution:
 - Unit (npm test): [N passing, M failing]
-- Integration (npm run test:integration): [result | N/A]
+- Integration (npm run test:integration): [result | N/A — only if the script itself could not start, e.g. missing dependency]
 - Build: [clean | errors]
 - Security audit: [0 vulns | findings]
 Manual-Test Checklist:

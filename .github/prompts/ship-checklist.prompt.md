@@ -23,7 +23,7 @@ Run `npm test`. All tests must pass.
 
 - If any tests fail, fix them and re-run before continuing.
 - Report: total passing, total failing.
-- Then run `npm run test:integration`. All integration tests must pass.
+- Then run `npm run test:integration`. Always run the command itself — never infer a skip from a shell env-var check (`.env` is loaded internally by `vitest.integration.config.ts`, not exported to the shell). All integration tests must pass.
 - If any integration tests fail, fix them and re-run before continuing.
 - Report: total passing, total failing.
 
