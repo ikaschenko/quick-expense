@@ -374,7 +374,6 @@ describe("HomePage — Month details expand", () => {
       ytdForecast: { amountUsd: 300, deviation: null },
       rolling12mStats: { count: 1, usdTotal: 25, deviation: null },
       mtdDailyAmounts: [25],
-      weekBoundaryPositions: [],
     });
     // Cache is fresh (matches Drive's modified time) — the background staleness check must
     // not itself trigger a reload here so the assertion isolates the new expand-triggered load.
@@ -451,7 +450,6 @@ describe("HomePage — Year details expand", () => {
       ytdForecast: { amountUsd: null, deviation: null },
       rolling12mStats: { count: 0, usdTotal: 0, deviation: null },
       mtdDailyAmounts: [],
-      weekBoundaryPositions: [],
     });
     mockDataset({ status: "idle", snapshot: null, loadDataset: vi.fn().mockResolvedValue(undefined) });
     renderHome();
@@ -480,7 +478,6 @@ describe("HomePage — Year details expand", () => {
       ytdForecast: { amountUsd: null, deviation: null },
       rolling12mStats: { count: 0, usdTotal: 0, deviation: null },
       mtdDailyAmounts: [],
-      weekBoundaryPositions: [],
     });
     mockDataset({ status: "idle", snapshot: null, loadDataset: vi.fn().mockResolvedValue(undefined) });
     renderHome();
@@ -561,7 +558,6 @@ describe("HomePage — month navigation", () => {
       ytdForecast: { amountUsd: 300, deviation: null },
       rolling12mStats: { count: 1, usdTotal: 25, deviation: null },
       mtdDailyAmounts: [25],
-      weekBoundaryPositions: [],
     });
     vi.mocked(googleSheetsService.getSheetModifiedTime).mockResolvedValueOnce({
       modifiedTime: "2026-01-01T00:00:00.000Z",
@@ -699,7 +695,6 @@ describe("HomePage — year navigation", () => {
       ytdForecast: { amountUsd: 300, deviation: null },
       rolling12mStats: { count: 1, usdTotal: 25, deviation: null },
       mtdDailyAmounts: [25],
-      weekBoundaryPositions: [],
     });
     vi.mocked(googleSheetsService.getSheetModifiedTime).mockResolvedValueOnce({
       modifiedTime: "2026-01-01T00:00:00.000Z",
@@ -744,7 +739,6 @@ describe("HomePage — stale cached metrics", () => {
       ytdForecast: { amountUsd: 1500, deviation: null },
       rolling12mStats: { count: 100, usdTotal: 4000, deviation: null },
       mtdDailyAmounts: [10, 20, 30],
-      weekBoundaryPositions: [6, 13],
     });
   }
 

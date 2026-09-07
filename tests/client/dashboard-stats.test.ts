@@ -8,7 +8,6 @@ import {
   getYtdForecast,
   getRolling12mStats,
   getMtdDailyAmounts,
-  getMtdWeekBoundaryPositions,
   getMonthRange,
   shiftMonth,
   buildIsoNormalizer,
@@ -532,25 +531,6 @@ describe("getMtdDailyAmounts", () => {
     const records = [makeRecord("2026-05-31", "100"), makeRecord("2026-07-01", "100")];
     const amounts = getMtdDailyAmounts(records, TODAY, iso, TODAY);
     expect(amounts.slice(0, 9).every((v) => v === 0)).toBe(true);
-  });
-});
-
-// ─── getMtdWeekBoundaryPositions ─────────────────────────────────────────────
-
-describe("getMtdWeekBoundaryPositions", () => {
-  it("returns correct Monday positions for June 2026", () => {
-    // June 2026: June 1 = Monday, so Mondays are at 1, 8, 15, 22, 29
-    // 0-indexed positions: 0, 7, 14, 21, 28
-    // But boundaries are for Mondays that are NOT the 1st day:
-    // 8→7, 15→14, 22→21, 29→28
-    const positions = getMtdWeekBoundaryPositions(2026, 6);
-    expect(positions).toEqual([7, 14, 21, 28]);
-  });
-
-  it("returns no boundaries when month starts on Monday and has 7 days (edge)", () => {
-    // Only need to check that day 1 (Monday) is NOT included as a boundary
-    const positions = getMtdWeekBoundaryPositions(2026, 6);
-    expect(positions).not.toContain(0);
   });
 });
 

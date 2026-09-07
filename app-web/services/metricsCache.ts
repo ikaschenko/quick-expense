@@ -19,7 +19,6 @@ export interface MetricsCacheEntry {
   ytdForecast: YtdForecast;
   rolling12mStats: PeriodStats;
   mtdDailyAmounts: (number | null)[];
-  weekBoundaryPositions: number[];
 }
 
 function cacheKey(email: string): string {
@@ -167,16 +166,6 @@ function sanitizeMtdDailyAmounts(value: unknown): (number | null)[] | null {
   return amounts;
 }
 
-function sanitizeWeekBoundaryPositions(value: unknown): number[] | null {
-  if (!Array.isArray(value) || value.length > MAX_DAYS_IN_MONTH) return null;
-  const positions: number[] = [];
-  for (const item of value) {
-    if (typeof item !== "number" || !Number.isInteger(item) || item < 0 || item >= MAX_DAYS_IN_MONTH) return null;
-    positions.push(item);
-  }
-  return positions;
-}
-
 function sanitizeMetricsCacheEntry(value: unknown, requireStoredSchemaVersion: boolean): MetricsCacheEntry | null {
   const obj = asPlainObject(value);
   if (!obj) return null;
@@ -192,7 +181,6 @@ function sanitizeMetricsCacheEntry(value: unknown, requireStoredSchemaVersion: b
   const ytdForecast = sanitizeYtdForecast(obj.ytdForecast);
   const rolling12mStats = sanitizePeriodStats(obj.rolling12mStats);
   const mtdDailyAmounts = sanitizeMtdDailyAmounts(obj.mtdDailyAmounts);
-  const weekBoundaryPositions = sanitizeWeekBoundaryPositions(obj.weekBoundaryPositions);
   if (
     cacheDate === null ||
     spreadsheetId === null ||
@@ -202,8 +190,7 @@ function sanitizeMetricsCacheEntry(value: unknown, requireStoredSchemaVersion: b
     ytdStats === null ||
     ytdForecast === null ||
     rolling12mStats === null ||
-    mtdDailyAmounts === null ||
-    weekBoundaryPositions === null
+    mtdDailyAmounts === null
   ) {
     return null;
   }
@@ -219,7 +206,6 @@ function sanitizeMetricsCacheEntry(value: unknown, requireStoredSchemaVersion: b
     ytdForecast,
     rolling12mStats,
     mtdDailyAmounts,
-    weekBoundaryPositions,
   };
 }
 

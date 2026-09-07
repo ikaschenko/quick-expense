@@ -22,7 +22,6 @@ import {
   getYearStats,
   getRolling12mStats,
   getMtdDailyAmounts,
-  getMtdWeekBoundaryPositions,
   formatPctChange,
   shiftMonth,
 } from "../utils/dashboardStats";
@@ -267,11 +266,6 @@ export function HomePage(): JSX.Element {
   const selectedMtdDailyAmounts = useMemo(() => getMtdDailyAmounts(records, selectedMonth, toIso, today), [records, selectedMonth, toIso, today]);
 
   const [year, month] = selectedMonth.split("-").map(Number);
-  const currentMonthNumber = Number(currentMonth.slice(5, 7));
-  const weekBoundaryPositions = useMemo(
-    () => getMtdWeekBoundaryPositions(currentYear, currentMonthNumber),
-    [currentYear, currentMonthNumber],
-  );
 
   // Write metrics to localStorage whenever live data is ready or mutated.
   useEffect(() => {
@@ -286,7 +280,6 @@ export function HomePage(): JSX.Element {
       ytdForecast,
       rolling12mStats,
       mtdDailyAmounts: currentMtdDailyAmounts,
-      weekBoundaryPositions,
     });
     driveModifiedTimeRef.current = null;
   }, [dataset.status, todayStats, mtdStats, ytdStats, ytdForecast, rolling12mStats]);
@@ -346,7 +339,6 @@ export function HomePage(): JSX.Element {
   const displayYtdForecast = cachedEntry?.ytdForecast ?? ytdForecast;
   const displayRolling12mStats = cachedEntry?.rolling12mStats ?? rolling12mStats;
   const displayMtdDailyAmounts = cachedEntry?.mtdDailyAmounts ?? currentMtdDailyAmounts;
-  const displayWeekBoundaryPositions = cachedEntry?.weekBoundaryPositions ?? weekBoundaryPositions;
 
   return (
     <Layout title="Quick Expense">
@@ -470,7 +462,6 @@ export function HomePage(): JSX.Element {
                   {displaySelectedMtdStats.deviation && <DeviationLine deviation={displaySelectedMtdStats.deviation} />}
                   <MtdSpendChart
                     dailyAmounts={selectedMonth === currentMonth ? displayMtdDailyAmounts : selectedMtdDailyAmounts}
-                    weekBoundaryPositions={selectedMonth === currentMonth ? displayWeekBoundaryPositions : getMtdWeekBoundaryPositions(year, month)}
                     year={year}
                     month={month}
                   />

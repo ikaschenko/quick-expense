@@ -15,7 +15,6 @@ function makeEntry(overrides: Partial<MetricsCacheEntry> = {}): MetricsCacheEntr
     ytdForecast: { amountUsd: 1500, deviation: null },
     rolling12mStats: { count: 100, usdTotal: 4000, deviation: null },
     mtdDailyAmounts: [10, 20, 30],
-    weekBoundaryPositions: [6, 13],
     ...overrides,
   };
 }

@@ -13,12 +13,11 @@ type MtdChartOption = ComposeOption<LineSeriesOption | GridComponentOption | Too
 
 interface MtdSpendChartProps {
   dailyAmounts: (number | null)[];
-  weekBoundaryPositions: number[];
   year: number;
   month: number;
 }
 
-export function MtdSpendChart({ dailyAmounts, weekBoundaryPositions, year, month }: MtdSpendChartProps): JSX.Element {
+export function MtdSpendChart({ dailyAmounts, year, month }: MtdSpendChartProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
 
@@ -52,10 +51,6 @@ export function MtdSpendChart({ dailyAmounts, weekBoundaryPositions, year, month
     const forecast = hasForecast
       ? cumulativeActual.map((value, index) => index >= todayIndex ? cumulativeToday : value === null ? null : null)
       : [];
-    const markLineData = [
-      ...weekBoundaryPositions.map((position) => ({ xAxis: labels[position] })),
-      ...(hasForecast ? [{ yAxis: cumulativeToday }] : []),
-    ];
     const config: MtdChartOption = {
       animation: false,
       grid: { top: 8, right: 8, bottom: 24, left: 8, containLabel: false },
@@ -71,6 +66,8 @@ export function MtdSpendChart({ dailyAmounts, weekBoundaryPositions, year, month
       },
       xAxis: { type: "category", data: labels, boundaryGap: false, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: "var(--color-text-placeholder)", interval: "auto" }, splitLine: { show: false } },
       yAxis: { type: "value", show: false, min: 0 },
+      // No markLine here by design: the MTD chart shows only the actual cumulative line plus the
+      // flat forecast region. Reference/average lines belong to the Year Details bar chart only.
       series: [
         {
           type: "line",
@@ -88,7 +85,6 @@ export function MtdSpendChart({ dailyAmounts, weekBoundaryPositions, year, month
               { offset: 1, color: "rgba(79,70,229,0.00)" },
             ]),
           },
-          markLine: markLineData.length > 0 ? { symbol: "none", lineStyle: { color: forecastBorderColor, type: "dashed", width: 1.5 }, data: markLineData } : undefined,
         },
         ...(hasForecast ? [{
           type: "line" as const,
@@ -127,7 +123,7 @@ export function MtdSpendChart({ dailyAmounts, weekBoundaryPositions, year, month
       chart.dispose();
       chartRef.current = null;
     };
-  }, [dailyAmounts, weekBoundaryPositions, year, month]);
+  }, [dailyAmounts, year, month]);
 
   return (
     <div className="home-chart-container" ref={containerRef} role="img" aria-label="Month-to-date spending">

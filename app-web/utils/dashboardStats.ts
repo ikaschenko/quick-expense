@@ -331,21 +331,6 @@ function getMtdActualThroughDay(
   return actualThroughDay;
 }
 
-/**
- * 0-indexed positions of Mondays within the month (used for week-boundary lines in the chart).
- * A line is drawn to the LEFT of each Monday (i.e. between Sunday and Monday).
- */
-export function getMtdWeekBoundaryPositions(year: number, month: number): number[] {
-  const totalDays = daysInMonth(year, month);
-  const positions: number[] = [];
-  for (let d = 2; d <= totalDays; d++) {
-    if (new Date(year, month - 1, d).getDay() === 1) {
-      positions.push(d - 1); // 0-indexed position of this Monday
-    }
-  }
-  return positions;
-}
-
 function filterPeriod(
   records: ExpenseRecord[],
   start: string,
