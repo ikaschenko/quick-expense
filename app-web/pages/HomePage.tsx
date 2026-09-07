@@ -18,6 +18,7 @@ import {
   getMonthStats,
   getYtdStats,
   getYtdForecast,
+  getYearStats,
   getRolling12mStats,
   getMtdDailyAmounts,
   getMtdWeekBoundaryPositions,
@@ -116,7 +117,7 @@ const TODAY_HELP_TEXT = "Total amount of expenses for today.";
 const MTD_HELP_TEXT =
   "Total amount of expenses for the ongoing month, compared to the same date range for the previous month (shown only when comparable prior-month data exists).";
 const YTD_HELP_TEXT =
-  "Total amount of expenses for the ongoing year, compared to the same date range for the previous year (if enough data). The forecast projects your full-year total from your recent daily spending rate.";
+  "Total amount of expenses for the ongoing year, compared to the same date range for the previous year (if enough data). The forecast projects your full-year total from your recent daily spending rate. Use the arrows to review a past year — it then shows that year's full total, and the forecast does not apply.";
 const ROLLING_12M_HELP_TEXT =
   "Total amount of expenses over the trailing 12 months (up to yesterday), compared to the preceding 12-month period (shown when that data exists).";
 
@@ -149,6 +150,8 @@ export function HomePage(): JSX.Element {
   const today = useMemo(() => getTodayLocalDate(), []);
   const currentMonth = today.slice(0, 7);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const currentYear = Number(today.slice(0, 4));
+  const [selectedYear, setSelectedYear] = useState(currentYear);
 
   const [cachedEntry, setCachedEntry] = useState<MetricsCacheEntry | null>(null);
   const driveModifiedTimeRef = useRef<string | null>(null);
@@ -234,10 +237,11 @@ export function HomePage(): JSX.Element {
   }, [monthDetailsOpen, dataset.status, dataset.loadDataset]);
 
   useEffect(() => {
-    if (selectedMonth !== currentMonth && dataset.status === "idle") {
+    const isViewingPastPeriod = selectedMonth !== currentMonth || selectedYear !== currentYear;
+    if (isViewingPastPeriod && dataset.status === "idle") {
       dataset.loadDataset().catch(() => {/* error surfaced via dataset.error */});
     }
-  }, [selectedMonth, currentMonth, dataset.status, dataset.loadDataset]);
+  }, [selectedMonth, currentMonth, selectedYear, currentYear, dataset.status, dataset.loadDataset]);
 
   const records = dataset.snapshot?.records ?? [];
 
@@ -247,13 +251,14 @@ export function HomePage(): JSX.Element {
   const mtdStats = useMemo(() => getMtdStats(records, today, toIso), [records, today, toIso]);
   const selectedMonthStats = useMemo(() => getMonthStats(records, selectedMonth, toIso), [records, selectedMonth, toIso]);
   const ytdStats = useMemo(() => getYtdStats(records, today, toIso), [records, today, toIso]);
+  const selectedYearStats = useMemo(() => getYearStats(records, selectedYear, toIso), [records, selectedYear, toIso]);
   const ytdForecast = useMemo(() => getYtdForecast(records, today, toIso), [records, today, toIso]);
   const rolling12mStats = useMemo(() => getRolling12mStats(records, today, toIso), [records, today, toIso]);
   const currentMtdDailyAmounts = useMemo(() => getMtdDailyAmounts(records, currentMonth, toIso, today), [records, currentMonth, toIso, today]);
   const selectedMtdDailyAmounts = useMemo(() => getMtdDailyAmounts(records, selectedMonth, toIso, today), [records, selectedMonth, toIso, today]);
 
   const [year, month] = selectedMonth.split("-").map(Number);
-  const [currentYear, currentMonthNumber] = currentMonth.split("-").map(Number);
+  const currentMonthNumber = Number(currentMonth.slice(5, 7));
   const weekBoundaryPositions = useMemo(
     () => getMtdWeekBoundaryPositions(currentYear, currentMonthNumber),
     [currentYear, currentMonthNumber],
@@ -296,6 +301,12 @@ export function HomePage(): JSX.Element {
   const isSelectedMonthLoading =
     (selectedMonth !== currentMonth && dataset.status !== "ready") ||
     (dataset.isLoadingHistory && (!earliestLoadedMonth || selectedMonth < earliestLoadedMonth));
+  const earliestLoadedYear = earliestLoadedMonth ? Number(earliestLoadedMonth.slice(0, 4)) : null;
+  const isSelectedYearLoading =
+    (selectedYear !== currentYear && dataset.status !== "ready") ||
+    (dataset.isLoadingHistory && (earliestLoadedYear === null || selectedYear < earliestLoadedYear));
+  // The earliest loaded year is only authoritative once the whole sheet is in memory.
+  const isYearNavLocked = isSelectedYearLoading || dataset.isLoadingHistory;
 
   // A cached entry from an earlier day still carries valid YTD/rolling-12m totals, but its
   // TODAY (and, across a month boundary, MTD) figures are definitively wrong.
@@ -308,6 +319,7 @@ export function HomePage(): JSX.Element {
   const displayMtdStats = cachedEntry?.mtdStats ?? mtdStats;
   const displaySelectedMtdStats = selectedMonth === currentMonth ? displayMtdStats : selectedMonthStats;
   const displayYtdStats = cachedEntry?.ytdStats ?? ytdStats;
+  const displaySelectedYearStats = selectedYear === currentYear ? displayYtdStats : selectedYearStats;
   const displayYtdForecast = cachedEntry?.ytdForecast ?? ytdForecast;
   const displayRolling12mStats = cachedEntry?.rolling12mStats ?? rolling12mStats;
   const displayMtdDailyAmounts = cachedEntry?.mtdDailyAmounts ?? currentMtdDailyAmounts;
@@ -467,23 +479,53 @@ export function HomePage(): JSX.Element {
                   YEARLY VIEW
                   <WidgetHelpButton label="YEARLY VIEW" open={ytdHelpOpen} onToggle={() => setYtdHelpOpen((v) => !v)} />
                 </span>
+                <span className="home-month-nav" aria-label="Year navigation">
+                  <button
+                    type="button"
+                    className="home-month-nav-button"
+                    aria-label="Previous year"
+                    title="Previous year"
+                    disabled={isYearNavLocked || (earliestLoadedYear !== null && selectedYear <= earliestLoadedYear)}
+                    onClick={() => setSelectedYear((value) => value - 1)}
+                  >
+                    <ChevronLeft size={16} aria-hidden />
+                  </button>
+                  <button
+                    type="button"
+                    className="home-month-nav-button"
+                    aria-label="Next year"
+                    title="Next year"
+                    disabled={isYearNavLocked || selectedYear === currentYear}
+                    onClick={() => setSelectedYear((value) => value + 1)}
+                  >
+                    <ChevronRight size={16} aria-hidden />
+                  </button>
+                </span>
               </div>
               {ytdHelpOpen && <p className="section-help-popover">{YTD_HELP_TEXT}</p>}
               <div className="home-yearly-columns">
                 <div className="home-yearly-col">
-                  <p className="home-yearly-label">{year} SO FAR</p>
-                  {displayYtdStats.count === 0 ? (
+                  <p className="home-yearly-label">
+                    {selectedYear} {selectedYear === currentYear ? "SO FAR" : "TOTAL"}
+                  </p>
+                  {isSelectedYearLoading ? (
+                    <MetricRefreshing />
+                  ) : displaySelectedYearStats.count === 0 ? (
                     <p className="home-metric-empty">No expense entries</p>
                   ) : (
                     <>
-                      <p className="home-metric-amount"><FormattedAmount prefix="$" value={displayYtdStats.usdTotal} /></p>
-                      {displayYtdStats.deviation && <DeviationLine deviation={displayYtdStats.deviation} />}
+                      <p className="home-metric-amount"><FormattedAmount prefix="$" value={displaySelectedYearStats.usdTotal} /></p>
+                      {displaySelectedYearStats.deviation && <DeviationLine deviation={displaySelectedYearStats.deviation} />}
                     </>
                   )}
                 </div>
                 <div className="home-yearly-col">
                   <p className="home-yearly-label">Full year FORECAST</p>
-                  {displayYtdForecast.amountUsd === null ? (
+                  {isSelectedYearLoading ? (
+                    <MetricRefreshing />
+                  ) : selectedYear !== currentYear ? (
+                    <p className="home-metric-forecast">Not applicable for past years</p>
+                  ) : displayYtdForecast.amountUsd === null ? (
                     <p className="home-metric-empty">Not enough data</p>
                   ) : (
                     <>

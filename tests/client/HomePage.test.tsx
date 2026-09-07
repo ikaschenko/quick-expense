@@ -168,7 +168,7 @@ describe("HomePage — widget info tooltips", () => {
     await user.click(screen.getByRole("button", { name: "Show info about YEARLY VIEW" }));
     expect(
       screen.getByText(
-        "Total amount of expenses for the ongoing year, compared to the same date range for the previous year (if enough data). The forecast projects your full-year total from your recent daily spending rate.",
+        "Total amount of expenses for the ongoing year, compared to the same date range for the previous year (if enough data). The forecast projects your full-year total from your recent daily spending rate. Use the arrows to review a past year — it then shows that year's full total, and the forecast does not apply.",
       ),
     ).toBeTruthy();
 
@@ -483,6 +483,138 @@ describe("HomePage — month navigation", () => {
 
     expect(screen.getByText(`${previous.toLocaleString("en", { month: "long" }).toUpperCase()} TOTAL`)).toBeTruthy();
     expect(screen.getAllByText("$40").length).toBeGreaterThan(0);
+  });
+});
+
+describe("HomePage — year navigation", () => {
+  const CURRENT_YEAR = new Date().getFullYear();
+
+  function mockYears(overrides: Partial<ReturnType<typeof useDataset>> = {}) {
+    const today = formatLocalDate(new Date());
+    mockDataset({
+      snapshot: {
+        records: [
+          makeRecord(1, today, "25"),
+          makeRecord(2, `${CURRENT_YEAR - 1}-06-15`, "40"),
+          makeRecord(3, `${CURRENT_YEAR - 2}-06-15`, "10"),
+        ],
+        distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} },
+        loadedAt: 0,
+        payloadBytes: 0,
+        loadPhase: "full",
+      },
+      ...overrides,
+    });
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("starts on the current year and disables navigation into the future", () => {
+    mockYears();
+    renderHome();
+
+    expect(screen.getByText(`${CURRENT_YEAR} SO FAR`)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Next year" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Previous year" })).toHaveProperty("disabled", false);
+  });
+
+  it("navigates to the previous year, showing its full total and the past-year forecast placeholder", async () => {
+    const user = userEvent.setup();
+    mockYears();
+    const { container } = renderHome();
+
+    await user.click(screen.getByRole("button", { name: "Previous year" }));
+
+    expect(screen.getByText(`${CURRENT_YEAR - 1} TOTAL`)).toBeTruthy();
+    expect(screen.getAllByText("$40").length).toBeGreaterThan(0);
+    expect(screen.getByText("Not applicable for past years")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Next year" })).toHaveProperty("disabled", false);
+
+    // YoY deviation reflects the newly selected year (prior year total = $10).
+    const yearlyCard = Array.from(container.querySelectorAll(".home-metric-card")).find((el) =>
+      el.textContent?.includes("YEARLY VIEW"),
+    );
+    expect(yearlyCard?.querySelector(".prior-period-label")?.textContent).toBe(`vs ${CURRENT_YEAR - 2}`);
+  });
+
+  it("returns to the current year and restores the forecast column", async () => {
+    const user = userEvent.setup();
+    mockYears();
+    renderHome();
+
+    await user.click(screen.getByRole("button", { name: "Previous year" }));
+    await user.click(screen.getByRole("button", { name: "Next year" }));
+
+    expect(screen.getByText(`${CURRENT_YEAR} SO FAR`)).toBeTruthy();
+    expect(screen.queryByText("Not applicable for past years")).toBeNull();
+    expect(screen.getByRole("button", { name: "Next year" })).toHaveProperty("disabled", true);
+  });
+
+  it("disables Previous once the earliest loaded year is reached", async () => {
+    const user = userEvent.setup();
+    mockYears();
+    renderHome();
+
+    await user.click(screen.getByRole("button", { name: "Previous year" }));
+    expect(screen.getByRole("button", { name: "Previous year" })).toHaveProperty("disabled", false);
+
+    await user.click(screen.getByRole("button", { name: "Previous year" }));
+    expect(screen.getByText(`${CURRENT_YEAR - 2} TOTAL`)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Previous year" })).toHaveProperty("disabled", true);
+  });
+
+  it("keeps both buttons visible but disabled while historical records are still loading", () => {
+    mockYears({ isLoadingHistory: true });
+    renderHome();
+
+    expect(screen.getByRole("button", { name: "Previous year" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Next year" })).toHaveProperty("disabled", true);
+  });
+
+  it("triggers a dataset load and shows an updating placeholder when the selected year is not loaded yet", async () => {
+    const user = userEvent.setup();
+    const loadDataset = vi.fn().mockResolvedValue(undefined);
+    const today = formatLocalDate(new Date());
+
+    metricsCache.save("test@example.com", {
+      cacheDate: today,
+      spreadsheetId: "abc123",
+      sheetLastModifiedTime: "2026-01-01T00:00:00.000Z",
+      todayStats: { count: 1, usdTotal: 25, dualCurrency: null },
+      mtdStats: { count: 1, usdTotal: 25, deviation: null },
+      ytdStats: { count: 1, usdTotal: 25, deviation: null },
+      ytdForecast: { amountUsd: 300, deviation: null },
+      rolling12mStats: { count: 1, usdTotal: 25, deviation: null },
+      mtdDailyAmounts: [25],
+      weekBoundaryPositions: [],
+    });
+    vi.mocked(googleSheetsService.getSheetModifiedTime).mockResolvedValueOnce({
+      modifiedTime: "2026-01-01T00:00:00.000Z",
+    });
+    mockDataset({ status: "idle", snapshot: null, loadDataset });
+    renderHome();
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Previous year" })).toBeTruthy());
+    await user.click(screen.getByRole("button", { name: "Previous year" }));
+
+    expect(loadDataset).toHaveBeenCalled();
+    expect(screen.getAllByText("Updating…").length).toBeGreaterThan(0);
+  });
+
+  it("leaves the MTD widget untouched when the year changes, and resets to the current year on remount", async () => {
+    const user = userEvent.setup();
+    const monthTitle = `${new Date().toLocaleString("en", { month: "long" }).toUpperCase()} SO FAR`;
+    mockYears();
+    const { unmount } = renderHome();
+
+    await user.click(screen.getByRole("button", { name: "Previous year" }));
+    expect(screen.getByText(monthTitle)).toBeTruthy();
+
+    unmount();
+    renderHome();
+    expect(screen.getByText(`${CURRENT_YEAR} SO FAR`)).toBeTruthy();
   });
 });
 

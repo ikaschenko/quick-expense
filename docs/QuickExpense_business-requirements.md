@@ -316,12 +316,19 @@ Dashboard data is loaded via the same mechanism as History (shared in-memory dat
 
 ### 2.7.4 YEARLY VIEW widget (issue #81)
 
-- Header: **"YEARLY VIEW"** with a single info icon (see 2.7.8 for tooltip behavior)
+- Header: **"YEARLY VIEW"** with a single info icon (see 2.7.8 for tooltip behavior) and prev/next chevron buttons for year navigation, styled identically to the MTD month nav
+- **Year navigation:**
+  - Prev moves the selected year back by one; Next moves it forward by one. Next is disabled while the current calendar year is selected.
+  - Prev is disabled once the selected year reaches the earliest year present in the fully-loaded dataset.
+  - Both buttons stay visible but disabled while the records for the selected year are still loading (including the background history load). Selecting a year whose data is not yet in memory triggers the shared dataset load automatically; both columns show an *"Updating…"* placeholder until it completes.
+  - The selection resets to the current year on every fresh Home screen mount (not persisted), and is independent of the MTD card's month selection.
 - Body: two columns, stacking vertically below 480px viewport width
-- **Left column — "{YEAR} SO FAR"** (e.g. "2026 SO FAR"):
-  - USD total for Jan 1 – today of the current year
-  - **Year-over-year deviation:** same logic as MTD, scaled to year-to-date comparison
+- **Left column — "{YEAR} SO FAR"** (e.g. "2026 SO FAR") for the current, in-progress year; **"{YEAR} TOTAL"** for a completed past year:
+  - Current year: USD total for Jan 1 – today
+  - Past year: USD total for the full calendar year
+  - **Year-over-year deviation:** same logic as MTD, compared against the corresponding range of the preceding year
 - **Right column — "Full year FORECAST"**:
+  - Shown only for the current year. For a past year the column shows the muted line *"Not applicable for past years"*.
   - Projected full-year USD total, based on the recent daily spending rate
   - Shows *"Not enough data"* instead of an amount when the forecast cannot be computed (insufficient recent baseline data)
   - **Year-over-year deviation:** compares the forecast to last year's actual full-year total; shown as muted *"No data"* when the prior year has no recorded expenses at all

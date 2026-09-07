@@ -150,6 +150,25 @@ export function getYtdStats(
   };
 }
 
+/** Full calendar-year stats compared with the full preceding calendar year. */
+export function getYearStats(
+  records: ExpenseRecord[],
+  year: number,
+  toIso: IsoNormalizer,
+): PeriodStats {
+  const current = filterPeriod(records, `${year}-01-01`, `${year}-12-31`, toIso);
+  const usdTotal = sumUsd(current);
+
+  const priorYear = year - 1;
+  const prior = filterPeriod(records, `${priorYear}-01-01`, `${priorYear}-12-31`, toIso);
+
+  return {
+    count: current.length,
+    usdTotal,
+    deviation: buildDeviation(usdTotal, sumUsd(prior), prior.length, String(priorYear)),
+  };
+}
+
 export interface YtdForecast {
   amountUsd: number | null;
   deviation: PeriodStats["deviation"];

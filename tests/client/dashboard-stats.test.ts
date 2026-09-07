@@ -4,6 +4,7 @@ import {
   getTodayStats,
   getMtdStats,
   getYtdStats,
+  getYearStats,
   getYtdForecast,
   getRolling12mStats,
   getMtdDailyAmounts,
@@ -242,6 +243,52 @@ describe("getYtdStats", () => {
     const stats = getYtdStats(records, TODAY, iso);
     expect(stats.deviation!.priorLabel).toBe("2025");
     expect(stats.deviation!.priorTotal).toBeCloseTo(80);
+  });
+});
+
+// ─── getYearStats ─────────────────────────────────────────────────────────────
+
+describe("getYearStats", () => {
+  it("totals the full calendar year, including dates after today", () => {
+    const records = [
+      makeRecord("2025-01-01", "100"),
+      makeRecord("2025-12-31", "200"),
+      makeRecord("2024-12-31", "9"),
+      makeRecord("2026-01-01", "9"),
+    ];
+    const stats = getYearStats(records, 2025, iso);
+    expect(stats.count).toBe(2);
+    expect(stats.usdTotal).toBeCloseTo(300);
+  });
+
+  it("compares against the full preceding calendar year", () => {
+    const records = [
+      makeRecord("2025-06-01", "150"),
+      makeRecord("2024-02-01", "50"),
+      makeRecord("2024-11-30", "50"),
+    ];
+    const stats = getYearStats(records, 2025, iso);
+    expect(stats.deviation!.priorLabel).toBe("2024");
+    expect(stats.deviation!.priorTotal).toBeCloseTo(100);
+    expect(stats.deviation!.up).toBe(true);
+    expect(stats.deviation!.absChange).toBeCloseTo(50);
+    expect(stats.deviation!.pctChange).toBeCloseTo(50);
+  });
+
+  it("returns a null deviation when the prior year has no records", () => {
+    const stats = getYearStats([makeRecord("2025-06-01", "100")], 2025, iso);
+    expect(stats.deviation).toBeNull();
+  });
+
+  it("returns zero count for a year with no records", () => {
+    const stats = getYearStats([makeRecord("2024-06-01", "100")], 2025, iso);
+    expect(stats.count).toBe(0);
+    expect(stats.usdTotal).toBe(0);
+    expect(stats.deviation!.priorTotal).toBeCloseTo(100);
+  });
+
+  it("returns an empty result for an empty dataset", () => {
+    expect(getYearStats([], 2025, iso)).toEqual({ count: 0, usdTotal: 0, deviation: null });
   });
 });
 
