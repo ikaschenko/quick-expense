@@ -69,4 +69,10 @@ describe("YearDetailsPanel — category breakdown", () => {
     const row = screen.getByRole("row", { name: /Food/ });
     expect(row.querySelectorAll("td")[3].textContent).toBe("-");
   });
+
+  it("defaults the Group toggle to on", () => {
+    const records = [makeRecord("2026-03-01", "100", "Food")];
+    render(<YearDetailsPanel records={records} toIso={toIso} year={2026} today="2026-06-15" />);
+    expect(screen.getByRole("button", { name: "Group" }).getAttribute("aria-pressed")).toBe("true");
+  });
 });

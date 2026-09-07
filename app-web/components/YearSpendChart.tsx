@@ -1,15 +1,17 @@
 import { useRef, useEffect } from "react";
 import * as echarts from "echarts/core";
 import { BarChart } from "echarts/charts";
-import { GridComponent, TooltipComponent } from "echarts/components";
+import { GridComponent, TooltipComponent, MarkLineComponent } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import type { BarSeriesOption } from "echarts/charts";
-import type { GridComponentOption, TooltipComponentOption } from "echarts/components";
+import type { GridComponentOption, TooltipComponentOption, MarkLineComponentOption } from "echarts/components";
 import type { ComposeOption } from "echarts/core";
 
-echarts.use([BarChart, GridComponent, TooltipComponent, CanvasRenderer]);
+echarts.use([BarChart, GridComponent, TooltipComponent, MarkLineComponent, CanvasRenderer]);
 
-type YearChartOption = ComposeOption<BarSeriesOption | GridComponentOption | TooltipComponentOption>;
+type YearChartOption = ComposeOption<
+  BarSeriesOption | GridComponentOption | TooltipComponentOption | MarkLineComponentOption
+>;
 
 const MONTH_INITIALS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
 const MONTH_NAMES = [
@@ -19,10 +21,17 @@ const MONTH_NAMES = [
 
 interface YearSpendChartProps {
   monthlyAmounts: (number | null)[];
+  year: number;
+  averagePerMonth: number;
 }
 
 /** Real months render as solid bars; forecast (future) months render as flat, non-interactive gray placeholders. */
-function buildSeries(monthlyAmounts: (number | null)[], forecastHatchColor: string): BarSeriesOption[] {
+function buildSeries(
+  monthlyAmounts: (number | null)[],
+  forecastHatchColor: string,
+  averagePerMonth: number,
+  averageLineColor: string,
+): BarSeriesOption[] {
   const actualAmounts = monthlyAmounts.filter((a): a is number => a !== null);
   const hasForecast = actualAmounts.length < monthlyAmounts.length;
   const actualSeries: BarSeriesOption = {
@@ -30,6 +39,13 @@ function buildSeries(monthlyAmounts: (number | null)[], forecastHatchColor: stri
     data: monthlyAmounts.map((amount) => amount ?? 0),
     barMaxWidth: 24,
     itemStyle: { color: "rgba(79,70,229,0.9)" },
+    markLine: {
+      silent: true,
+      symbol: "none",
+      lineStyle: { color: averageLineColor, type: "dashed" },
+      label: { show: false },
+      data: [{ yAxis: averagePerMonth }],
+    },
   };
   if (!hasForecast) return [actualSeries];
 
@@ -57,7 +73,7 @@ function buildSeries(monthlyAmounts: (number | null)[], forecastHatchColor: stri
   return [actualSeries, forecastSeries];
 }
 
-export function YearSpendChart({ monthlyAmounts }: YearSpendChartProps): JSX.Element {
+export function YearSpendChart({ monthlyAmounts, year, averagePerMonth }: YearSpendChartProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
 
@@ -69,6 +85,8 @@ export function YearSpendChart({ monthlyAmounts }: YearSpendChartProps): JSX.Ele
     const cssVars = getComputedStyle(document.documentElement);
     const forecastHatchColor =
       cssVars.getPropertyValue("--color-chart-forecast-hatch").trim() || "rgba(107,114,128,0.3)";
+    const averageLineColor =
+      cssVars.getPropertyValue("--color-chart-average-line").trim() || "#FB923C";
 
     const config: YearChartOption = {
       animation: false,
@@ -79,7 +97,7 @@ export function YearSpendChart({ monthlyAmounts }: YearSpendChartProps): JSX.Ele
           const item = (Array.isArray(params) ? params[0] : params) as { dataIndex: number };
           const amount = monthlyAmounts[item.dataIndex];
           if (amount === null) return "";
-          return `${MONTH_NAMES[item.dataIndex]}<br/>Total: $${amount.toFixed(2)}`;
+          return `${MONTH_NAMES[item.dataIndex]} ${year}<br/>Total: $${amount.toFixed(2)}`;
         },
       },
       xAxis: {
@@ -91,7 +109,7 @@ export function YearSpendChart({ monthlyAmounts }: YearSpendChartProps): JSX.Ele
         splitLine: { show: false },
       },
       yAxis: { type: "value", show: false, min: 0 },
-      series: buildSeries(monthlyAmounts, forecastHatchColor),
+      series: buildSeries(monthlyAmounts, forecastHatchColor, averagePerMonth, averageLineColor),
     };
 
     chartRef.current?.dispose();
@@ -106,7 +124,7 @@ export function YearSpendChart({ monthlyAmounts }: YearSpendChartProps): JSX.Ele
       chart.dispose();
       chartRef.current = null;
     };
-  }, [monthlyAmounts]);
+  }, [monthlyAmounts, year, averagePerMonth]);
 
   return (
     <div className="home-chart-container year-chart-container" ref={containerRef} role="img" aria-label="Monthly spending for the selected year">

@@ -16,6 +16,8 @@ export interface CategoryBreakdownPanelProps {
   currentLabel: string;
   /** Column header for the prior-period amount (e.g. "Dec 2025" or "2025"). */
   priorLabel: string;
+  /** Initial state of the Group toggle (default off). */
+  defaultGrouped?: boolean;
 }
 
 type TopFilter = "top5" | "all";
@@ -33,9 +35,10 @@ export function CategoryBreakdownPanel({
   priorEndDate,
   currentLabel,
   priorLabel,
+  defaultGrouped = false,
 }: CategoryBreakdownPanelProps): JSX.Element {
   const [topFilter, setTopFilter] = useState<TopFilter>("all");
-  const [grouped, setGrouped] = useState(false);
+  const [grouped, setGrouped] = useState(defaultGrouped);
 
   const breakdown = useMemo(
     () => getCategoryBreakdown(records, startDate, endDate, priorStartDate, priorEndDate, toIso, { grouped }),

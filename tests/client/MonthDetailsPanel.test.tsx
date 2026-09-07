@@ -45,6 +45,14 @@ describe("MonthDetailsPanel — isLoading", () => {
     expect(screen.getByRole("button", { name: "Group" })).toBeTruthy();
     expect(screen.queryByText("Loading…")).toBeNull();
   });
+
+  it("defaults the Group toggle to off", () => {
+    const records = [makeRecord("2026-08-01", "20", "Food")];
+    render(
+      <MonthDetailsPanel records={records} toIso={toIso} startDate="2026-08-01" endDate="2026-08-06" />,
+    );
+    expect(screen.getByRole("button", { name: "Group" }).getAttribute("aria-pressed")).toBe("false");
+  });
 });
 
 describe("MonthDetailsPanel — controls", () => {

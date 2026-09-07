@@ -41,7 +41,7 @@ export function YearDetailsPanel({ records, toIso, year, today, isLoading }: Yea
       </p>
       {averagePerMonth !== null && (
         <>
-          <YearSpendChart monthlyAmounts={monthlyAmounts} />
+          <YearSpendChart monthlyAmounts={monthlyAmounts} year={year} averagePerMonth={averagePerMonth} />
           <CategoryBreakdownPanel
             records={records}
             toIso={toIso}
@@ -51,6 +51,7 @@ export function YearDetailsPanel({ records, toIso, year, today, isLoading }: Yea
             priorEndDate={priorEndDate}
             currentLabel={String(year)}
             priorLabel={String(year - 1)}
+            defaultGrouped
           />
         </>
       )}

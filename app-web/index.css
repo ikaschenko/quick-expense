@@ -71,6 +71,9 @@
 
   /* Category pie chart */
   --color-chart-other: #94A3B8;
+
+  /* Year chart average line */
+  --color-chart-average-line: #FB923C;
 }
 
 /* ===== Global Reset ===== */
