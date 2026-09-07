@@ -315,6 +315,10 @@ export function HomePage(): JSX.Element {
     (dataset.isLoadingHistory && (earliestLoadedYear === null || selectedYear < earliestLoadedYear));
   // The earliest loaded year is only authoritative once the whole sheet is in memory.
   const isYearNavLocked = isSelectedYearLoading || dataset.isLoadingHistory;
+  // Year Details' category breakdown also needs the prior year loaded — reuses the same spinner.
+  const isPriorYearLoading =
+    isSelectedYearLoading ||
+    (dataset.isLoadingHistory && (earliestLoadedYear === null || selectedYear - 1 < earliestLoadedYear));
 
   // A cached entry from an earlier day still carries valid YTD/rolling-12m totals, but its
   // TODAY (and, across a month boundary, MTD) figures are definitively wrong.
@@ -565,7 +569,7 @@ export function HomePage(): JSX.Element {
                   toIso={toIso}
                   year={selectedYear}
                   today={today}
-                  isLoading={isSelectedYearLoading}
+                  isLoading={isPriorYearLoading}
                 />
               )}
             </div>

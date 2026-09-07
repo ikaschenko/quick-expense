@@ -79,24 +79,25 @@ function groupPrefixOf(name: string): string {
 }
 
 /**
- * Category breakdown for [startDate, endDate] vs the same day-of-month range in the prior
- * calendar month. When `grouped` is true, current-period categories whose `GROUP_PREFIX_REGEX`
- * match collides with at least one other distinct current-period category are merged under
- * `{matched first word of the first-encountered record's original casing}...`; categories with
- * no such collision keep their original name unchanged. Rows are sorted descending by
- * current-period amount.
+ * Category breakdown for [startDate, endDate] vs the caller-supplied prior-period range (e.g. the
+ * same day-of-month range in the prior calendar month, or the same year-to-date range in the prior
+ * year). When `grouped` is true, current-period categories whose `GROUP_PREFIX_REGEX` match collides
+ * with at least one other distinct current-period category are merged under `{matched first word of
+ * the first-encountered record's original casing}...`; categories with no such collision keep their
+ * original name unchanged. Rows are sorted descending by current-period amount.
  */
 export function getCategoryBreakdown(
   records: ExpenseRecord[],
   startDate: string,
   endDate: string,
+  priorStartDate: string,
+  priorEndDate: string,
   toIso: IsoNormalizer,
   options: { grouped: boolean },
 ): CategoryBreakdownRow[] {
   const { grouped } = options;
   const currentRecords = filterByRange(records, startDate, endDate, toIso);
-  const { startDate: priorStart, endDate: priorEnd } = computePriorMonthRange(startDate, endDate);
-  const priorRecords = filterByRange(records, priorStart, priorEnd, toIso);
+  const priorRecords = filterByRange(records, priorStartDate, priorEndDate, toIso);
 
   // Only merge categories whose prefix is shared by 2+ distinct category names actually
   // shown in the current period — a same-prefix category from the prior period alone

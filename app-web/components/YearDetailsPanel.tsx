@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import { FormattedAmount } from "./FormattedAmount";
 import { LoadingBlock } from "./LoadingBlock";
 import { YearSpendChart } from "./YearSpendChart";
-import { getYearMonthlyAmounts, getYearlyAverageSpend } from "../utils/yearDetails";
+import { CategoryBreakdownPanel } from "./CategoryBreakdownPanel";
+import { getYearMonthlyAmounts, getYearlyAverageSpend, getYearRange, computePriorYearRange } from "../utils/yearDetails";
 import { IsoNormalizer } from "../utils/dashboardStats";
 import { ExpenseRecord } from "../types/expense";
 
@@ -18,6 +19,11 @@ export interface YearDetailsPanelProps {
 export function YearDetailsPanel({ records, toIso, year, today, isLoading }: YearDetailsPanelProps): JSX.Element {
   const monthlyAmounts = useMemo(() => getYearMonthlyAmounts(records, year, toIso, today), [records, year, toIso, today]);
   const averagePerMonth = useMemo(() => getYearlyAverageSpend(records, year, toIso, today), [records, year, toIso, today]);
+  const { startDate, endDate } = useMemo(() => getYearRange(year, today), [year, today]);
+  const { startDate: priorStartDate, endDate: priorEndDate } = useMemo(
+    () => computePriorYearRange(startDate, endDate),
+    [startDate, endDate],
+  );
 
   if (isLoading) {
     return (
@@ -33,7 +39,21 @@ export function YearDetailsPanel({ records, toIso, year, today, isLoading }: Yea
         Average spent per month:{" "}
         {averagePerMonth === null ? "No data" : <FormattedAmount prefix="$" value={averagePerMonth} />}
       </p>
-      {averagePerMonth !== null && <YearSpendChart monthlyAmounts={monthlyAmounts} />}
+      {averagePerMonth !== null && (
+        <>
+          <YearSpendChart monthlyAmounts={monthlyAmounts} />
+          <CategoryBreakdownPanel
+            records={records}
+            toIso={toIso}
+            startDate={startDate}
+            endDate={endDate}
+            priorStartDate={priorStartDate}
+            priorEndDate={priorEndDate}
+            currentLabel={String(year)}
+            priorLabel={String(year - 1)}
+          />
+        </>
+      )}
     </div>
   );
 }

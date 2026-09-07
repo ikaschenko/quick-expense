@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { getYearMonthlyAmounts, getYearlyAverageSpend } from "../../app-web/utils/yearDetails";
+import {
+  getYearMonthlyAmounts,
+  getYearlyAverageSpend,
+  getYearRange,
+  computePriorYearRange,
+} from "../../app-web/utils/yearDetails";
 import { buildIsoNormalizer } from "../../app-web/utils/dashboardStats";
 import { ExpenseRecord } from "../../app-web/types/expense";
 
@@ -76,5 +81,38 @@ describe("getYearlyAverageSpend", () => {
     const toIso = buildIsoNormalizer(records);
     const average = getYearlyAverageSpend(records, 2024, toIso, "2026-06-15");
     expect(average).toBeCloseTo(300 / 1, 4);
+  });
+});
+
+describe("getYearRange", () => {
+  it("returns Jan 1 through today for the current year", () => {
+    expect(getYearRange(2026, "2026-06-15")).toEqual({ startDate: "2026-01-01", endDate: "2026-06-15" });
+  });
+
+  it("returns the full calendar year for a past year", () => {
+    expect(getYearRange(2024, "2026-06-15")).toEqual({ startDate: "2024-01-01", endDate: "2024-12-31" });
+  });
+});
+
+describe("computePriorYearRange", () => {
+  it("shifts both dates back one calendar year", () => {
+    expect(computePriorYearRange("2026-01-01", "2026-06-15")).toEqual({
+      startDate: "2025-01-01",
+      endDate: "2025-06-15",
+    });
+  });
+
+  it("shifts a full past-year range back one year", () => {
+    expect(computePriorYearRange("2024-01-01", "2024-12-31")).toEqual({
+      startDate: "2023-01-01",
+      endDate: "2023-12-31",
+    });
+  });
+
+  it("clamps Feb 29 to Feb 28 when the prior year is not a leap year", () => {
+    expect(computePriorYearRange("2024-01-01", "2024-02-29")).toEqual({
+      startDate: "2023-01-01",
+      endDate: "2023-02-28",
+    });
   });
 });

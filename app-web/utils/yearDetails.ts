@@ -41,6 +41,23 @@ export function getYearMonthlyAmounts(
   return amounts;
 }
 
+/** Full calendar year, or Jan 1 – today for the current (in-progress) year. */
+export function getYearRange(year: number, today: string): { startDate: string; endDate: string } {
+  const isCurrentYear = year === Number(today.slice(0, 4));
+  return { startDate: `${year}-01-01`, endDate: isCurrentYear ? today : `${year}-12-31` };
+}
+
+/** Shifts both dates back one calendar year, clamping Feb 29 to Feb 28 when the prior year isn't a leap year. */
+export function computePriorYearRange(startDate: string, endDate: string): { startDate: string; endDate: string } {
+  const shiftBackOneYear = (iso: string): string => {
+    const [y, m, d] = iso.split("-").map(Number);
+    const prevYear = y - 1;
+    const clampedDay = m === 2 && d === 29 && daysInYear(prevYear) === 365 ? 28 : d;
+    return `${prevYear}-${String(m).padStart(2, "0")}-${String(clampedDay).padStart(2, "0")}`;
+  };
+  return { startDate: shiftBackOneYear(startDate), endDate: shiftBackOneYear(endDate) };
+}
+
 /**
  * Average USD spend per month for the selected year.
  * Current year: year-to-date total ÷ elapsed months, prorated by day-of-year (fractional).

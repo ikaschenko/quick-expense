@@ -75,19 +75,30 @@ describe("computePriorMonthRange", () => {
 
 // ─── getCategoryBreakdown ─────────────────────────────────────────────────────
 
+// Prior range mirrors what MonthDetailsPanel computes via computePriorMonthRange.
+function breakdown(
+  records: ExpenseRecord[],
+  startDate: string,
+  endDate: string,
+  options: { grouped: boolean },
+): CategoryBreakdownRow[] {
+  const { startDate: priorStart, endDate: priorEnd } = computePriorMonthRange(startDate, endDate);
+  return getCategoryBreakdown(records, startDate, endDate, priorStart, priorEnd, iso, options);
+}
+
 describe("getCategoryBreakdown", () => {
   it("sorts rows descending by current-month amount", () => {
     const records = [
       makeRecord("2026-08-01", "10", "Utilities"),
       makeRecord("2026-08-02", "30", "Food"),
     ];
-    const rows = getCategoryBreakdown(records, "2026-08-01", "2026-08-05", iso, { grouped: false });
+    const rows = breakdown(records, "2026-08-01", "2026-08-05", { grouped: false });
     expect(rows.map((r) => r.label)).toEqual(["Food", "Utilities"]);
   });
 
   it("shows '-' (priorAmount null) and omits deviation when category had no prior spend", () => {
     const records = [makeRecord("2026-08-01", "20", "Food")];
-    const rows = getCategoryBreakdown(records, "2026-08-01", "2026-08-05", iso, { grouped: false });
+    const rows = breakdown(records, "2026-08-01", "2026-08-05", { grouped: false });
     expect(rows[0].priorAmount).toBeNull();
     expect(rows[0].deviationPct).toBeNull();
   });
@@ -97,7 +108,7 @@ describe("getCategoryBreakdown", () => {
       makeRecord("2026-08-01", "20", "Food"),
       makeRecord("2026-07-01", "0", "Food"),
     ];
-    const rows = getCategoryBreakdown(records, "2026-08-01", "2026-08-31", iso, { grouped: false });
+    const rows = breakdown(records, "2026-08-01", "2026-08-31", { grouped: false });
     const food = rows.find((r) => r.label === "Food")!;
     expect(food.priorAmount).toBe(0);
     expect(food.deviationPct).toBeNull();
@@ -108,7 +119,7 @@ describe("getCategoryBreakdown", () => {
       makeRecord("2026-08-01", "115", "Food"),
       makeRecord("2026-07-01", "100", "Food"),
     ];
-    const rows = getCategoryBreakdown(records, "2026-08-01", "2026-08-31", iso, { grouped: false });
+    const rows = breakdown(records, "2026-08-01", "2026-08-31", { grouped: false });
     const food = rows.find((r) => r.label === "Food")!;
     expect(food.priorAmount).toBe(100);
     expect(food.deviationPct).toBeCloseTo(15);
@@ -120,7 +131,7 @@ describe("getCategoryBreakdown", () => {
       makeRecord("2026-08-02", "7", "Food - Dining out"),
       makeRecord("2026-08-03", "10", "Utilities"),
     ];
-    const rows = getCategoryBreakdown(records, "2026-08-01", "2026-08-05", iso, { grouped: true });
+    const rows = breakdown(records, "2026-08-01", "2026-08-05", { grouped: true });
     expect(rows[0]).toMatchObject({ label: "Food...", currentAmount: 12 });
     expect(rows[1]).toMatchObject({ label: "Utilities", currentAmount: 10 });
   });
@@ -137,7 +148,7 @@ describe("getCategoryBreakdown", () => {
       makeRecord("2026-08-01", "10", firstCategory),
       makeRecord("2026-08-02", "5", secondCategory),
     ];
-    const rows = getCategoryBreakdown(records, "2026-08-01", "2026-08-05", iso, { grouped: true });
+    const rows = breakdown(records, "2026-08-01", "2026-08-05", { grouped: true });
     expect(rows.map((r) => r.label)).toEqual([firstCategory, secondCategory]);
   });
 
@@ -146,7 +157,7 @@ describe("getCategoryBreakdown", () => {
       makeRecord("2026-08-01", "10", "Groceries"),
       makeRecord("2026-08-02", "5", "Transport"),
     ];
-    const rows = getCategoryBreakdown(records, "2026-08-01", "2026-08-05", iso, { grouped: true });
+    const rows = breakdown(records, "2026-08-01", "2026-08-05", { grouped: true });
     expect(rows.map((r) => r.label)).toEqual(["Groceries", "Transport"]);
   });
 
@@ -155,7 +166,7 @@ describe("getCategoryBreakdown", () => {
       makeRecord("2026-08-01", "10", "Food"),
       makeRecord("2026-07-01", "5", "Food - takeout"),
     ];
-    const rows = getCategoryBreakdown(records, "2026-08-01", "2026-08-31", iso, { grouped: true });
+    const rows = breakdown(records, "2026-08-01", "2026-08-31", { grouped: true });
     expect(rows[0]).toMatchObject({ label: "Food", currentAmount: 10 });
   });
 
@@ -164,7 +175,7 @@ describe("getCategoryBreakdown", () => {
       makeRecord("2026-08-01", "5", "food"),
       makeRecord("2026-08-02", "7", "Food - junk"),
     ];
-    const rows = getCategoryBreakdown(records, "2026-08-01", "2026-08-05", iso, { grouped: true });
+    const rows = breakdown(records, "2026-08-01", "2026-08-05", { grouped: true });
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ label: "food...", currentAmount: 12 });
   });
