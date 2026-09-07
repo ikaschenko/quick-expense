@@ -319,6 +319,9 @@ export function HomePage(): JSX.Element {
   const isPriorYearLoading =
     isSelectedYearLoading ||
     (dataset.isLoadingHistory && (earliestLoadedYear === null || selectedYear - 1 < earliestLoadedYear));
+  // Unlike the metric cards above, YearDetailsPanel has no cache fallback — it always reads live
+  // records, so it must show a spinner until the dataset itself is ready, even for the current year.
+  const isYearDetailsLoading = dataset.status !== "ready" || isPriorYearLoading;
 
   // A cached entry from an earlier day still carries valid YTD/rolling-12m totals, but its
   // TODAY (and, across a month boundary, MTD) figures are definitively wrong.
@@ -569,7 +572,7 @@ export function HomePage(): JSX.Element {
                   toIso={toIso}
                   year={selectedYear}
                   today={today}
-                  isLoading={isPriorYearLoading}
+                  isLoading={isYearDetailsLoading}
                 />
               )}
             </div>

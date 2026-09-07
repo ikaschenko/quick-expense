@@ -24,6 +24,7 @@ export function YearDetailsPanel({ records, toIso, year, today, isLoading }: Yea
     () => computePriorYearRange(startDate, endDate),
     [startDate, endDate],
   );
+  const currentMonthIndex = year === Number(today.slice(0, 4)) ? Number(today.slice(5, 7)) - 1 : null;
 
   if (isLoading) {
     return (
@@ -41,7 +42,12 @@ export function YearDetailsPanel({ records, toIso, year, today, isLoading }: Yea
       </p>
       {averagePerMonth !== null && (
         <>
-          <YearSpendChart monthlyAmounts={monthlyAmounts} year={year} averagePerMonth={averagePerMonth} />
+          <YearSpendChart
+            monthlyAmounts={monthlyAmounts}
+            year={year}
+            averagePerMonth={averagePerMonth}
+            currentMonthIndex={currentMonthIndex}
+          />
           <CategoryBreakdownPanel
             records={records}
             toIso={toIso}

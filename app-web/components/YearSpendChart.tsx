@@ -23,20 +23,39 @@ interface YearSpendChartProps {
   monthlyAmounts: (number | null)[];
   year: number;
   averagePerMonth: number;
+  currentMonthIndex: number | null;
 }
 
 /** Real months render as solid bars; forecast (future) months render as flat, non-interactive gray placeholders. */
-function buildSeries(
+export function buildSeries(
   monthlyAmounts: (number | null)[],
   forecastHatchColor: string,
   averagePerMonth: number,
   averageLineColor: string,
+  currentMonthIndex: number | null,
 ): BarSeriesOption[] {
   const actualAmounts = monthlyAmounts.filter((a): a is number => a !== null);
   const hasForecast = actualAmounts.length < monthlyAmounts.length;
+  const forecastFillStyle = {
+    color: "rgba(107,114,128,0.15)",
+    decal: {
+      symbol: "line",
+      rotation: Math.PI / 4,
+      dashArrayX: [1, 0],
+      dashArrayY: [2, 6],
+      color: forecastHatchColor,
+      maxTileWidth: 12,
+      maxTileHeight: 12,
+    },
+  };
   const actualSeries: BarSeriesOption = {
     type: "bar",
-    data: monthlyAmounts.map((amount) => amount ?? 0),
+    data: monthlyAmounts.map((amount, index) =>
+      // In-progress current month keeps its blue border but borrows the future months' fill, to signal it's incomplete.
+      index === currentMonthIndex
+        ? { value: amount ?? 0, itemStyle: { ...forecastFillStyle, borderColor: "rgba(79,70,229,0.9)", borderWidth: 2 } }
+        : amount ?? 0,
+    ),
     barMaxWidth: 24,
     itemStyle: { color: "rgba(79,70,229,0.9)" },
     markLine: {
@@ -55,25 +74,14 @@ function buildSeries(
     data: monthlyAmounts.map((amount) => (amount === null ? placeholderHeight : 0)),
     barMaxWidth: 24,
     barGap: "-100%",
-    itemStyle: {
-      color: "rgba(107,114,128,0.15)",
-      decal: {
-        symbol: "line",
-        rotation: Math.PI / 4,
-        dashArrayX: [1, 0],
-        dashArrayY: [2, 6],
-        color: forecastHatchColor,
-        maxTileWidth: 12,
-        maxTileHeight: 12,
-      },
-    },
+    itemStyle: forecastFillStyle,
     tooltip: { show: false },
     silent: true,
   };
   return [actualSeries, forecastSeries];
 }
 
-export function YearSpendChart({ monthlyAmounts, year, averagePerMonth }: YearSpendChartProps): JSX.Element {
+export function YearSpendChart({ monthlyAmounts, year, averagePerMonth, currentMonthIndex }: YearSpendChartProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
 
@@ -109,7 +117,7 @@ export function YearSpendChart({ monthlyAmounts, year, averagePerMonth }: YearSp
         splitLine: { show: false },
       },
       yAxis: { type: "value", show: false, min: 0 },
-      series: buildSeries(monthlyAmounts, forecastHatchColor, averagePerMonth, averageLineColor),
+      series: buildSeries(monthlyAmounts, forecastHatchColor, averagePerMonth, averageLineColor, currentMonthIndex),
     };
 
     chartRef.current?.dispose();
@@ -124,7 +132,7 @@ export function YearSpendChart({ monthlyAmounts, year, averagePerMonth }: YearSp
       chart.dispose();
       chartRef.current = null;
     };
-  }, [monthlyAmounts, year, averagePerMonth]);
+  }, [monthlyAmounts, year, averagePerMonth, currentMonthIndex]);
 
   return (
     <div className="home-chart-container year-chart-container" ref={containerRef} role="img" aria-label="Monthly spending for the selected year">

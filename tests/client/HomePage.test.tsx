@@ -456,6 +456,34 @@ describe("HomePage — Year details expand", () => {
 
     expect(screen.getByText("Loading…")).toBeTruthy();
   });
+
+  it("shows a spinner instead of 'No data' when opened for the current year before the dataset finishes its initial load", async () => {
+    const user = userEvent.setup();
+    const today = formatLocalDate(new Date());
+    // A cachedEntry makes the dashboard render immediately, but YearDetailsPanel has no cache fallback —
+    // it must wait for live records rather than showing "No data" while dataset.status is still "loading".
+    metricsCache.save("test@example.com", {
+      cacheDate: today,
+      spreadsheetId: "abc123",
+      sheetLastModifiedTime: "2026-01-01T00:00:00.000Z",
+      todayStats: { count: 0, usdTotal: 0, dualCurrency: null },
+      mtdStats: { count: 0, usdTotal: 0, deviation: null },
+      ytdStats: { count: 1, usdTotal: 100, deviation: null },
+      ytdForecast: { amountUsd: null, deviation: null },
+      rolling12mStats: { count: 0, usdTotal: 0, deviation: null },
+      mtdDailyAmounts: [],
+      weekBoundaryPositions: [],
+    });
+    mockDataset({ status: "idle", snapshot: null, loadDataset: vi.fn().mockResolvedValue(undefined) });
+    renderHome();
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Previous year" })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole("button", { name: /Year details/i })).toBeTruthy());
+    await user.click(screen.getByRole("button", { name: /Year details/i }));
+
+    expect(screen.getByText("Loading…")).toBeTruthy();
+    expect(screen.queryByText("No data")).toBeNull();
+  });
 });
 
 describe("HomePage — month navigation", () => {
