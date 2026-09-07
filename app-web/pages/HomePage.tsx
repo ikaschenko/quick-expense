@@ -5,6 +5,7 @@ import { FormattedAmount } from "../components/FormattedAmount";
 import { Layout } from "../components/Layout";
 import { MtdSpendChart } from "../components/MtdSpendChart";
 import { MonthDetailsPanel } from "../components/MonthDetailsPanel";
+import { YearDetailsPanel } from "../components/YearDetailsPanel";
 import { StatusBanner } from "../components/StatusBanner";
 import { useConfig } from "../contexts/ConfigContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -161,6 +162,7 @@ export function HomePage(): JSX.Element {
   const [ytdHelpOpen, setYtdHelpOpen] = useState(false);
   const [rolling12mHelpOpen, setRolling12mHelpOpen] = useState(false);
   const [monthDetailsOpen, setMonthDetailsOpen] = useState(false);
+  const [yearDetailsOpen, setYearDetailsOpen] = useState(false);
 
   const [showSavedBanner, setShowSavedBanner] = useState(
     !!(location.state as { expenseSaved?: boolean } | null)?.expenseSaved,
@@ -235,6 +237,12 @@ export function HomePage(): JSX.Element {
       dataset.loadDataset().catch(() => {/* error surfaced via dataset.error */});
     }
   }, [monthDetailsOpen, dataset.status, dataset.loadDataset]);
+
+  useEffect(() => {
+    if (yearDetailsOpen && dataset.status !== "ready") {
+      dataset.loadDataset().catch(() => {/* error surfaced via dataset.error */});
+    }
+  }, [yearDetailsOpen, dataset.status, dataset.loadDataset]);
 
   useEffect(() => {
     const isViewingPastPeriod = selectedMonth !== currentMonth || selectedYear !== currentYear;
@@ -541,6 +549,25 @@ export function HomePage(): JSX.Element {
                   )}
                 </div>
               </div>
+              {(isSelectedYearLoading || displaySelectedYearStats.count > 0) && (
+                <button
+                  type="button"
+                  className="month-details-toggle"
+                  aria-expanded={yearDetailsOpen}
+                  onClick={() => setYearDetailsOpen((v) => !v)}
+                >
+                  Year details {yearDetailsOpen ? <ChevronUp size={14} aria-hidden /> : <ChevronDown size={14} aria-hidden />}
+                </button>
+              )}
+              {yearDetailsOpen && (
+                <YearDetailsPanel
+                  records={records}
+                  toIso={toIso}
+                  year={selectedYear}
+                  today={today}
+                  isLoading={isSelectedYearLoading}
+                />
+              )}
             </div>
 
             {/* ROLLING 12M */}

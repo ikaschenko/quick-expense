@@ -383,6 +383,81 @@ describe("HomePage — Month details expand", () => {
   });
 });
 
+describe("HomePage — Year details expand", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("shows the Year details toggle and renders the bar chart + average when the current year has data", async () => {
+    const user = userEvent.setup();
+    const currentYear = new Date().getFullYear();
+    mockDataset({
+      snapshot: {
+        records: [makeRecord(1, `${currentYear}-01-15`, "100")],
+        distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} },
+        loadedAt: 0,
+        payloadBytes: 0,
+        loadPhase: "full",
+      },
+    });
+    renderHome();
+
+    const toggle = screen.getByRole("button", { name: /Year details/i });
+    await user.click(toggle);
+
+    expect(screen.getByText(/Average spent per month/)).toBeTruthy();
+    expect(screen.queryByText("Loading…")).toBeNull();
+    expect(screen.queryByText("No data")).toBeNull();
+  });
+
+  it("hides the Year details toggle once a past year is confirmed to have zero records", async () => {
+    const user = userEvent.setup();
+    const currentYear = new Date().getFullYear();
+    mockDataset({
+      snapshot: {
+        records: [makeRecord(1, `${currentYear}-01-15`, "100"), makeRecord(2, "2000-01-01", "5")],
+        distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} },
+        loadedAt: 0,
+        payloadBytes: 0,
+        loadPhase: "full",
+      },
+    });
+    renderHome();
+
+    expect(screen.getByRole("button", { name: /Year details/i })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Previous year" }));
+
+    expect(screen.queryByRole("button", { name: /Year details/i })).toBeNull();
+  });
+
+  it("keeps the Year details toggle visible and shows a spinner while the selected year is still loading", async () => {
+    const user = userEvent.setup();
+    const today = formatLocalDate(new Date());
+    metricsCache.save("test@example.com", {
+      cacheDate: today,
+      spreadsheetId: "abc123",
+      sheetLastModifiedTime: "2026-01-01T00:00:00.000Z",
+      todayStats: { count: 0, usdTotal: 0, dualCurrency: null },
+      mtdStats: { count: 0, usdTotal: 0, deviation: null },
+      ytdStats: { count: 0, usdTotal: 0, deviation: null },
+      ytdForecast: { amountUsd: null, deviation: null },
+      rolling12mStats: { count: 0, usdTotal: 0, deviation: null },
+      mtdDailyAmounts: [],
+      weekBoundaryPositions: [],
+    });
+    mockDataset({ status: "idle", snapshot: null, loadDataset: vi.fn().mockResolvedValue(undefined) });
+    renderHome();
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Previous year" })).toBeTruthy());
+    await user.click(screen.getByRole("button", { name: "Previous year" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: /Year details/i })).toBeTruthy());
+    await user.click(screen.getByRole("button", { name: /Year details/i }));
+
+    expect(screen.getByText("Loading…")).toBeTruthy();
+  });
+});
+
 describe("HomePage — month navigation", () => {
   beforeEach(() => {
     localStorage.clear();
