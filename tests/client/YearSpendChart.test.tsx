@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { BarSeriesOption } from "echarts/charts";
-import { buildSeries } from "../../app-web/components/YearSpendChart";
+import { buildSeries, resolveMonthClick } from "../../app-web/components/YearSpendChart";
 
 function dataAt(series: BarSeriesOption, index: number) {
   return (series.data as unknown[])[index];
@@ -49,5 +49,33 @@ describe("YearSpendChart — buildSeries", () => {
     const series = buildSeries(monthlyAmounts, "gray", 5, "orange", 11);
 
     expect(series).toHaveLength(1);
+  });
+});
+
+describe("YearSpendChart — resolveMonthClick", () => {
+  const monthlyAmounts: (number | null)[] = [10, 20, null, null];
+
+  it("ignores clicks on the forecast placeholder series", () => {
+    expect(resolveMonthClick(1, 0, monthlyAmounts, false, null)).toEqual({ type: "ignore" });
+  });
+
+  it("ignores clicks on a null (forecast-only) month, even on the primary series", () => {
+    expect(resolveMonthClick(0, 2, monthlyAmounts, false, null)).toEqual({ type: "ignore" });
+  });
+
+  it("navigates immediately on a mouse click of an actual-data bar", () => {
+    expect(resolveMonthClick(0, 1, monthlyAmounts, false, null)).toEqual({ type: "navigate" });
+  });
+
+  it("arms the tooltip on a touch device's first tap of a bar", () => {
+    expect(resolveMonthClick(0, 0, monthlyAmounts, true, null)).toEqual({ type: "arm" });
+  });
+
+  it("arms again when a different bar is tapped before the armed one", () => {
+    expect(resolveMonthClick(0, 1, monthlyAmounts, true, 0)).toEqual({ type: "arm" });
+  });
+
+  it("navigates on a second touch tap of the same already-armed bar", () => {
+    expect(resolveMonthClick(0, 0, monthlyAmounts, true, 0)).toEqual({ type: "navigate" });
   });
 });

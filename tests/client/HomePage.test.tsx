@@ -54,6 +54,14 @@ vi.mock("../../app-web/services/googleSheets", () => ({
   },
 }));
 
+vi.mock("../../app-web/components/YearSpendChart", () => ({
+  YearSpendChart: (props: { onMonthClick?: (year: number, month: number) => void }) => (
+    <button type="button" onClick={() => props.onMonthClick?.(2024, 6)}>
+      Mock year-details bar
+    </button>
+  ),
+}));
+
 function makeRecord(rowNumber: number, date: string, usd: string): ExpenseRecord {
   return {
     Date: date,
@@ -841,5 +849,38 @@ describe("HomePage — stale cached metrics", () => {
 
     expect(screen.getByText("Loading expenses from Google Sheet…")).toBeTruthy();
     await waitFor(() => expect(loadDataset).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe("HomePage — Year Details bar drill-down into MTD", () => {
+  const CURRENT_YEAR = new Date().getFullYear();
+
+  it("jumps MTD to the clicked month, expands its details, and scrolls the MTD card into view", async () => {
+    const user = userEvent.setup();
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    mockDataset({
+      snapshot: {
+        records: [
+          makeRecord(1, formatLocalDate(new Date()), "25"),
+          makeRecord(2, "2024-06-15", "40"),
+        ],
+        distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} },
+        loadedAt: 0,
+        payloadBytes: 0,
+        loadPhase: "full",
+      },
+    });
+    renderHome();
+
+    await user.click(screen.getByRole("button", { name: "Year details" }));
+    await user.click(screen.getByRole("button", { name: "Mock year-details bar" }));
+
+    expect(screen.getByText("JUNE TOTAL")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Month details/i }).getAttribute("aria-expanded")).toBe("true");
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+
+    // Year Details' own selected year/open state is untouched by the drill-down.
+    expect(screen.getByText(`${CURRENT_YEAR} SO FAR`)).toBeTruthy();
   });
 });

@@ -156,6 +156,7 @@ export function HomePage(): JSX.Element {
 
   const [cachedEntry, setCachedEntry] = useState<MetricsCacheEntry | null>(null);
   const driveModifiedTimeRef = useRef<string | null>(null);
+  const mtdCardRef = useRef<HTMLDivElement>(null);
 
   const [todayHelpOpen, setTodayHelpOpen] = useState(false);
   const [mtdHelpOpen, setMtdHelpOpen] = useState(false);
@@ -295,6 +296,13 @@ export function HomePage(): JSX.Element {
   const dayLabel = formatShortDate(today);
   const selectedMonthRange = getMonthRange(selectedMonth);
 
+  // Year Details bar drill-down: jump MTD to that month, expand its details, scroll it into view.
+  const handleYearMonthClick = (clickedYear: number, clickedMonth: number): void => {
+    setSelectedMonth(`${clickedYear}-${String(clickedMonth).padStart(2, "0")}`);
+    setMonthDetailsOpen(true);
+    mtdCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   const isDatasetLoading = dataset.status === "idle" || dataset.status === "loading";
   const isLoading = isConfigLoading || isDatasetLoading;
   const showEmptySheet = !isConfigLoading && !config;
@@ -418,7 +426,7 @@ export function HomePage(): JSX.Element {
             </div>
 
             {/* MTD */}
-            <div className="home-metric-card">
+            <div className="home-metric-card" ref={mtdCardRef}>
               <div className="home-metric-header">
                 <span className="home-metric-title">
                   {mtdTitle}
@@ -573,6 +581,7 @@ export function HomePage(): JSX.Element {
                   year={selectedYear}
                   today={today}
                   isLoading={isYearDetailsLoading}
+                  onMonthClick={handleYearMonthClick}
                 />
               )}
             </div>

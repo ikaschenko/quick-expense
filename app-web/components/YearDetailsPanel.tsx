@@ -14,9 +14,11 @@ export interface YearDetailsPanelProps {
   today: string;
   /** True while the consumer is (re)loading records — renders a spinner instead of stats. */
   isLoading?: boolean;
+  /** Drill-down into a clicked/tapped month bar — forwarded from YearSpendChart. */
+  onMonthClick?: (year: number, month: number) => void;
 }
 
-export function YearDetailsPanel({ records, toIso, year, today, isLoading }: YearDetailsPanelProps): JSX.Element {
+export function YearDetailsPanel({ records, toIso, year, today, isLoading, onMonthClick }: YearDetailsPanelProps): JSX.Element {
   const monthlyAmounts = useMemo(() => getYearMonthlyAmounts(records, year, toIso, today), [records, year, toIso, today]);
   const averagePerMonth = useMemo(() => getYearlyAverageSpend(records, year, toIso, today), [records, year, toIso, today]);
   const { startDate, endDate } = useMemo(() => getYearRange(year, today), [year, today]);
@@ -47,6 +49,7 @@ export function YearDetailsPanel({ records, toIso, year, today, isLoading }: Yea
             year={year}
             averagePerMonth={averagePerMonth}
             currentMonthIndex={currentMonthIndex}
+            onMonthClick={onMonthClick}
           />
           <CategoryBreakdownPanel
             records={records}

@@ -6,3 +6,7 @@ if (typeof HTMLCanvasElement !== "undefined") {
     value: vi.fn(() => null),
   });
 }
+
+if (typeof Element !== "undefined" && !Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = vi.fn();
+}

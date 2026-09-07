@@ -24,6 +24,26 @@ interface YearSpendChartProps {
   year: number;
   averagePerMonth: number;
   currentMonthIndex: number | null;
+  /** Fires on desktop click, or on a second touch tap of the same bar (first tap only shows its tooltip). */
+  onMonthClick?: (year: number, month: number) => void;
+}
+
+export type MonthClickResolution = { type: "ignore" } | { type: "arm" } | { type: "navigate" };
+
+/**
+ * Decides what a bar click means: ignore clicks on non-primary series or null (forecast-only) months,
+ * arm the tooltip on a touch device's first tap of a bar, or navigate on a second same-bar tap / any mouse click.
+ */
+export function resolveMonthClick(
+  seriesIndex: number,
+  dataIndex: number,
+  monthlyAmounts: (number | null)[],
+  isTouch: boolean,
+  armedIndex: number | null,
+): MonthClickResolution {
+  if (seriesIndex !== 0 || monthlyAmounts[dataIndex] === null) return { type: "ignore" };
+  if (isTouch && armedIndex !== dataIndex) return { type: "arm" };
+  return { type: "navigate" };
 }
 
 /** Real months render as solid bars; forecast (future) months render as flat, non-interactive gray placeholders. */
@@ -81,9 +101,15 @@ export function buildSeries(
   return [actualSeries, forecastSeries];
 }
 
-export function YearSpendChart({ monthlyAmounts, year, averagePerMonth, currentMonthIndex }: YearSpendChartProps): JSX.Element {
+export function YearSpendChart({ monthlyAmounts, year, averagePerMonth, currentMonthIndex, onMonthClick }: YearSpendChartProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
+  // Touch-only: dataIndex of the bar whose tooltip is already showing from a first tap.
+  const armedIndexRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    armedIndexRef.current = null;
+  }, [monthlyAmounts, year]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -127,12 +153,36 @@ export function YearSpendChart({ monthlyAmounts, year, averagePerMonth, currentM
     const resizeObserver = new ResizeObserver(() => chart.resize());
     resizeObserver.observe(container);
 
+    const handleClick = (params: unknown): void => {
+      if (!onMonthClick) return;
+      const { seriesIndex, dataIndex, event } = params as {
+        seriesIndex: number;
+        dataIndex: number;
+        event?: { event?: PointerEvent };
+      };
+      const isTouch = event?.event?.pointerType === "touch";
+      const resolution = resolveMonthClick(seriesIndex, dataIndex, monthlyAmounts, isTouch, armedIndexRef.current);
+
+      if (resolution.type === "ignore") return;
+      if (resolution.type === "arm") {
+        chart.dispatchAction({ type: "showTip", seriesIndex: 0, dataIndex });
+        armedIndexRef.current = dataIndex;
+        return;
+      }
+
+      armedIndexRef.current = null;
+      onMonthClick(year, dataIndex + 1);
+    };
+    chart.on("click", handleClick);
+
     return () => {
+      chart.off("click", handleClick);
       resizeObserver.disconnect();
       chart.dispose();
       chartRef.current = null;
     };
-  }, [monthlyAmounts, year, averagePerMonth, currentMonthIndex]);
+  }, [monthlyAmounts, year, averagePerMonth, currentMonthIndex, onMonthClick]);
+
 
   return (
     <div className="home-chart-container year-chart-container" ref={containerRef} role="img" aria-label="Monthly spending for the selected year">
