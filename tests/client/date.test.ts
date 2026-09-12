@@ -1,4 +1,4 @@
-import { detectDateFormat, formatLocalDate } from "../../app-web/utils/date";
+import { detectDateFormat, formatLocalDate, getDateShortcutRanges } from "../../app-web/utils/date";
 
 describe("detectDateFormat", () => {
   it("returns null for empty samples", () => {
@@ -126,5 +126,41 @@ describe("detectDateFormat", () => {
       const fmt = detectDateFormat(["04/15/2024"]);
       expect(fmt!.toIso(fmt!.toSheet(new Date(2026, 5, 4)))).toBe("2026-06-04");
     });
+  });
+});
+
+describe("getDateShortcutRanges", () => {
+  it("computes correct shortcut ranges for Saturday Sep 12, 2026", () => {
+    const ref = new Date(2026, 8, 12); // Sep 12, 2026
+    const ranges = getDateShortcutRanges(ref);
+
+    // Last 7d (-7d ago)
+    expect(ranges.last7d).toEqual({ dateFrom: "2026-09-05", dateTo: "" });
+
+    // Last 30d (-30d ago)
+    expect(ranges.last30d).toEqual({ dateFrom: "2026-08-13", dateTo: "" });
+
+    // Last week (Mon Aug 31 to Sun Sep 6)
+    expect(ranges.lastWeek).toEqual({ dateFrom: "2026-08-31", dateTo: "2026-09-06" });
+
+    // Last month (Aug 1 to Aug 31)
+    expect(ranges.lastMonth).toEqual({ dateFrom: "2026-08-01", dateTo: "2026-08-31" });
+  });
+
+  it("handles year rollover for Last Month when refDate is in January", () => {
+    const ref = new Date(2026, 0, 15); // Jan 15, 2026
+    const ranges = getDateShortcutRanges(ref);
+
+    expect(ranges.lastMonth).toEqual({ dateFrom: "2025-12-01", dateTo: "2025-12-31" });
+  });
+
+  it("handles Last Week when refDate is a Sunday or Monday", () => {
+    // Sunday Sep 13, 2026 -> last week is Mon Aug 31 to Sun Sep 6
+    const sunRef = new Date(2026, 8, 13);
+    expect(getDateShortcutRanges(sunRef).lastWeek).toEqual({ dateFrom: "2026-08-31", dateTo: "2026-09-06" });
+
+    // Monday Sep 7, 2026 -> last week is Mon Aug 31 to Sun Sep 6
+    const monRef = new Date(2026, 8, 7);
+    expect(getDateShortcutRanges(monRef).lastWeek).toEqual({ dateFrom: "2026-08-31", dateTo: "2026-09-06" });
   });
 });

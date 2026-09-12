@@ -2370,6 +2370,19 @@ button { cursor: pointer; }
   margin-bottom: var(--space-4);
 }
 
+.filter-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.filter-toggle-row .filter-toggle {
+  width: auto;
+  margin-bottom: 0;
+}
+
 .filter-toggle {
   display: flex;
   align-items: center;
@@ -2416,6 +2429,37 @@ button { cursor: pointer; }
 }
 .filter-amount-range .input {
   flex: 1;
+}
+
+.date-filter-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.date-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.btn-shortcut {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.1s;
+}
+
+.btn-shortcut:hover {
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  border-color: var(--color-text-secondary);
 }
 
 .show-earlier-link {

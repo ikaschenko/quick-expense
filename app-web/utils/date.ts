@@ -9,6 +9,56 @@ export function getTodayLocalDate(): string {
   return formatLocalDate(new Date());
 }
 
+export interface DateShortcutRange {
+  dateFrom: string;
+  dateTo: string;
+}
+
+export function getDateShortcutRanges(refDate: Date = new Date()): {
+  last7d: DateShortcutRange;
+  last30d: DateShortcutRange;
+  lastWeek: DateShortcutRange;
+  lastMonth: DateShortcutRange;
+} {
+  const year = refDate.getFullYear();
+  const month = refDate.getMonth();
+  const day = refDate.getDate();
+
+  // Last 7 days (-7 days from refDate)
+  const d7 = new Date(year, month, day - 7);
+  const last7d: DateShortcutRange = {
+    dateFrom: formatLocalDate(d7),
+    dateTo: "",
+  };
+
+  // Last 30 days (-30 days from refDate)
+  const d30 = new Date(year, month, day - 30);
+  const last30d: DateShortcutRange = {
+    dateFrom: formatLocalDate(d30),
+    dateTo: "",
+  };
+
+  // Last week (Monday to Sunday of previous calendar week)
+  const dayOfWeek = refDate.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
+  const currentWeekMon = new Date(year, month, day - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+  const lastWeekMon = new Date(currentWeekMon.getFullYear(), currentWeekMon.getMonth(), currentWeekMon.getDate() - 7);
+  const lastWeekSun = new Date(currentWeekMon.getFullYear(), currentWeekMon.getMonth(), currentWeekMon.getDate() - 1);
+  const lastWeek: DateShortcutRange = {
+    dateFrom: formatLocalDate(lastWeekMon),
+    dateTo: formatLocalDate(lastWeekSun),
+  };
+
+  // Last month (1st to last day of previous calendar month)
+  const lastMonthFirst = new Date(year, month - 1, 1);
+  const lastMonthLast = new Date(year, month, 0);
+  const lastMonth: DateShortcutRange = {
+    dateFrom: formatLocalDate(lastMonthFirst),
+    dateTo: formatLocalDate(lastMonthLast),
+  };
+
+  return { last7d, last30d, lastWeek, lastMonth };
+}
+
 export function isValidIsoDate(dateValue: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) return false;
   const [year, month, day] = dateValue.split("-").map(Number);

@@ -16,7 +16,7 @@ import { trackEvent } from "../services/analytics";
 import { getDisplayAmountFull, groupByDate } from "../utils/expenseTable";
 import { computeDayTotal, DayTotal } from "../utils/currencyTotals";
 import { ExpenseRecord, SearchFilters } from "../types/expense";
-import { formatLocalDate, isValidIsoDate } from "../utils/date";
+import { formatLocalDate, isValidIsoDate, getDateShortcutRanges } from "../utils/date";
 
 const emptyFilters: SearchFilters = {
   comment: "",
@@ -46,7 +46,6 @@ function isAnyFilterActive(f: SearchFilters): boolean {
 
 function countPanelFilters(f: SearchFilters): number {
   let count = 0;
-  if (f.comment !== "") count++;
   if (f.categories.length > 0) count++;
   if (f.dateFrom !== "") count++;
   if (f.dateTo !== "") count++;
@@ -90,7 +89,6 @@ export function HistoryPage(): JSX.Element {
   const [filterOpen, setFilterOpen] = useState(() => {
     const fil = dataset.searchFilters;
     return (
-      fil.comment !== "" ||
       fil.categories.length > 0 ||
       fil.dateFrom !== "" ||
       fil.dateTo !== "" ||
@@ -238,6 +236,19 @@ export function HistoryPage(): JSX.Element {
     setAppliedFilters(emptyFilters); // bypass debounce
   }, [dataset]);
 
+  const dateShortcuts = useMemo(() => getDateShortcutRanges(), []);
+
+  const handleApplyDateShortcut = useCallback(
+    (range: { dateFrom: string; dateTo: string }) => {
+      dataset.setSearchFilters({
+        ...dataset.searchFilters,
+        dateFrom: range.dateFrom,
+        dateTo: range.dateTo,
+      });
+    },
+    [dataset],
+  );
+
   const handleCategoryToggle = useCallback(
     (category: string) => {
       const cats = dataset.searchFilters.categories;
@@ -276,30 +287,99 @@ export function HistoryPage(): JSX.Element {
         <StatusBanner variant="info" message="Complete history is still loading…" />
       )}
 
-      {/* Filter toggle */}
-      <button
-        className={`filter-toggle${panelFilterCount > 0 ? " filter-toggle--active" : ""}`}
-        type="button"
-        onClick={() => setFilterOpen((o) => !o)}
-        aria-expanded={filterOpen}
-      >
-        <span>Filter</span>
-        {panelFilterCount > 0 && (
-          <span className="filter-toggle-badge">{panelFilterCount}</span>
+      {/* Comment search input (placed before Filters section) */}
+      <div className="input-label mb-2">Comments</div>
+      <div className="search-hero-input mb-4">
+        <SearchIcon size={18} className="search-icon" aria-hidden />
+        <input
+          className="input"
+          value={dataset.searchFilters.comment}
+          onChange={(e) =>
+            dataset.setSearchFilters({ ...dataset.searchFilters, comment: e.target.value })
+          }
+          placeholder="Search by words…"
+          inputMode="text"
+          aria-label="Filter by comment"
+        />
+        {dataset.searchFilters.comment !== "" && (
+          <button
+            className="search-hero-clear"
+            type="button"
+            aria-label="Clear comment"
+            onClick={() =>
+              dataset.setSearchFilters({ ...dataset.searchFilters, comment: "" })
+            }
+          >
+            <X size={14} />
+          </button>
         )}
-        {filterOpen ? <ChevronUp size={16} aria-hidden /> : <ChevronDown size={16} aria-hidden />}
-      </button>
+      </div>
+
+      {/* Filter toggle and Clear Filters top row */}
+      <div className="filter-toggle-row">
+        <button
+          className={`filter-toggle${panelFilterCount > 0 ? " filter-toggle--active" : ""}`}
+          type="button"
+          onClick={() => setFilterOpen((o) => !o)}
+          aria-expanded={filterOpen}
+        >
+          <span>Filter</span>
+          {panelFilterCount > 0 && (
+            <span className="filter-toggle-badge">{panelFilterCount}</span>
+          )}
+          {filterOpen ? <ChevronUp size={16} aria-hidden /> : <ChevronDown size={16} aria-hidden />}
+        </button>
+        <button
+          className="btn btn-secondary btn-inline"
+          type="button"
+          onClick={handleClear}
+        >
+          Clear Filters
+        </button>
+      </div>
 
       {/* Expandable filter panel */}
       {filterOpen && (
         <div className="filter-section">
-          {/* Date range */}
-          <div className="input-label mb-2">Dates</div>
+          {/* Date range header with shortcuts */}
+          <div className="date-filter-header mb-2">
+            <span className="input-label">Dates</span>
+            <div className="date-shortcuts">
+              <button
+                type="button"
+                className="btn-shortcut"
+                onClick={() => handleApplyDateShortcut(dateShortcuts.last7d)}
+              >
+                Last 7d
+              </button>
+              <button
+                type="button"
+                className="btn-shortcut"
+                onClick={() => handleApplyDateShortcut(dateShortcuts.last30d)}
+              >
+                Last 30d
+              </button>
+              <button
+                type="button"
+                className="btn-shortcut"
+                onClick={() => handleApplyDateShortcut(dateShortcuts.lastWeek)}
+              >
+                Last week
+              </button>
+              <button
+                type="button"
+                className="btn-shortcut"
+                onClick={() => handleApplyDateShortcut(dateShortcuts.lastMonth)}
+              >
+                Last month
+              </button>
+            </div>
+          </div>
           <div className="filter-amount-range mb-4">
             {(["dateFrom", "dateTo"] as const).map((field) => {
               const value = dataset.searchFilters[field];
               const selected = isValidIsoDate(value) ? new Date(`${value}T00:00:00`) : null;
-              const label = field === "dateFrom" ? "From" : "To";
+              const label = field === "dateFrom" ? "From (YYYY-MM-DD)" : "To (YYYY-MM-DD)";
               return (
                 <DatePicker
                   key={field}
@@ -316,7 +396,7 @@ export function HistoryPage(): JSX.Element {
                   isClearable
                   popperPlacement="bottom-start"
                   showPopperArrow={false}
-                  aria-label={`${label} date`}
+                  aria-label={`${field === "dateFrom" ? "From" : "To"} date`}
                 />
               );
             })}
@@ -389,7 +469,7 @@ export function HistoryPage(): JSX.Element {
                   onChange={(e) =>
                     dataset.setSearchFilters({ ...dataset.searchFilters, spentBy: e.target.value })
                   }
-                  placeholder="Search Spent By…"
+                  placeholder=""
                   inputMode="text"
                   aria-label="Filter by Spent By"
                 />
@@ -405,40 +485,12 @@ export function HistoryPage(): JSX.Element {
                   onChange={(e) =>
                     dataset.setSearchFilters({ ...dataset.searchFilters, spentFor: e.target.value })
                   }
-                  placeholder="Search Spent For…"
+                  placeholder=""
                   inputMode="text"
                   aria-label="Filter by Spent For"
                 />
               </div>
             </div>
-          </div>
-
-          {/* Comment text filter */}
-          <div className="input-label mb-2">Comments</div>
-          <div className="search-hero-input mb-4">
-            <SearchIcon size={18} className="search-icon" aria-hidden />
-            <input
-              className="input"
-              value={dataset.searchFilters.comment}
-              onChange={(e) =>
-                dataset.setSearchFilters({ ...dataset.searchFilters, comment: e.target.value })
-              }
-              placeholder="Search by words…"
-              inputMode="text"
-              aria-label="Filter by comment"
-            />
-            {dataset.searchFilters.comment !== "" && (
-              <button
-                className="search-hero-clear"
-                type="button"
-                aria-label="Clear comment"
-                onClick={() =>
-                  dataset.setSearchFilters({ ...dataset.searchFilters, comment: "" })
-                }
-              >
-                <X size={14} />
-              </button>
-            )}
           </div>
 
           {/* Custom column text filters */}
@@ -464,28 +516,15 @@ export function HistoryPage(): JSX.Element {
             </div>
           ))}
 
-          {/* Clear all filters — inside the panel */}
-          {isAnyFilterActive(dataset.searchFilters) && (
-            <button
-              className="btn btn-secondary btn-inline mb-4"
-              type="button"
-              onClick={handleClear}
-            >
-              Clear filters
-            </button>
-          )}
+          {/* Clear Filters — inside the panel */}
+          <button
+            className="btn btn-secondary btn-inline mb-4"
+            type="button"
+            onClick={handleClear}
+          >
+            Clear Filters
+          </button>
         </div>
-      )}
-
-      {/* Clear all filters — outside panel (shown when panel is collapsed but filters are active) */}
-      {!filterOpen && isAnyFilterActive(dataset.searchFilters) && (
-        <button
-          className="btn btn-secondary btn-inline mb-4"
-          type="button"
-          onClick={handleClear}
-        >
-          Clear filters
-        </button>
       )}
 
       {/* Error and loading */}

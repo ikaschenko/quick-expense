@@ -89,8 +89,8 @@ function mockDataset(overrides: Partial<ReturnType<typeof useDataset>>) {
     isLoadingHistory: false,
     searchFilters: { ...emptyFilters, dateFrom: "", dateTo: "" },
     setSearchFilters: vi.fn(),
-    loadDataset: vi.fn(),
-    reloadDataset: vi.fn(),
+    loadDataset: vi.fn().mockResolvedValue(undefined),
+    reloadDataset: vi.fn().mockResolvedValue(undefined),
     invalidateDataset: vi.fn(),
     appendToDataset: vi.fn(),
     updateInDataset: vi.fn(),
@@ -294,5 +294,97 @@ describe("HistoryPage — Repeat button", () => {
     // For view-only users, onRepeatRequest is not passed so card may not be interactive via actions.
     // Verify the Repeat button is absent.
     expect(screen.queryByRole("button", { name: /repeat this expense/i })).toBeNull();
+  });
+});
+
+describe("HistoryPage — UI Enhancements", () => {
+  beforeEach(() => {
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+  });
+
+  it("renders Comments input before the Filter toggle button", () => {
+    mockDataset({});
+    const { container } = renderHistory();
+
+    const commentsInput = screen.getByRole("textbox", { name: /filter by comment/i });
+    const filterToggleBtn = screen.getByRole("button", { name: /^filter$/i });
+
+    expect(commentsInput).toBeTruthy();
+    expect(filterToggleBtn).toBeTruthy();
+
+    // Verify DOM order: comments input precedes the filter toggle button
+    expect(commentsInput.compareDocumentPosition(filterToggleBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("has empty placeholders for Spent By and Spent For fields", async () => {
+    const user = userEvent.setup();
+    mockDataset({});
+    renderHistory();
+
+    const filterToggleBtn = screen.getByRole("button", { name: /^filter$/i });
+    await user.click(filterToggleBtn);
+
+    const spentByInput = screen.getByRole("textbox", { name: /filter by spent by/i });
+    const spentForInput = screen.getByRole("textbox", { name: /filter by spent for/i });
+
+    expect(spentByInput.getAttribute("placeholder")).toBe("");
+    expect(spentForInput.getAttribute("placeholder")).toBe("");
+  });
+
+  it("has date format hints in date field placeholders", async () => {
+    const user = userEvent.setup();
+    mockDataset({});
+    renderHistory();
+
+    const filterToggleBtn = screen.getByRole("button", { name: /^filter$/i });
+    await user.click(filterToggleBtn);
+
+    const fromInput = screen.getByRole("textbox", { name: /from date/i });
+    const toInput = screen.getByRole("textbox", { name: /to date/i });
+
+    expect(fromInput.getAttribute("placeholder")).toBe("From (YYYY-MM-DD)");
+    expect(toInput.getAttribute("placeholder")).toBe("To (YYYY-MM-DD)");
+  });
+
+  it("applies date range shortcuts when clicked", async () => {
+    const user = userEvent.setup();
+    const mockSetSearchFilters = vi.fn();
+    mockDataset({
+      setSearchFilters: mockSetSearchFilters,
+    });
+    renderHistory();
+
+    const filterToggleBtn = screen.getByRole("button", { name: /^filter$/i });
+    await user.click(filterToggleBtn);
+
+    const last7dBtn = screen.getByRole("button", { name: /last 7d/i });
+    await user.click(last7dBtn);
+
+    expect(mockSetSearchFilters).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dateFrom: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        dateTo: "",
+      }),
+    );
+  });
+
+  it("renders dual Clear Filters buttons with exact caption 'Clear Filters'", async () => {
+    const user = userEvent.setup();
+    mockDataset({});
+    renderHistory();
+
+    // With filter section collapsed, top Clear Filters button is visible
+    let clearBtns = screen.getAllByRole("button", { name: /clear filters/i });
+    expect(clearBtns).toHaveLength(1);
+    expect(clearBtns[0].textContent?.trim()).toBe("Clear Filters");
+
+    // Expand filter section -> second Clear Filters button appears at bottom
+    const filterToggleBtn = screen.getByRole("button", { name: /^filter$/i });
+    await user.click(filterToggleBtn);
+
+    clearBtns = screen.getAllByRole("button", { name: /clear filters/i });
+    expect(clearBtns).toHaveLength(2);
+    expect(clearBtns[0].textContent?.trim()).toBe("Clear Filters");
+    expect(clearBtns[1].textContent?.trim()).toBe("Clear Filters");
   });
 });
