@@ -115,6 +115,123 @@ function findDateGroupBadge(container: HTMLElement, dateText: string): Element |
   return group?.querySelector(".expense-date-badge") ?? null;
 }
 
+describe("HistoryPage — filtered total", () => {
+  beforeEach(() => {
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+  });
+
+  it("shows the result count and USD total across all matching records", () => {
+    const records = [makeRecord(1, "2026-06-09", "10.25"), makeRecord(2, "2026-06-10", "$1,200.50")];
+    mockDataset({
+      snapshot: { records, distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} }, loadedAt: 0, payloadBytes: 0, loadPhase: "full" },
+      searchFilters: { ...emptyFilters, dateFrom: "2026-01-01", dateTo: "" },
+    });
+
+    renderHistory();
+
+    expect(screen.getByText("2", { selector: ".search-results-badge" })).toBeTruthy();
+    expect(document.querySelector(".search-results-total")?.textContent).toBe("Total $1,210.75");
+  });
+
+  it("totals all matches when only the most recent 100 results are rendered", () => {
+    const records = Array.from({ length: 101 }, (_, index) => makeRecord(index + 1, "2026-06-09", "1"));
+    mockDataset({
+      snapshot: { records, distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} }, loadedAt: 0, payloadBytes: 0, loadPhase: "full" },
+      searchFilters: { ...emptyFilters, categories: ["Misc"], dateFrom: "", dateTo: "" },
+    });
+
+    renderHistory();
+
+    expect(document.querySelector(".search-results-total")?.textContent).toBe("Total $101.00");
+    expect(screen.getByText(/showing most recent 100 of 101 results/i)).toBeTruthy();
+  });
+
+  it("shows a zero total and the empty state when no records match", () => {
+    mockDataset({
+      snapshot: { records: [makeRecord(1, "2026-06-09", "10")], distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} }, loadedAt: 0, payloadBytes: 0, loadPhase: "full" },
+      searchFilters: { ...emptyFilters, categories: ["Travel"], dateFrom: "", dateTo: "" },
+    });
+
+    renderHistory();
+
+    expect(screen.getByText("0", { selector: ".search-results-badge" })).toBeTruthy();
+    expect(document.querySelector(".search-results-total")?.textContent).toBe("Total $0.00");
+    expect(screen.getByText(/no expenses match your search/i)).toBeTruthy();
+  });
+
+  it("uses existing USD parsing rules and never renders NaN", () => {
+    const records = [
+      makeRecord(1, "2026-06-09", "$1,200.50"),
+      makeRecord(2, "2026-06-09", "-50.25"),
+      makeRecord(3, "2026-06-09", ""),
+      makeRecord(4, "2026-06-09", "invalid"),
+    ];
+    mockDataset({
+      snapshot: { records, distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} }, loadedAt: 0, payloadBytes: 0, loadPhase: "full" },
+      searchFilters: { ...emptyFilters, categories: ["Misc"], dateFrom: "", dateTo: "" },
+    });
+
+    renderHistory();
+
+    expect(document.querySelector(".search-results-total")?.textContent).toBe("Total $1,150.25");
+    expect(document.body.textContent).not.toContain("NaN");
+  });
+
+  it("shows only the USD aggregate when matches contain local currencies", () => {
+    const plnRecord = { ...makeRecord(1, "2026-06-09", "10"), currencyAmounts: { PLN: "40" } };
+    const eurRecord = { ...makeRecord(2, "2026-06-09", "20"), currencyAmounts: { EUR: "18" } };
+    mockDataset({
+      snapshot: { records: [plnRecord, eurRecord], distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} }, loadedAt: 0, payloadBytes: 0, loadPhase: "full" },
+      searchFilters: { ...emptyFilters, categories: ["Misc"], dateFrom: "", dateTo: "" },
+    });
+
+    renderHistory();
+
+    const summary = document.querySelector(".search-results-count");
+    expect(summary?.textContent).toContain("Total $30.00");
+    expect(summary?.textContent).not.toMatch(/PLN|EUR/);
+  });
+
+  it("shows an accessible calculating state without a partial count or total", () => {
+    mockDataset({
+      snapshot: { records: [makeRecord(1, "2026-06-09", "10")], distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} }, loadedAt: 0, payloadBytes: 0, loadPhase: "recent" },
+      isLoadingHistory: true,
+      searchFilters: { ...emptyFilters, categories: ["Misc"], dateFrom: "", dateTo: "" },
+    });
+
+    renderHistory();
+
+    expect(screen.getByText("Calculating…").closest('[role="status"]')).not.toBeNull();
+    expect(document.querySelector(".search-results-badge")).toBeNull();
+    expect(document.querySelector(".search-results-total")).toBeNull();
+  });
+
+  it("shows the incomplete-history error without a calculating state or total", () => {
+    mockDataset({
+      snapshot: { records: [makeRecord(1, "2026-06-09", "10")], distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} }, loadedAt: 0, payloadBytes: 0, loadPhase: "recent" },
+      isLoadingHistory: false,
+      searchFilters: { ...emptyFilters, categories: ["Misc"], dateFrom: "", dateTo: "" },
+    });
+
+    renderHistory();
+
+    expect(screen.getByText(/history failed to load/i)).toBeTruthy();
+    expect(screen.queryByText("Calculating…")).toBeNull();
+    expect(document.querySelector(".search-results-total")).toBeNull();
+  });
+
+  it("does not show a filtered total in the unfiltered history view", () => {
+    mockDataset({
+      snapshot: { records: [makeRecord(1, "2026-06-09", "10")], distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} }, loadedAt: 0, payloadBytes: 0, loadPhase: "full" },
+    });
+
+    const { container } = renderHistory();
+
+    expect(container.querySelector(".search-results-total")).toBeNull();
+    expect(findDateGroupBadge(container, "2026-06-09")).not.toBeNull();
+  });
+});
+
 describe("HistoryPage — per-day totals", () => {
   beforeEach(() => {
     window.HTMLElement.prototype.scrollIntoView = vi.fn();

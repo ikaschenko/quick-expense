@@ -4,6 +4,7 @@ import { RefreshCw, Search as SearchIcon, SearchX, X, ChevronDown, ChevronUp } f
 import DatePicker from "react-datepicker";
 import { HISTORY_PAGE_SIZE, FILTER_DEBOUNCE_MS } from "../constants/expenses";
 import { ExpenseTable } from "../components/ExpenseTable";
+import { FormattedAmount } from "../components/FormattedAmount";
 import { Layout } from "../components/Layout";
 import { LoadingBlock } from "../components/LoadingBlock";
 import { StatusBanner } from "../components/StatusBanner";
@@ -14,7 +15,7 @@ import { filterExpenses } from "../utils/search";
 import { googleSheetsService } from "../services/googleSheets";
 import { trackEvent } from "../services/analytics";
 import { getDisplayAmountFull, groupByDate } from "../utils/expenseTable";
-import { computeDayTotal, DayTotal } from "../utils/currencyTotals";
+import { computeDayTotal, DayTotal, parseUsd } from "../utils/currencyTotals";
 import { ExpenseRecord, SearchFilters } from "../types/expense";
 import { formatLocalDate, isValidIsoDate, getDateShortcutRanges } from "../utils/date";
 
@@ -153,6 +154,11 @@ export function HistoryPage(): JSX.Element {
         ? filterExpenses(dataset.snapshot.records, appliedFilters)
         : null,
     [isFiltered, dataset.snapshot, datasetIsComplete, appliedFilters],
+  );
+
+  const filteredUsdTotal = useMemo(
+    () => outcome?.allMatches.reduce((sum, record) => sum + parseUsd(record), 0) ?? null,
+    [outcome],
   );
 
   const lastRecord = dataset.snapshot?.records.at(-1) ?? null;
@@ -533,12 +539,25 @@ export function HistoryPage(): JSX.Element {
 
       {/* Results */}
       {dataset.status === "ready" ? (
-        isFiltered && outcome ? (
+        isFiltered ? (
           <>
             <div className="search-results-count">
-              Results <span className="search-results-badge">{outcome.allMatches.length}</span>
+              <span>Results</span>
+              {outcome ? (
+                <>
+                  <span className="search-results-badge">{outcome.allMatches.length}</span>
+                  <span className="search-results-total">
+                    Total <FormattedAmount prefix="$" value={filteredUsdTotal ?? 0} />
+                  </span>
+                </>
+              ) : dataset.isLoadingHistory ? (
+                <span className="search-results-calculating" role="status" aria-live="polite">
+                  <span className="spinner spinner-sm" aria-hidden="true" />
+                  Calculating…
+                </span>
+              ) : null}
             </div>
-            {outcome.allMatches.length === 0 ? (
+            {outcome ? outcome.allMatches.length === 0 ? (
               <div className="expense-empty">
                 <SearchX size={40} className="expense-empty-icon" />
                 <p>No expenses match your search</p>
@@ -566,12 +585,12 @@ export function HistoryPage(): JSX.Element {
                   isViewOnly={isViewOnly}
                 />
               </>
+            ) : dataset.isLoadingHistory ? (
+              <LoadingBlock label="Loading complete history before filtering\u2026" variant="skeleton" />
+            ) : (
+              <StatusBanner variant="error" message="History failed to load \u2014 filter results may be incomplete. Try reloading." />
             )}
           </>
-        ) : isFiltered && dataset.isLoadingHistory ? (
-          <LoadingBlock label="Loading complete history before filtering\u2026" variant="skeleton" />
-        ) : isFiltered ? (
-          <StatusBanner variant="error" message="History failed to load \u2014 filter results may be incomplete. Try reloading." />
         ) : (
           <>
             <ExpenseTable

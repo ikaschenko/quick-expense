@@ -285,9 +285,9 @@ A comment text input in the expandable **Filter** panel enables instant substrin
 - **Comments** — substring match
 - **Custom columns** — one substring input per configured custom column
 
-When any filter is active, the full dataset is searched client-side and results are shown instead of the recency view. A badge on the Filter toggle counts active panel filters. **Clear filters** resets all fields. Filter state persists across navigation within the session (stored in `DatasetContext`).
+When any filter is active, the full dataset is searched client-side and results are shown instead of the recency view. The Results summary shows the match count and the total USD amount across all matching records, including matches outside the 100-record display limit. Empty results show a `$0.00` total. Non-USD columns are not aggregated in this summary. A badge on the Filter toggle counts active panel filters. **Clear filters** resets all fields. Filter state persists across navigation within the session (stored in `DatasetContext`).
 
-While the background Phase-2 history load is still in progress, a non-blocking banner "Complete history is still loading…" is shown.
+While the background Phase-2 history load is still in progress, a non-blocking banner "Complete history is still loading…" is shown. If a filter is active, the Results summary shows a spinner and "Calculating…" instead of a partial count or total until the complete dataset is available. If the historical load fails, no partial total is shown.
 
 Search is client-side. If the sheet exceeds the 10 MB payload cap, History is denied with an error (same rule as §3.5).
 
