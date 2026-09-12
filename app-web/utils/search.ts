@@ -1,5 +1,6 @@
 import { MAX_SEARCH_RESULTS } from "../constants/expenses";
 import { ExpenseRecord, SearchFilters } from "../types/expense";
+import { isValidIsoDate, normalizeDateToIso } from "./date";
 
 export interface SearchOutcome {
   allMatches: ExpenseRecord[];
@@ -16,6 +17,10 @@ export function filterExpenses(records: ExpenseRecord[], filters: SearchFilters)
 
   const amountFromNum = filters.amountFrom !== "" ? Number.parseFloat(filters.amountFrom) : null;
   const amountToNum = filters.amountTo !== "" ? Number.parseFloat(filters.amountTo) : null;
+  const dateFrom = filters.dateFrom === "" || isValidIsoDate(filters.dateFrom) ? filters.dateFrom : null;
+  const dateTo = filters.dateTo === "" || isValidIsoDate(filters.dateTo) ? filters.dateTo : null;
+  const hasDateFilter = filters.dateFrom !== "" || filters.dateTo !== "";
+  const hasInvalidDateFilter = (filters.dateFrom !== "" && dateFrom === null) || (filters.dateTo !== "" && dateTo === null);
 
   const customFieldEntries = Object.entries(filters.customFields).filter(([, v]) => v.trim() !== "");
 
@@ -25,6 +30,14 @@ export function filterExpenses(records: ExpenseRecord[], filters: SearchFilters)
   const spentForMeaningfulChars = spentForParts.join("");
 
   const matches = records.filter((record) => {
+    if (hasDateFilter) {
+      if (hasInvalidDateFilter) return false;
+      const recordDate = normalizeDateToIso(record.Date);
+      if (!isValidIsoDate(recordDate)) return false;
+      if (dateFrom !== "" && dateFrom !== null && recordDate < dateFrom) return false;
+      if (dateTo !== "" && dateTo !== null && recordDate > dateTo) return false;
+    }
+
     const categoryMatch =
       selectedCategoriesLower.size === 0 || selectedCategoriesLower.has(record.Category.trim().toLowerCase());
     const commentMatch =

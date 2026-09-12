@@ -31,6 +31,8 @@ function f(overrides: Partial<SearchFilters>): SearchFilters {
   return {
     comment: "",
     categories: [],
+    dateFrom: "",
+    dateTo: "",
     amountFrom: "",
     amountTo: "",
     spentBy: "",
@@ -199,6 +201,38 @@ describe("filterExpenses — amount range", () => {
     };
     const outcome = filterExpenses([record], f({ amountTo }));
     expect(outcome.allMatches).toHaveLength(expected);
+  });
+});
+
+describe("filterExpenses — date range", () => {
+  it("applies an inclusive From bound", () => {
+    const outcome = filterExpenses(records, f({ dateFrom: "2026-03-02" }));
+    expect(outcome.allMatches.map((record) => record.rowNumber)).toEqual([3]);
+  });
+
+  it("applies an inclusive To bound", () => {
+    const outcome = filterExpenses(records, f({ dateTo: "2026-03-01" }));
+    expect(outcome.allMatches.map((record) => record.rowNumber)).toEqual([2]);
+  });
+
+  it("applies From and To together", () => {
+    const outcome = filterExpenses(records, f({ dateFrom: "2026-03-01", dateTo: "2026-03-02" }));
+    expect(outcome.allMatches).toHaveLength(2);
+  });
+
+  it("treats empty date bounds as no constraints", () => {
+    const outcome = filterExpenses(records, f({ dateFrom: "", dateTo: "" }));
+    expect(outcome.allMatches).toHaveLength(records.length);
+  });
+
+  it("returns no matches for an invalid date bound", () => {
+    const outcome = filterExpenses(records, f({ dateFrom: "2026-02-30" }));
+    expect(outcome.allMatches).toHaveLength(0);
+  });
+
+  it("combines date filtering with other filters", () => {
+    const outcome = filterExpenses(records, f({ dateFrom: "2026-03-01", categories: ["Travel"] }));
+    expect(outcome.allMatches.map((record) => record.rowNumber)).toEqual([3]);
   });
 });
 

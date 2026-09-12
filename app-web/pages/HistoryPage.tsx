@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { RefreshCw, Search as SearchIcon, SearchX, X, ChevronDown, ChevronUp } from "lucide-react";
+import DatePicker from "react-datepicker";
 import { HISTORY_PAGE_SIZE, FILTER_DEBOUNCE_MS } from "../constants/expenses";
 import { ExpenseTable } from "../components/ExpenseTable";
 import { Layout } from "../components/Layout";
@@ -15,10 +16,13 @@ import { trackEvent } from "../services/analytics";
 import { getDisplayAmountFull, groupByDate } from "../utils/expenseTable";
 import { computeDayTotal, DayTotal } from "../utils/currencyTotals";
 import { ExpenseRecord, SearchFilters } from "../types/expense";
+import { formatLocalDate, isValidIsoDate } from "../utils/date";
 
 const emptyFilters: SearchFilters = {
   comment: "",
   categories: [],
+  dateFrom: "",
+  dateTo: "",
   amountFrom: "",
   amountTo: "",
   spentBy: "",
@@ -30,6 +34,8 @@ function isAnyFilterActive(f: SearchFilters): boolean {
   return (
     f.comment !== "" ||
     f.categories.length > 0 ||
+    f.dateFrom !== "" ||
+    f.dateTo !== "" ||
     f.amountFrom !== "" ||
     f.amountTo !== "" ||
     f.spentBy !== "" ||
@@ -40,7 +46,10 @@ function isAnyFilterActive(f: SearchFilters): boolean {
 
 function countPanelFilters(f: SearchFilters): number {
   let count = 0;
+  if (f.comment !== "") count++;
   if (f.categories.length > 0) count++;
+  if (f.dateFrom !== "") count++;
+  if (f.dateTo !== "") count++;
   if (f.amountFrom !== "") count++;
   if (f.amountTo !== "") count++;
   if (f.spentBy !== "") count++;
@@ -81,7 +90,10 @@ export function HistoryPage(): JSX.Element {
   const [filterOpen, setFilterOpen] = useState(() => {
     const fil = dataset.searchFilters;
     return (
+      fil.comment !== "" ||
       fil.categories.length > 0 ||
+      fil.dateFrom !== "" ||
+      fil.dateTo !== "" ||
       fil.amountFrom !== "" ||
       fil.amountTo !== "" ||
       fil.spentBy !== "" ||
@@ -264,34 +276,6 @@ export function HistoryPage(): JSX.Element {
         <StatusBanner variant="info" message="Complete history is still loading…" />
       )}
 
-      {/* Comment input — always visible */}
-      <div className="input-label mb-2">Comment</div>
-      <div className="search-hero-input">
-        <SearchIcon size={18} className="search-icon" aria-hidden />
-        <input
-          className="input"
-          value={dataset.searchFilters.comment}
-          onChange={(e) =>
-            dataset.setSearchFilters({ ...dataset.searchFilters, comment: e.target.value })
-          }
-          placeholder="Search by words…"
-          inputMode="text"
-          aria-label="Filter by comment"
-        />
-        {dataset.searchFilters.comment !== "" && (
-          <button
-            className="search-hero-clear"
-            type="button"
-            aria-label="Clear comment"
-            onClick={() =>
-              dataset.setSearchFilters({ ...dataset.searchFilters, comment: "" })
-            }
-          >
-            <X size={14} />
-          </button>
-        )}
-      </div>
-
       {/* Filter toggle */}
       <button
         className={`filter-toggle${panelFilterCount > 0 ? " filter-toggle--active" : ""}`}
@@ -309,6 +293,35 @@ export function HistoryPage(): JSX.Element {
       {/* Expandable filter panel */}
       {filterOpen && (
         <div className="filter-section">
+          {/* Date range */}
+          <div className="input-label mb-2">Dates</div>
+          <div className="filter-amount-range mb-4">
+            {(["dateFrom", "dateTo"] as const).map((field) => {
+              const value = dataset.searchFilters[field];
+              const selected = isValidIsoDate(value) ? new Date(`${value}T00:00:00`) : null;
+              const label = field === "dateFrom" ? "From" : "To";
+              return (
+                <DatePicker
+                  key={field}
+                  className="input"
+                  selected={selected}
+                  onChange={(date: Date | null) =>
+                    dataset.setSearchFilters({
+                      ...dataset.searchFilters,
+                      [field]: date ? formatLocalDate(date) : "",
+                    })
+                  }
+                  dateFormat="yyyy-MM-dd"
+                  placeholderText={label}
+                  isClearable
+                  popperPlacement="bottom-start"
+                  showPopperArrow={false}
+                  aria-label={`${label} date`}
+                />
+              );
+            })}
+          </div>
+
           {/* Category chips */}
           {dataset.snapshot && (
             <>
@@ -398,6 +411,34 @@ export function HistoryPage(): JSX.Element {
                 />
               </div>
             </div>
+          </div>
+
+          {/* Comment text filter */}
+          <div className="input-label mb-2">Comments</div>
+          <div className="search-hero-input mb-4">
+            <SearchIcon size={18} className="search-icon" aria-hidden />
+            <input
+              className="input"
+              value={dataset.searchFilters.comment}
+              onChange={(e) =>
+                dataset.setSearchFilters({ ...dataset.searchFilters, comment: e.target.value })
+              }
+              placeholder="Search by words…"
+              inputMode="text"
+              aria-label="Filter by comment"
+            />
+            {dataset.searchFilters.comment !== "" && (
+              <button
+                className="search-hero-clear"
+                type="button"
+                aria-label="Clear comment"
+                onClick={() =>
+                  dataset.setSearchFilters({ ...dataset.searchFilters, comment: "" })
+                }
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
 
           {/* Custom column text filters */}

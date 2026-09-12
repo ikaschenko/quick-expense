@@ -110,6 +110,8 @@ export interface FxRateBackupRecord {
 export interface SearchFilters {
   comment: string;
   categories: string[];
+  dateFrom: string;       // "" = no lower bound
+  dateTo: string;         // "" = no upper bound
   amountFrom: string;    // "" = no lower bound
   amountTo: string;      // "" = no upper bound
   spentBy: string;       // substring match, "" = skip

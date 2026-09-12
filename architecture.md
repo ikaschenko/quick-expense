@@ -9,7 +9,7 @@
 Quick Expense is a small web application for recording personal/family expenses on the go. Users authenticate with Google, connect a Google Spreadsheet as their "database", and then:
 
 - **Add** an expense record (appended as a new row to the sheet).
-- **Browse and filter expense history (History):** view the most recent records and search/filter by comment, category, amount range, and custom columns (client-side, after loading the full dataset).
+- **Browse and filter expense history (History):** view the most recent records and search/filter by an optional inclusive date range, comment, category, amount range, and custom columns (client-side, after loading the full dataset).
 - **Repeat** a past expense: tapping the Repeat action on a History record pre-fills the Add form with that record's data and today's date.
 
 All expense data lives in the user's own Google Spreadsheet — the application never stores expense rows. The business requirements are documented in detail in `docs/QuickExpense_business-requirements.md`.
@@ -128,7 +128,7 @@ quick-expense/
 │   │   ├── AuthCallbackPage.tsx ← post-OAuth redirect handler
 │   │   ├── HomePage.tsx       ← spending dashboard (TODAY / MTD / YTD)
 │   │   ├── LoginPage.tsx      ← sign-in screen
-│   │   ├── HistoryPage.tsx    <- unified history: recent records + collapsible filter panel (comment, category, amount range, custom columns); Repeat navigates to /add with pre-filled state
+│   │   ├── HistoryPage.tsx    <- unified history: recent records + collapsible filter panel (dates, amounts, category, people, comments, custom columns); Repeat navigates to /add with pre-filled state
 │   │   └── SetupPage.tsx      ← spreadsheet URL configuration + Google Picker
 │   ├── services/              ← API client layer
 │   │   ├── authApi.ts         ← /api/auth/* calls
@@ -511,7 +511,7 @@ The SPA uses three nested context providers (wrapped in `App.tsx`):
   - After any surgical mutation, `HomePage.tsx` recomputes all dashboard metrics via its `useMemo` hooks and rewrites the `localStorage` metrics cache (`qe_metrics_{email}`) immediately — no reload, no "Refreshing…" indicator.
   - `DatasetSnapshot.hasDateOrderIssue` — boolean set on every load by scanning the date column. When `true`, `Layout.tsx` renders a persistent red banner on all screens prompting the user to sort their sheet. The banner disappears automatically on the next clean reload.
   - Shared between Home and History pages (they reuse the same in-memory dataset).
-  - Holds `searchFilters` state (`SearchFilters`: `comment`, `categories`, `amountFrom`, `amountTo`, `spentBy`, `spentFor`, `customFields`) so History page filter values persist across navigation.
+  - Holds `searchFilters` state (`SearchFilters`: `comment`, `categories`, `dateFrom`, `dateTo`, `amountFrom`, `amountTo`, `spentBy`, `spentFor`, `customFields`) so History page filter values persist across navigation. Date bounds are ISO `yyyy-mm-dd` strings; filtering is inclusive and client-side.
 
 ### 8.2 Routing
 
@@ -524,7 +524,7 @@ The SPA uses three nested context providers (wrapped in `App.tsx`):
 | `/add` | `AddExpensePage` | Yes | New expense form |
 | `/tail` | — | — | Legacy route — redirects to `/home` |
 | `/search` | — | — | Legacy route — redirects to `/home` |
-| `/history` | `HistoryPage` | Yes | Recent records + optional filtering (comment, category, amount, custom columns); Repeat button pre-fills `/add` via Router state |
+| `/history` | `HistoryPage` | Yes | Recent records + optional filtering (dates, comment, category, amount, people, custom columns); Repeat button pre-fills `/add` via Router state |
 
 `ProtectedRoute` wraps all "Yes" routes — redirects to `/` if `auth.session` is null.
 

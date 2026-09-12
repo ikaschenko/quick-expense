@@ -54,6 +54,8 @@ export function DatasetProvider({ children }: PropsWithChildren): JSX.Element {
   const [searchFilters, setSearchFilters] = useState<SearchFilters>({
     comment: "",
     categories: [],
+    dateFrom: "",
+    dateTo: "",
     amountFrom: "",
     amountTo: "",
     spentBy: "",

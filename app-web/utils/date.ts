@@ -9,6 +9,13 @@ export function getTodayLocalDate(): string {
   return formatLocalDate(new Date());
 }
 
+export function isValidIsoDate(dateValue: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) return false;
+  const [year, month, day] = dateValue.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+}
+
 export function normalizeDateToIso(dateValue: string): string {
   if (!dateValue) return dateValue;
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) return dateValue;

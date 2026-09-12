@@ -275,12 +275,14 @@ Displays the most recent records in reverse-insertion order (same as old Tail). 
 
 ### Filtering
 
-A comment text input (always visible at the top of the page) enables instant substring search across the Comment field (case-insensitive, debounced). An expandable **Filter** panel provides additional criteria:
+A comment text input in the expandable **Filter** panel enables instant substring search across the Comment field (case-insensitive, debounced). The panel provides criteria in this order:
 
-- **Category** — chip-based multi-select (exact match, AND logic)
+- **Dates** — optional From/To fields, manually entered as `yyyy-mm-dd` or selected with the same date picker used by Add Expense; each bound is inclusive and an empty field imposes no constraint
 - **Amount (USD)** — numeric from/to range
+- **Category** — chip-based multi-select (exact match, AND logic)
 - **SpentBy** — substring match
 - **SpentFor** — substring match
+- **Comments** — substring match
 - **Custom columns** — one substring input per configured custom column
 
 When any filter is active, the full dataset is searched client-side and results are shown instead of the recency view. A badge on the Filter toggle counts active panel filters. **Clear filters** resets all fields. Filter state persists across navigation within the session (stored in `DatasetContext`).

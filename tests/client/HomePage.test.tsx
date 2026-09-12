@@ -90,7 +90,7 @@ function mockDataset(overrides: Partial<ReturnType<typeof useDataset>>) {
     },
     error: null,
     isLoadingHistory: false,
-    searchFilters: { comment: "", categories: [], amountFrom: "", amountTo: "", spentBy: "", spentFor: "", customFields: {} },
+    searchFilters: { comment: "", categories: [], dateFrom: "", dateTo: "", amountFrom: "", amountTo: "", spentBy: "", spentFor: "", customFields: {} },
     setSearchFilters: vi.fn(),
     loadDataset: vi.fn(),
     reloadDataset: vi.fn(),

@@ -87,7 +87,7 @@ function mockDataset(overrides: Partial<ReturnType<typeof useDataset>>) {
     snapshot: null,
     error: null,
     isLoadingHistory: false,
-    searchFilters: emptyFilters,
+    searchFilters: { ...emptyFilters, dateFrom: "", dateTo: "" },
     setSearchFilters: vi.fn(),
     loadDataset: vi.fn(),
     reloadDataset: vi.fn(),
@@ -130,7 +130,7 @@ describe("HistoryPage — per-day totals", () => {
     const records = [makeRecord(1, "2026-06-09", "45"), makeRecord(2, "2026-06-09", "5")];
     mockDataset({
       snapshot: { records, distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} }, loadedAt: 0, payloadBytes: 0, loadPhase: "full" },
-      searchFilters,
+      searchFilters: { ...searchFilters, dateFrom: "", dateTo: "" },
     });
     const { container } = renderHistory();
     expect(container.querySelector(".expense-date-badge")).toBeNull();
