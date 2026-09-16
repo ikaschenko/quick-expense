@@ -25,7 +25,7 @@ const { mockUseAuth, mockNavigate, mockUseConfig } = vi.hoisted(() => ({
       spreadsheetUrl: "https://docs.google.com/spreadsheets/d/abc123/edit",
       sheetName: "Expenses",
       currencies: [],
-      customColumns: [],
+      customColumns: [] as string[],
       configMode: "default",
       predefinedCategories: [],
       hiddenColumns: [] as string[],
