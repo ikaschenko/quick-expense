@@ -44,12 +44,16 @@ export function filterExpenses(records: ExpenseRecord[], filters: SearchFilters)
       meaningfulChars.length < 2 ||
       parts.every((p) => record.Comment.toLowerCase().includes(p));
 
-    if (spentByMeaningfulChars.length >= 2) {
+    if (filters.spentByExact) {
+      if (record.spentBy.trim().toLowerCase() !== filters.spentBy.trim().toLowerCase()) return false;
+    } else if (spentByMeaningfulChars.length >= 2) {
       const recordValue = record.spentBy.toLowerCase();
       if (!spentByParts.every((p) => recordValue.includes(p))) return false;
     }
 
-    if (spentForMeaningfulChars.length >= 2) {
+    if (filters.spentForExact) {
+      if (record.spentFor.trim().toLowerCase() !== filters.spentFor.trim().toLowerCase()) return false;
+    } else if (spentForMeaningfulChars.length >= 2) {
       const recordValue = record.spentFor.toLowerCase();
       if (!spentForParts.every((p) => recordValue.includes(p))) return false;
     }
@@ -62,12 +66,16 @@ export function filterExpenses(records: ExpenseRecord[], filters: SearchFilters)
       if (amountToNum !== null && recordUSD > amountToNum) return false;
     }
 
-    // Custom field filters (same multi-word substring logic as comment)
+    // Custom field filters (same multi-word substring logic as comment, unless an exact value was picked)
     for (const [key, value] of customFieldEntries) {
+      const recordValue = (record.customFields[key] ?? "").toLowerCase();
+      if (filters.customFieldsExact[key]) {
+        if (recordValue !== value.trim().toLowerCase()) return false;
+        continue;
+      }
       const fieldParts = value.trim().toLowerCase().split(/\s+/).filter((p) => p.length > 0);
       const fieldMeaningfulChars = fieldParts.join("");
       if (fieldMeaningfulChars.length >= 2) {
-        const recordValue = (record.customFields[key] ?? "").toLowerCase();
         if (!fieldParts.every((p) => recordValue.includes(p))) return false;
       }
     }

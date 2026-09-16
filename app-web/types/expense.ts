@@ -114,9 +114,12 @@ export interface SearchFilters {
   dateTo: string;         // "" = no upper bound
   amountFrom: string;    // "" = no lower bound
   amountTo: string;      // "" = no upper bound
-  spentBy: string;       // substring match, "" = skip
-  spentFor: string;      // substring match, "" = skip
+  spentBy: string;       // substring match by default, "" = skip
+  spentByExact: boolean; // true when spentBy was picked from suggestions (exact match)
+  spentFor: string;      // substring match by default, "" = skip
+  spentForExact: boolean; // true when spentFor was picked from suggestions (exact match)
   customFields: Record<string, string>; // keyed by column name, "" = skip
+  customFieldsExact: Record<string, boolean>; // keyed by column name, true = exact match
 }
 
 export type AppErrorKind =

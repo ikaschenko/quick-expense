@@ -1065,8 +1065,8 @@ export function SetupPage(): JSX.Element {
                             type="button"
                             disabled={actionBusy}
                             onClick={() => void handleToggleVisibility(col.name)}
-                            aria-label={isHidden ? `Show ${col.name} on Add form` : `Hide ${col.name} from Add form`}
-                            title={isHidden ? "Hidden from Add form" : "Visible on Add form"}
+                            aria-label={isHidden ? `Show ${col.name} on Add and History screens` : `Hide ${col.name} from Add and History screens`}
+                            title={isHidden ? "Hidden from Add and History screens" : "Visible on Add and History screens"}
                           >
                             {isHidden ? <EyeOff size={16} /> : <Eye size={16} />}
                           </button>

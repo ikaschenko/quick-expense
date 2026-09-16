@@ -59,8 +59,11 @@ export function DatasetProvider({ children }: PropsWithChildren): JSX.Element {
     amountFrom: "",
     amountTo: "",
     spentBy: "",
+    spentByExact: false,
     spentFor: "",
+    spentForExact: false,
     customFields: {},
+    customFieldsExact: {},
   });
   const retryBackoffRef = useRef(new RetryBackoff());
 

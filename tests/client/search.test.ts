@@ -36,8 +36,11 @@ function f(overrides: Partial<SearchFilters>): SearchFilters {
     amountFrom: "",
     amountTo: "",
     spentBy: "",
+    spentByExact: false,
     spentFor: "",
+    spentForExact: false,
     customFields: {},
+    customFieldsExact: {},
     ...overrides,
   };
 }
@@ -258,6 +261,23 @@ describe("filterExpenses — spent by / spent for", () => {
     const outcome = filterExpenses(records, f({ spentBy: "maria", spentFor: "family" }));
     expect(outcome.allMatches).toHaveLength(0);
   });
+
+  it("spentByExact requires an exact case-insensitive match, not just a substring", () => {
+    const outcome = filterExpenses(records, f({ spentBy: "ivan@example.com", spentByExact: true }));
+    expect(outcome.allMatches).toHaveLength(1);
+    expect(outcome.allMatches[0].rowNumber).toBe(2);
+  });
+
+  it("spentByExact rejects a partial value that would otherwise substring-match", () => {
+    const outcome = filterExpenses(records, f({ spentBy: "ivan", spentByExact: true }));
+    expect(outcome.allMatches).toHaveLength(0);
+  });
+
+  it("spentForExact requires an exact case-insensitive match", () => {
+    const outcome = filterExpenses(records, f({ spentFor: "FRIENDS", spentForExact: true }));
+    expect(outcome.allMatches).toHaveLength(1);
+    expect(outcome.allMatches[0].rowNumber).toBe(3);
+  });
 });
 
 describe("filterExpenses — custom field filters", () => {
@@ -293,6 +313,23 @@ describe("filterExpenses — custom field filters", () => {
     }));
     expect(outcome.allMatches).toHaveLength(1);
     expect(outcome.allMatches[0].rowNumber).toBe(2);
+  });
+
+  it("customFieldsExact requires an exact case-insensitive match, not just a substring", () => {
+    const outcome = filterExpenses(
+      records,
+      f({ customFields: { SpentFor: "Family" }, customFieldsExact: { SpentFor: true } }),
+    );
+    expect(outcome.allMatches).toHaveLength(1);
+    expect(outcome.allMatches[0].rowNumber).toBe(2);
+  });
+
+  it("customFieldsExact rejects a partial value that would otherwise substring-match", () => {
+    const outcome = filterExpenses(
+      records,
+      f({ customFields: { SpentFor: "fam" }, customFieldsExact: { SpentFor: true } }),
+    );
+    expect(outcome.allMatches).toHaveLength(0);
   });
 });
 

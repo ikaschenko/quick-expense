@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { RefreshCw, Search as SearchIcon, SearchX, X, ChevronDown, ChevronUp } from "lucide-react";
+import { RefreshCw, Search as SearchIcon, SearchX, X, FilterX, ChevronDown, ChevronUp } from "lucide-react";
 import DatePicker from "react-datepicker";
 import { HISTORY_PAGE_SIZE, FILTER_DEBOUNCE_MS } from "../constants/expenses";
+import { AutosuggestInput } from "../components/AutosuggestInput";
 import { ExpenseTable } from "../components/ExpenseTable";
 import { FormattedAmount } from "../components/FormattedAmount";
 import { Layout } from "../components/Layout";
@@ -27,8 +28,11 @@ const emptyFilters: SearchFilters = {
   amountFrom: "",
   amountTo: "",
   spentBy: "",
+  spentByExact: false,
   spentFor: "",
+  spentForExact: false,
   customFields: {},
+  customFieldsExact: {},
 };
 
 function isAnyFilterActive(f: SearchFilters): boolean {
@@ -190,6 +194,14 @@ export function HistoryPage(): JSX.Element {
 
   const panelFilterCount = countPanelFilters(dataset.searchFilters);
 
+  const hiddenColumns = useMemo(() => config?.hiddenColumns ?? [], [config?.hiddenColumns]);
+  const isSpentByHidden = hiddenColumns.includes("Spent By");
+  const isSpentForHidden = hiddenColumns.includes("Spent For");
+  const visibleCustomColumns = useMemo(
+    () => (config?.customColumns ?? []).filter((c) => !hiddenColumns.includes(c)),
+    [config?.customColumns, hiddenColumns],
+  );
+
   const handleEditRequest = useCallback(
     (record: ExpenseRecord) => {
       navigate(`/edit/${record.rowNumber}`, { state: { record, origin: "/history" } });
@@ -339,8 +351,10 @@ export function HistoryPage(): JSX.Element {
           className="btn btn-secondary btn-inline"
           type="button"
           onClick={handleClear}
+          aria-label="Clear all filter fields"
+          title="Clear all filter fields"
         >
-          Clear Filters
+          <FilterX size={14} aria-hidden />
         </button>
       </div>
 
@@ -464,72 +478,87 @@ export function HistoryPage(): JSX.Element {
           </div>
 
           {/* Spent By + Spent For */}
-          <div className="two-col-row mb-4">
-            <div>
-              <div className="input-label mb-2">Spent By</div>
-              <div className="search-hero-input">
-                <SearchIcon size={18} className="search-icon" aria-hidden />
-                <input
-                  className="input"
-                  value={dataset.searchFilters.spentBy}
-                  onChange={(e) =>
-                    dataset.setSearchFilters({ ...dataset.searchFilters, spentBy: e.target.value })
-                  }
-                  placeholder=""
-                  inputMode="text"
-                  aria-label="Filter by Spent By"
-                />
-              </div>
+          {(!isSpentByHidden || !isSpentForHidden) ? (
+            <div className="two-col-row mb-4">
+              {!isSpentByHidden ? (
+                <div>
+                  <div className="input-label mb-2">Spent By</div>
+                  <div className="search-hero-input">
+                    <SearchIcon size={18} className="search-icon" aria-hidden />
+                    <AutosuggestInput
+                      value={dataset.searchFilters.spentBy}
+                      onChange={(value) =>
+                        dataset.setSearchFilters({ ...dataset.searchFilters, spentBy: value, spentByExact: false })
+                      }
+                      onSelect={(value) =>
+                        dataset.setSearchFilters({ ...dataset.searchFilters, spentBy: value, spentByExact: true })
+                      }
+                      allSuggestions={dataset.distinctValues.spentBy}
+                      minChars={1}
+                      clearable
+                      showChevron
+                      aria-label="Filter by Spent By"
+                    />
+                  </div>
+                </div>
+              ) : null}
+              {!isSpentForHidden ? (
+                <div>
+                  <div className="input-label mb-2">Spent For</div>
+                  <div className="search-hero-input">
+                    <SearchIcon size={18} className="search-icon" aria-hidden />
+                    <AutosuggestInput
+                      value={dataset.searchFilters.spentFor}
+                      onChange={(value) =>
+                        dataset.setSearchFilters({ ...dataset.searchFilters, spentFor: value, spentForExact: false })
+                      }
+                      onSelect={(value) =>
+                        dataset.setSearchFilters({ ...dataset.searchFilters, spentFor: value, spentForExact: true })
+                      }
+                      allSuggestions={dataset.distinctValues.spentFor}
+                      minChars={1}
+                      clearable
+                      showChevron
+                      aria-label="Filter by Spent For"
+                    />
+                  </div>
+                </div>
+              ) : null}
             </div>
-            <div>
-              <div className="input-label mb-2">Spent For</div>
-              <div className="search-hero-input">
-                <SearchIcon size={18} className="search-icon" aria-hidden />
-                <input
-                  className="input"
-                  value={dataset.searchFilters.spentFor}
-                  onChange={(e) =>
-                    dataset.setSearchFilters({ ...dataset.searchFilters, spentFor: e.target.value })
-                  }
-                  placeholder=""
-                  inputMode="text"
-                  aria-label="Filter by Spent For"
-                />
-              </div>
-            </div>
-          </div>
+          ) : null}
 
           {/* Custom column text filters */}
-          {config?.customColumns.map((col) => (
+          {visibleCustomColumns.map((col) => (
             <div key={col}>
               <div className="input-label mb-2">{col}</div>
               <div className="search-hero-input mb-4">
                 <SearchIcon size={18} className="search-icon" aria-hidden />
-                <input
-                  className="input"
+                <AutosuggestInput
                   value={dataset.searchFilters.customFields[col] ?? ""}
-                  onChange={(e) =>
+                  onChange={(value) =>
                     dataset.setSearchFilters({
                       ...dataset.searchFilters,
-                      customFields: { ...dataset.searchFilters.customFields, [col]: e.target.value },
+                      customFields: { ...dataset.searchFilters.customFields, [col]: value },
+                      customFieldsExact: { ...dataset.searchFilters.customFieldsExact, [col]: false },
                     })
                   }
+                  onSelect={(value) =>
+                    dataset.setSearchFilters({
+                      ...dataset.searchFilters,
+                      customFields: { ...dataset.searchFilters.customFields, [col]: value },
+                      customFieldsExact: { ...dataset.searchFilters.customFieldsExact, [col]: true },
+                    })
+                  }
+                  allSuggestions={dataset.distinctValues.customFields[col] ?? []}
+                  minChars={1}
+                  clearable
+                  showChevron
                   placeholder={`Search ${col}…`}
-                  inputMode="text"
                   aria-label={`Filter by ${col}`}
                 />
               </div>
             </div>
           ))}
-
-          {/* Clear Filters — inside the panel */}
-          <button
-            className="btn btn-secondary btn-inline mb-4"
-            type="button"
-            onClick={handleClear}
-          >
-            Clear Filters
-          </button>
         </div>
       )}
 

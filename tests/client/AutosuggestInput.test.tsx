@@ -5,12 +5,13 @@ import { AutosuggestInput } from "../../app-web/components/AutosuggestInput";
 
 const SUGGESTIONS = ["Coffee", "Taxi to airport", "Lunch at work", "Coffee shop"];
 
-function Controlled({ minChars = 3, clearable = false, showChevron = false, required = false, invalid = false }: {
+function Controlled({ minChars = 3, clearable = false, showChevron = false, required = false, invalid = false, onSelect }: {
   minChars?: number;
   clearable?: boolean;
   showChevron?: boolean;
   required?: boolean;
   invalid?: boolean;
+  onSelect?: (value: string) => void;
 }) {
   const [value, setValue] = useState("");
   return (
@@ -18,6 +19,7 @@ function Controlled({ minChars = 3, clearable = false, showChevron = false, requ
       id="test-input"
       value={value}
       onChange={setValue}
+      onSelect={onSelect}
       allSuggestions={SUGGESTIONS}
       minChars={minChars}
       placeholder="Add a note…"
@@ -98,6 +100,37 @@ describe("AutosuggestInput", () => {
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("listbox")).toBeNull();
     expect((input as HTMLInputElement).value).toBe("cof");
+  });
+
+  it("fires onSelect (in addition to onChange) when a suggestion is clicked", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(<Controlled onSelect={onSelect} />);
+    await user.type(screen.getByRole("combobox"), "lun");
+    await user.click(screen.getByRole("option", { name: "Lunch at work" }));
+    expect(onSelect).toHaveBeenCalledWith("Lunch at work");
+  });
+
+  it("fires onSelect when a highlighted suggestion is chosen via Enter", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(<Controlled onSelect={onSelect} />);
+    await user.type(screen.getByRole("combobox"), "cof");
+    await user.keyboard("{ArrowDown}{Enter}");
+    expect(onSelect).toHaveBeenCalledWith("Coffee");
+  });
+
+  it("Enter with no highlighted suggestion closes the dropdown without calling onSelect", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(<Controlled onSelect={onSelect} />);
+    const input = screen.getByRole("combobox");
+    await user.type(input, "cof");
+    expect(screen.getByRole("listbox")).toBeTruthy();
+    await user.keyboard("{Enter}");
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect((input as HTMLInputElement).value).toBe("cof");
+    expect(onSelect).not.toHaveBeenCalled();
   });
 
   it("clear button is hidden when value is empty", () => {

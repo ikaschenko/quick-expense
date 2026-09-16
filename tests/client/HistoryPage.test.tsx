@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -6,7 +6,7 @@ import { HistoryPage } from "../../app-web/pages/HistoryPage";
 import { useDataset } from "../../app-web/contexts/DatasetContext";
 import { ExpenseRecord } from "../../app-web/types/expense";
 
-const { mockUseAuth, mockNavigate } = vi.hoisted(() => ({
+const { mockUseAuth, mockNavigate, mockUseConfig } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
   mockUseAuth: vi.fn(() => ({
     session: { guestAccessLevel: null as 'view' | 'edit' | null, email: "test@example.com", givenName: "Test", picture: null },
@@ -16,6 +16,25 @@ const { mockUseAuth, mockNavigate } = vi.hoisted(() => ({
     signOut: vi.fn(),
     refreshSession: vi.fn(),
     touchSession: vi.fn(),
+    clearError: vi.fn(),
+  })),
+  mockUseConfig: vi.fn(() => ({
+    config: {
+      email: "test@example.com",
+      spreadsheetId: "abc123",
+      spreadsheetUrl: "https://docs.google.com/spreadsheets/d/abc123/edit",
+      sheetName: "Expenses",
+      currencies: [],
+      customColumns: [],
+      configMode: "default",
+      predefinedCategories: [],
+      hiddenColumns: [] as string[],
+      isGuest: false,
+      accessLevel: "edit",
+      ownerEmail: null,
+    },
+    isConfigLoading: false,
+    error: null,
     clearError: vi.fn(),
   })),
 }));
@@ -30,25 +49,7 @@ vi.mock("react-router-dom", async (importOriginal) => {
 });
 
 vi.mock("../../app-web/contexts/ConfigContext", () => ({
-  useConfig: () => ({
-    config: {
-      email: "test@example.com",
-      spreadsheetId: "abc123",
-      spreadsheetUrl: "https://docs.google.com/spreadsheets/d/abc123/edit",
-      sheetName: "Expenses",
-      currencies: [],
-      customColumns: [],
-      configMode: "default",
-      predefinedCategories: [],
-      hiddenColumns: [],
-      isGuest: false,
-      accessLevel: "edit",
-      ownerEmail: null,
-    },
-    isConfigLoading: false,
-    error: null,
-    clearError: vi.fn(),
-  }),
+  useConfig: mockUseConfig,
 }));
 
 vi.mock("../../app-web/contexts/DatasetContext", () => ({
@@ -79,7 +80,7 @@ function makeRecord(rowNumber: number, date: string, usd: string): ExpenseRecord
   };
 }
 
-const emptyFilters = { comment: "", categories: [] as string[], amountFrom: "", amountTo: "", spentBy: "", spentFor: "", customFields: {} };
+const emptyFilters = { comment: "", categories: [] as string[], amountFrom: "", amountTo: "", spentBy: "", spentByExact: false, spentFor: "", spentForExact: false, customFields: {}, customFieldsExact: {} };
 
 function mockDataset(overrides: Partial<ReturnType<typeof useDataset>>) {
   vi.mocked(useDataset).mockReturnValue({
@@ -441,11 +442,11 @@ describe("HistoryPage — UI Enhancements", () => {
     const filterToggleBtn = screen.getByRole("button", { name: /^filter$/i });
     await user.click(filterToggleBtn);
 
-    const spentByInput = screen.getByRole("textbox", { name: /filter by spent by/i });
-    const spentForInput = screen.getByRole("textbox", { name: /filter by spent for/i });
+    const spentByInput = screen.getByRole("combobox", { name: /filter by spent by/i });
+    const spentForInput = screen.getByRole("combobox", { name: /filter by spent for/i });
 
-    expect(spentByInput.getAttribute("placeholder")).toBe("");
-    expect(spentForInput.getAttribute("placeholder")).toBe("");
+    expect(spentByInput.getAttribute("placeholder")).toBeNull();
+    expect(spentForInput.getAttribute("placeholder")).toBeNull();
   });
 
   it("has date format hints in date field placeholders", async () => {
@@ -485,23 +486,117 @@ describe("HistoryPage — UI Enhancements", () => {
     );
   });
 
-  it("renders dual Clear Filters buttons with exact caption 'Clear Filters'", async () => {
+  it("renders a single icon-only Clear Filters button with tooltip, unaffected by panel expansion", async () => {
     const user = userEvent.setup();
     mockDataset({});
     renderHistory();
 
-    // With filter section collapsed, top Clear Filters button is visible
-    let clearBtns = screen.getAllByRole("button", { name: /clear filters/i });
-    expect(clearBtns).toHaveLength(1);
-    expect(clearBtns[0].textContent?.trim()).toBe("Clear Filters");
+    const topClearBtn = screen.getByRole("button", { name: /clear all filter fields/i });
+    expect(topClearBtn.textContent?.trim()).toBe("");
+    expect(topClearBtn.getAttribute("title")).toBe("Clear all filter fields");
 
-    // Expand filter section -> second Clear Filters button appears at bottom
+    // Expand filter section -> no additional Clear Filters button should appear
     const filterToggleBtn = screen.getByRole("button", { name: /^filter$/i });
     await user.click(filterToggleBtn);
 
-    clearBtns = screen.getAllByRole("button", { name: /clear filters/i });
-    expect(clearBtns).toHaveLength(2);
-    expect(clearBtns[0].textContent?.trim()).toBe("Clear Filters");
-    expect(clearBtns[1].textContent?.trim()).toBe("Clear Filters");
+    expect(screen.getAllByRole("button", { name: /clear all filter fields/i })).toHaveLength(1);
+  });
+
+  it("picking a Spent By suggestion applies an exact-match filter", async () => {
+    const user = userEvent.setup();
+    const mockSetSearchFilters = vi.fn();
+    mockDataset({
+      snapshot: {
+        records: [],
+        distinctValues: { Category: [], spentBy: ["Ivan", "Maria"], spentFor: [], customFields: {} },
+        loadedAt: 0,
+        payloadBytes: 0,
+        loadPhase: "full",
+      },
+      distinctValues: { Category: [], spentBy: ["Ivan", "Maria"], spentFor: [], customFields: {} },
+      setSearchFilters: mockSetSearchFilters,
+    });
+    renderHistory();
+
+    const filterToggleBtn = screen.getByRole("button", { name: /^filter$/i });
+    await user.click(filterToggleBtn);
+
+    // Chevron forces the full, unfiltered suggestion list open regardless of typed value.
+    const chevronBtns = screen.getAllByRole("button", { name: /show suggestions/i });
+    await user.click(chevronBtns[0]);
+    await user.click(screen.getByRole("option", { name: "Ivan" }));
+
+    expect(mockSetSearchFilters).toHaveBeenLastCalledWith(
+      expect.objectContaining({ spentBy: "Ivan", spentByExact: true }),
+    );
+  });
+
+  it("typing free text in Spent By keeps substring (non-exact) matching", async () => {
+    const mockSetSearchFilters = vi.fn();
+    mockDataset({
+      snapshot: {
+        records: [],
+        distinctValues: { Category: [], spentBy: ["Ivan", "Maria"], spentFor: [], customFields: {} },
+        loadedAt: 0,
+        payloadBytes: 0,
+        loadPhase: "full",
+      },
+      distinctValues: { Category: [], spentBy: ["Ivan", "Maria"], spentFor: [], customFields: {} },
+      setSearchFilters: mockSetSearchFilters,
+    });
+    renderHistory();
+
+    const filterToggleBtn = screen.getByRole("button", { name: /^filter$/i });
+    fireEvent.click(filterToggleBtn);
+
+    const spentByInput = screen.getByRole("combobox", { name: /filter by spent by/i });
+    fireEvent.change(spentByInput, { target: { value: "Iv" } });
+
+    expect(mockSetSearchFilters).toHaveBeenLastCalledWith(
+      expect.objectContaining({ spentBy: "Iv", spentByExact: false }),
+    );
+  });
+});
+
+describe("HistoryPage — hidden columns in Filters panel", () => {
+  beforeEach(() => {
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+  });
+
+  afterEach(() => {
+    mockUseConfig.mockClear();
+  });
+
+  it("omits a hidden custom column and hidden Spent By/For fields from the Filters panel", async () => {
+    const user = userEvent.setup();
+    mockUseConfig.mockReturnValue({
+      config: {
+        email: "test@example.com",
+        spreadsheetId: "abc123",
+        spreadsheetUrl: "https://docs.google.com/spreadsheets/d/abc123/edit",
+        sheetName: "Expenses",
+        currencies: [],
+        customColumns: ["Channel", "Theme"],
+        configMode: "default",
+        predefinedCategories: [],
+        hiddenColumns: ["Spent By", "Spent For", "Channel"],
+        isGuest: false,
+        accessLevel: "edit",
+        ownerEmail: null,
+      },
+      isConfigLoading: false,
+      error: null,
+      clearError: vi.fn(),
+    });
+    mockDataset({});
+    renderHistory();
+
+    const filterToggleBtn = screen.getByRole("button", { name: /^filter$/i });
+    await user.click(filterToggleBtn);
+
+    expect(screen.queryByRole("combobox", { name: /filter by spent by/i })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: /filter by spent for/i })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: /filter by channel/i })).toBeNull();
+    expect(screen.getByRole("combobox", { name: /filter by theme/i })).toBeTruthy();
   });
 });

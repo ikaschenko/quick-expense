@@ -5,6 +5,8 @@ interface AutosuggestInputProps {
   id?: string;
   value: string;
   onChange: (value: string) => void;
+  /** Fired only when a suggestion is picked (click or Enter on a highlighted option), not on free typing. */
+  onSelect?: (value: string) => void;
   /** Pre-sorted, deduplicated suggestion list. Filtering is done inside the component. */
   allSuggestions: string[];
   /** Minimum number of typed characters before the dropdown appears. Default: 2. */
@@ -17,12 +19,14 @@ interface AutosuggestInputProps {
   showChevron?: boolean;
   required?: boolean;
   invalid?: boolean;
+  "aria-label"?: string;
 }
 
 export function AutosuggestInput({
   id,
   value,
   onChange,
+  onSelect,
   allSuggestions,
   minChars = 2,
   placeholder,
@@ -32,6 +36,7 @@ export function AutosuggestInput({
   showChevron = false,
   required,
   invalid,
+  "aria-label": ariaLabel,
 }: AutosuggestInputProps): JSX.Element {
   const uid = useId();
   const instanceId = id ?? uid;
@@ -84,6 +89,7 @@ export function AutosuggestInput({
 
   const select = (suggestion: string): void => {
     onChange(suggestion);
+    onSelect?.(suggestion);
     setIsOpen(false);
     setForceOpen(false);
     setActiveIndex(-1);
@@ -100,6 +106,11 @@ export function AutosuggestInput({
     } else if (e.key === "Enter" && !e.shiftKey && activeIndex >= 0) {
       e.preventDefault();
       select(filteredSuggestions[activeIndex]);
+    } else if (e.key === "Enter" && !e.shiftKey) {
+      // Accept the free-typed text as-is and dismiss the dropdown.
+      e.preventDefault();
+      setIsOpen(false);
+      setForceOpen(false);
     } else if (e.key === "Escape") {
       setIsOpen(false);
       setForceOpen(false);
@@ -116,6 +127,7 @@ export function AutosuggestInput({
     value,
     placeholder,
     role: "combobox" as const,
+    "aria-label": ariaLabel,
     "aria-expanded": shouldShow,
     "aria-haspopup": "listbox" as const,
     "aria-controls": listboxId,
