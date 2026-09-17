@@ -107,6 +107,18 @@ describe("MonthDetailsPanel — controls", () => {
     expect(screen.queryByRole("table", { name: "Food transactions" })).toBeNull();
   });
 
+  it("parses currency-symbol-formatted USD values in expanded transaction rows", async () => {
+    const user = userEvent.setup();
+    const records = [makeRecord("2026-08-01", "$675.72", "Food")];
+    render(
+      <MonthDetailsPanel records={records} toIso={toIso} startDate="2026-08-01" endDate="2026-08-06" />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Food" }));
+    const transactions = screen.getByRole("table", { name: "Food transactions" });
+    expect(transactions.textContent).toContain("$675.72");
+  });
+
   it("uses the selected date display format for transaction rows", async () => {
     const user = userEvent.setup();
     const records = [makeRecord("2026-08-03", "20", "Food")];

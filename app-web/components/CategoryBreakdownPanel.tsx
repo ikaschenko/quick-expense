@@ -3,6 +3,7 @@ import { FormattedAmount } from "./FormattedAmount";
 import { CategoryPieChart } from "./CategoryPieChart";
 import { formatPctChange, IsoNormalizer } from "../utils/dashboardStats";
 import { getCategoryBreakdown, buildPieSlices } from "../utils/monthDetails";
+import { parseUsd } from "../utils/currencyTotals";
 import { COMMENT_PREVIEW_LENGTH } from "../utils/expenseTable";
 import { DateDisplayFormat, formatDisplayDate } from "../utils/date";
 import { ExpenseRecord } from "../types/expense";
@@ -189,7 +190,7 @@ export function CategoryBreakdownPanel({
                               {row.records.map((record) => (
                                 <tr key={record.rowNumber}>
                                   <td>{formatLocalDate(record.Date)}</td>
-                                  <td><FormattedAmount prefix="$" value={Number.parseFloat(record.USD) || 0} /></td>
+                                  <td><FormattedAmount prefix="$" value={parseUsd(record)} /></td>
                                   <td title={record.spentFor}>{record.spentFor}</td>
                                   <td className="month-details-comment" title={record.Comment}>{getCommentPreview(record.Comment)}</td>
                                 </tr>
