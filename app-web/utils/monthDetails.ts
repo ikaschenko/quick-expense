@@ -9,6 +9,8 @@ export interface CategoryBreakdownRow {
   priorAmount: number | null;
   /** Signed percentage change vs prior month; null when no comparable prior data. */
   deviationPct: number | null;
+  /** Current-period transactions contributing to this category's displayed total, newest first. */
+  records: ExpenseRecord[];
 }
 
 export interface PieSlice {
@@ -124,11 +126,14 @@ export function getCategoryBreakdown(
 
   const labelOf = new Map<string, string>();
   const currentTotals = new Map<string, number>();
+  const currentRecordsByKey = new Map<string, ExpenseRecord[]>();
   for (const r of currentRecords) {
     const trimmed = (r.Category ?? "").trim();
     const key = keyOf(trimmed);
     if (!labelOf.has(key)) labelOf.set(key, hasCollisionFor(trimmed) ? `${groupPrefixOf(trimmed)}...` : trimmed);
     currentTotals.set(key, (currentTotals.get(key) ?? 0) + parseUsd(r));
+    if (!currentRecordsByKey.has(key)) currentRecordsByKey.set(key, []);
+    currentRecordsByKey.get(key)!.push(r);
   }
 
   const priorTotals = new Map<string, number>();
@@ -144,7 +149,17 @@ export function getCategoryBreakdown(
       priorAmount !== null && priorAmount !== 0
         ? Math.round(((currentAmount - priorAmount) / priorAmount) * 1000) / 10
         : null;
-    rows.push({ label: labelOf.get(key)!, currentAmount, priorAmount, deviationPct });
+    const recordsForCategory = currentRecordsByKey.get(key) ?? [];
+    rows.push({
+      label: labelOf.get(key)!,
+      currentAmount,
+      priorAmount,
+      deviationPct,
+      records: [...recordsForCategory].sort((a, b) => {
+        const byDate = (toIso(b.Date) ?? "").localeCompare(toIso(a.Date) ?? "");
+        return byDate !== 0 ? byDate : b.rowNumber - a.rowNumber;
+      }),
+    });
   }
 
   return rows.sort((a, b) => b.currentAmount - a.currentAmount);

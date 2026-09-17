@@ -78,6 +78,7 @@ User Story: As a [role], I want [goal], so that [benefit].
 Acceptance Criteria:
 1. [criterion]
 2. [criterion]
+
 Scope Impact: DB: yes/no | API: yes/no | New pages/components: yes/no | User-scenario impact: low/medium/high | Effort-caliber: S/M/L/XL
 Out of Scope: [explicit exclusions agreed during discussion]
 Open Constraints for Architect: [any technical boundaries or open questions PO identified]

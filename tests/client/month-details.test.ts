@@ -96,6 +96,17 @@ describe("getCategoryBreakdown", () => {
     expect(rows.map((r) => r.label)).toEqual(["Food", "Utilities"]);
   });
 
+  it("attaches only matching current-period transactions to an ungrouped category, newest first", () => {
+    const records = [
+      makeRecord("2026-08-01", "10", "Food"),
+      makeRecord("2026-08-03", "20", "Food"),
+      makeRecord("2026-08-04", "30", "Transport"),
+      makeRecord("2026-07-31", "40", "Food"),
+    ];
+    const food = breakdown(records, "2026-08-01", "2026-08-31", { grouped: false }).find((row) => row.label === "Food")!;
+    expect(food.records.map((record) => record.Date)).toEqual(["2026-08-03", "2026-08-01"]);
+  });
+
   it("shows '-' (priorAmount null) and omits deviation when category had no prior spend", () => {
     const records = [makeRecord("2026-08-01", "20", "Food")];
     const rows = breakdown(records, "2026-08-01", "2026-08-05", { grouped: false });
@@ -134,6 +145,16 @@ describe("getCategoryBreakdown", () => {
     const rows = breakdown(records, "2026-08-01", "2026-08-05", { grouped: true });
     expect(rows[0]).toMatchObject({ label: "Food...", currentAmount: 12 });
     expect(rows[1]).toMatchObject({ label: "Utilities", currentAmount: 10 });
+  });
+
+  it("attaches all colliding current-period categories to a grouped row", () => {
+    const records = [
+      makeRecord("2026-08-01", "5", "Food"),
+      makeRecord("2026-08-03", "7", "Food - Dining out"),
+      makeRecord("2026-08-04", "10", "Utilities"),
+    ];
+    const food = breakdown(records, "2026-08-01", "2026-08-31", { grouped: true }).find((row) => row.label === "Food...")!;
+    expect(food.records.map((record) => record.Category)).toEqual(["Food - Dining out", "Food"]);
   });
 
   it.each([
@@ -184,7 +205,7 @@ describe("getCategoryBreakdown", () => {
 // ─── buildPieSlices ────────────────────────────────────────────────────────────
 
 function makeRow(label: string, currentAmount: number): CategoryBreakdownRow {
-  return { label, currentAmount, priorAmount: null, deviationPct: null };
+  return { label, currentAmount, priorAmount: null, deviationPct: null, records: [] };
 }
 
 describe("buildPieSlices", () => {

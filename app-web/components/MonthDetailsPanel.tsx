@@ -4,6 +4,7 @@ import { LoadingBlock } from "./LoadingBlock";
 import { CategoryBreakdownPanel } from "./CategoryBreakdownPanel";
 import { IsoNormalizer } from "../utils/dashboardStats";
 import { getAverageDailySpend, computePriorMonthRange } from "../utils/monthDetails";
+import { DateDisplayFormat } from "../utils/date";
 import { ExpenseRecord } from "../types/expense";
 
 export interface MonthDetailsPanelProps {
@@ -14,6 +15,7 @@ export interface MonthDetailsPanelProps {
   endDate: string;
   /** True while the consumer is (re)loading records — renders a spinner instead of stats. */
   isLoading?: boolean;
+  dateDisplayFormat?: DateDisplayFormat;
 }
 
 function monthLabel(iso: string): string {
@@ -25,7 +27,7 @@ function monthLabel(iso: string): string {
  * Generic month-range breakdown panel — reused as-is by any future consumer that needs
  * average-per-day + category-vs-prior-month stats for an arbitrary same-month date range.
  */
-export function MonthDetailsPanel({ records, toIso, startDate, endDate, isLoading }: MonthDetailsPanelProps): JSX.Element {
+export function MonthDetailsPanel({ records, toIso, startDate, endDate, isLoading, dateDisplayFormat }: MonthDetailsPanelProps): JSX.Element {
   const averagePerDay = useMemo(
     () => getAverageDailySpend(records, startDate, endDate, toIso),
     [records, startDate, endDate, toIso],
@@ -57,6 +59,8 @@ export function MonthDetailsPanel({ records, toIso, startDate, endDate, isLoadin
         priorEndDate={priorEndDate}
         currentLabel={monthLabel(startDate)}
         priorLabel={monthLabel(priorStartDate)}
+        showInlineDetails
+        dateDisplayFormat={dateDisplayFormat}
       />
     </div>
   );

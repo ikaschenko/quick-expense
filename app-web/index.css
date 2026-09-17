@@ -1032,9 +1032,31 @@ button { cursor: pointer; }
 
 .month-details-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: var(--font-size-xs);
   font-variant-numeric: tabular-nums;
+}
+
+/* Fixed column widths keep the table from reflowing when a category row expands/collapses. */
+.month-details-table th:nth-child(1),
+.month-details-table td:nth-child(1) {
+  width: 38%;
+}
+
+.month-details-table th:nth-child(2),
+.month-details-table td:nth-child(2) {
+  width: 10%;
+}
+
+.month-details-table th:nth-child(3),
+.month-details-table td:nth-child(3) {
+  width: 28%;
+}
+
+.month-details-table th:nth-child(4),
+.month-details-table td:nth-child(4) {
+  width: 24%;
 }
 
 .month-details-table th,
@@ -1058,6 +1080,85 @@ button { cursor: pointer; }
 
 .month-details-table tbody tr:hover {
   background: var(--color-surface-raised);
+}
+
+.month-details-category-row {
+  cursor: pointer;
+}
+
+.month-details-category-row td:first-child {
+  padding-left: 0;
+}
+
+.month-details-category-toggle {
+  width: 100%;
+  padding: 2px var(--space-2);
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.month-details-category-toggle:hover,
+.month-details-category-toggle:focus-visible {
+  color: var(--color-accent);
+}
+
+.month-details-transactions > td {
+  padding: 0 0 var(--space-2) 5vw;
+  background: var(--color-warning-light);
+}
+
+.month-details-transactions table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: var(--font-size-xs);
+}
+
+.month-details-transactions th,
+.month-details-transactions td {
+  padding: 2px var(--space-1);
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.month-details-transactions th {
+  color: var(--color-text-secondary);
+  font-size: 0.9em;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.month-details-transactions th:nth-child(1),
+.month-details-transactions td:nth-child(1) {
+  /* Fixed (not %) width: a date's rendered length is locale-dependent but roughly constant,
+     so sizing it against the fluid table width risks truncation at some viewport/locale. */
+  width: 7em;
+}
+
+.month-details-transactions th:nth-child(2),
+.month-details-transactions td:nth-child(2) {
+  width: 15%;
+  text-align: right;
+}
+
+.month-details-transactions th:nth-child(3),
+.month-details-transactions td:nth-child(3) {
+  width: 20%;
+}
+
+.month-details-transactions th:nth-child(4),
+.month-details-transactions td:nth-child(4) {
+  width: 50%;
+}
+
+.month-details-comment {
+  color: var(--color-text-secondary);
 }
 
 /* Fixed width + right alignment keeps the decimal point at the same position across rows. */
@@ -1898,6 +1999,10 @@ button { cursor: pointer; }
   margin-left: var(--space-2);
   color: var(--color-warning);
   font-size: var(--font-size-base);
+}
+
+.setup-preference-group {
+  margin-bottom: 0;
 }
 
 .home-status-card {

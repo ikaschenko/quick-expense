@@ -4,17 +4,22 @@ import { describe, it, expect } from "vitest";
 import { MonthDetailsPanel } from "../../app-web/components/MonthDetailsPanel";
 import { ExpenseRecord } from "../../app-web/types/expense";
 
-function makeRecord(date: string, usd: string, category: string): ExpenseRecord {
+function makeRecord(
+  date: string,
+  usd: string,
+  category: string,
+  options: Partial<Pick<ExpenseRecord, "spentFor" | "Comment" | "rowNumber">> = {},
+): ExpenseRecord {
   return {
     Date: date,
     USD: usd,
     Category: category,
     spentBy: "test",
-    spentFor: "test",
-    Comment: "",
+    spentFor: options.spentFor ?? "test",
+    Comment: options.Comment ?? "",
     currencyAmounts: {},
     customFields: {},
-    rowNumber: 1,
+    rowNumber: options.rowNumber ?? 1,
   };
 }
 
@@ -56,6 +61,86 @@ describe("MonthDetailsPanel — isLoading", () => {
 });
 
 describe("MonthDetailsPanel — controls", () => {
+  it("expands a category into a compact newest-first four-column transaction grid and collapses it by keyboard", async () => {
+    const user = userEvent.setup();
+    const longComment = "A long comment that should be clipped after the compact preview limit used by History cards for this transaction.";
+    const records = [
+      makeRecord("2026-08-01", "10", "Food", { spentFor: "Household", rowNumber: 1 }),
+      makeRecord("2026-08-03", "20", "Food", { spentFor: "Partner", Comment: longComment, rowNumber: 2 }),
+      makeRecord("2026-08-04", "30", "Transport", { rowNumber: 3 }),
+    ];
+    render(
+      <MonthDetailsPanel
+        records={records}
+        toIso={toIso}
+        startDate="2026-08-01"
+        endDate="2026-08-06"
+        dateDisplayFormat="mdy"
+      />,
+    );
+
+    const foodButton = screen.getByRole("button", { name: "Food" });
+    expect(foodButton.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("table", { name: "Food transactions" })).toBeNull();
+
+    await user.click(foodButton);
+    const transactions = screen.getByRole("table", { name: "Food transactions" });
+    expect(foodButton.getAttribute("aria-expanded")).toBe("true");
+    expect(Array.from(transactions.querySelectorAll("th")).map((header) => header.textContent)).toEqual([
+      "Date", "Amount", "For", "Comment",
+    ]);
+    const transactionTable = transactions as HTMLTableElement;
+    expect(Array.from(transactionTable.tBodies[0].rows).map((row) => row.cells[0]?.textContent)).toEqual([
+      "08/03/2026",
+      "08/01/2026",
+    ]);
+    expect(transactions.textContent).toContain("$20.00");
+    expect(transactions.textContent).toContain("Partner");
+    expect(transactions.textContent).toContain(`${longComment.slice(0, 72)}...`);
+    const firstRow = (transactions as HTMLTableElement).tBodies[0].rows[0];
+    expect(firstRow.cells[2]?.getAttribute("title")).toBe("Partner");
+    expect(firstRow.cells[3]?.getAttribute("title")).toBe(longComment);
+
+    foodButton.focus();
+    await user.keyboard("{Enter}");
+    expect(foodButton.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("table", { name: "Food transactions" })).toBeNull();
+  });
+
+  it("uses the selected date display format for transaction rows", async () => {
+    const user = userEvent.setup();
+    const records = [makeRecord("2026-08-03", "20", "Food")];
+    render(
+      <MonthDetailsPanel
+        records={records}
+        toIso={toIso}
+        startDate="2026-08-01"
+        endDate="2026-08-06"
+        dateDisplayFormat="dmy"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Food" }));
+    const transactions = screen.getByRole("table", { name: "Food transactions" }) as HTMLTableElement;
+    expect(transactions.tBodies[0].rows[0].cells[0]?.textContent).toBe("03/08/2026");
+  });
+
+  it("toggles a category from a click anywhere on its row", async () => {
+    const user = userEvent.setup();
+    const records = [makeRecord("2026-08-01", "10", "Food", { rowNumber: 1 })];
+    render(
+      <MonthDetailsPanel records={records} toIso={toIso} startDate="2026-08-01" endDate="2026-08-06" />,
+    );
+
+    const percentCell = screen.getByRole("cell", { name: "100.0%" });
+    await user.click(percentCell);
+    expect(screen.getByRole("button", { name: "Food" }).getAttribute("aria-expanded")).toBe("true");
+
+    await user.click(percentCell);
+    expect(screen.getByRole("button", { name: "Food" }).getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("table", { name: "Food transactions" })).toBeNull();
+  });
+
   it("shows each category's share of the displayed current-month total to one decimal place", () => {
     const records = [
       makeRecord("2026-08-01", "10", "Food"),

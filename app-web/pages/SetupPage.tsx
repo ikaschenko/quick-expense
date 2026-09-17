@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileSpreadsheet, Wand2, ChevronDown, ChevronUp, X, Plus, Pencil, Trash2, Check, TableProperties, Eye, EyeOff, Link2Off, Share2 } from "lucide-react";
+import { CalendarDays, FileSpreadsheet, Wand2, ChevronDown, ChevronUp, X, Plus, Pencil, Trash2, Check, TableProperties, Eye, EyeOff, Link2Off, Share2 } from "lucide-react";
 import { Layout } from "../components/Layout";
 import { LoadingBlock } from "../components/LoadingBlock";
 import { StatusBanner } from "../components/StatusBanner";
@@ -14,6 +14,7 @@ import { sharingApi } from "../services/sharingApi";
 import { trackEvent } from "../services/analytics";
 import { AppError, ColumnMapping, ConfigMode, CurrencyDictionary, HeaderDetails, SetupReport, ShareEntry } from "../types/expense";
 import { deriveHeaderRowDetails, validateColumnName } from "../utils/spreadsheet";
+import { DateDisplayFormat, readDateDisplayFormat, writeDateDisplayFormat } from "../utils/date";
 import { MAX_CUSTOM_COLUMNS, REQUIRED_QE_FIELDS } from "../constants/expenses";
 
 type ColumnType = "mandatory-field" | "mandatory-currency" | "optional-currency" | "custom-column";
@@ -108,6 +109,12 @@ export function SetupPage(): JSX.Element {
   const [newSheetName, setNewSheetName] = useState("Quick Expense — My Expenses");
   const [templateCopyUrl, setTemplateCopyUrl] = useState<string | null>(null);
   const [structureGuideOpen, setStructureGuideOpen] = useState(false);
+  const [dateDisplayFormat, setDateDisplayFormat] = useState<DateDisplayFormat>(() => readDateDisplayFormat(localStorage));
+
+  const handleDateDisplayFormatChange = (format: DateDisplayFormat): void => {
+    setDateDisplayFormat(format);
+    writeDateDisplayFormat(localStorage, format);
+  };
 
   // Structure management state
   const [actionError, setActionError] = useState<string | null>(null);
@@ -1396,6 +1403,27 @@ export function SetupPage(): JSX.Element {
           ) : null}
         </>
       ) : null}
+
+      <div className="card setup-card">
+        <div className="setup-card-icon">
+          <CalendarDays size={24} aria-hidden />
+          <span className="setup-card-title">Display preferences</span>
+        </div>
+        <div className="input-group setup-preference-group">
+          <label className="input-label" htmlFor="date-display-format">Date format</label>
+          <select
+            id="date-display-format"
+            className="input"
+            value={dateDisplayFormat}
+            onChange={(event) => handleDateDisplayFormatChange(event.target.value as DateDisplayFormat)}
+          >
+            <option value="locale">Browser default</option>
+            <option value="mdy">MM/DD/YYYY</option>
+            <option value="dmy">DD/MM/YYYY</option>
+            <option value="iso">YYYY-MM-DD</option>
+          </select>
+        </div>
+      </div>
 
     </Layout>
   );

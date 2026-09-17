@@ -10,7 +10,7 @@ import { StatusBanner } from "../components/StatusBanner";
 import { useConfig } from "../contexts/ConfigContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useDataset } from "../contexts/DatasetContext";
-import { getTodayLocalDate } from "../utils/date";
+import { getTodayLocalDate, readDateDisplayFormat } from "../utils/date";
 import {
   buildIsoNormalizer,
   getTodayStats,
@@ -148,6 +148,7 @@ export function HomePage(): JSX.Element {
   const location = useLocation();
   const navigate = useNavigate();
   const today = useMemo(() => getTodayLocalDate(), []);
+  const dateDisplayFormat = useMemo(() => readDateDisplayFormat(localStorage), []);
   const currentMonth = today.slice(0, 7);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const currentYear = Number(today.slice(0, 4));
@@ -482,6 +483,7 @@ export function HomePage(): JSX.Element {
                   startDate={selectedMonthRange.startDate}
                   endDate={selectedMonthRange.endDate}
                   isLoading={dataset.status !== "ready" || isSelectedMonthLoading}
+                  dateDisplayFormat={dateDisplayFormat}
                 />
               )}
             </div>

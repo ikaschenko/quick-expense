@@ -1,3 +1,33 @@
+export type DateDisplayFormat = "locale" | "mdy" | "dmy" | "iso";
+
+export const DATE_DISPLAY_FORMAT_STORAGE_KEY = "qe_date_display_format";
+
+const DATE_DISPLAY_FORMATS = new Set<DateDisplayFormat>(["locale", "mdy", "dmy", "iso"]);
+
+export function readDateDisplayFormat(storage: Storage): DateDisplayFormat {
+  const value = storage.getItem(DATE_DISPLAY_FORMAT_STORAGE_KEY);
+  return DATE_DISPLAY_FORMATS.has(value as DateDisplayFormat) ? value as DateDisplayFormat : "locale";
+}
+
+export function writeDateDisplayFormat(storage: Storage, format: DateDisplayFormat): void {
+  storage.setItem(DATE_DISPLAY_FORMAT_STORAGE_KEY, format);
+}
+
+export function formatDisplayDate(isoDate: string, format: DateDisplayFormat, locale?: string): string {
+  if (!isValidIsoDate(isoDate)) return isoDate;
+
+  const [year, month, day] = isoDate.split("-").map(Number);
+  if (format === "locale") {
+    return new Date(year, month - 1, day).toLocaleDateString(locale);
+  }
+
+  const paddedMonth = String(month).padStart(2, "0");
+  const paddedDay = String(day).padStart(2, "0");
+  if (format === "mdy") return `${paddedMonth}/${paddedDay}/${year}`;
+  if (format === "dmy") return `${paddedDay}/${paddedMonth}/${year}`;
+  return isoDate;
+}
+
 export function formatLocalDate(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");

@@ -1,4 +1,49 @@
-import { detectDateFormat, formatLocalDate, getDateShortcutRanges } from "../../app-web/utils/date";
+import {
+  DATE_DISPLAY_FORMAT_STORAGE_KEY,
+  detectDateFormat,
+  formatDisplayDate,
+  formatLocalDate,
+  getDateShortcutRanges,
+  readDateDisplayFormat,
+  writeDateDisplayFormat,
+} from "../../app-web/utils/date";
+
+describe("formatDisplayDate", () => {
+  it.each([
+    ["mdy", "09/16/2026"],
+    ["dmy", "16/09/2026"],
+    ["iso", "2026-09-16"],
+  ] as const)("formats an ISO date as %s", (format, expected) => {
+    expect(formatDisplayDate("2026-09-16", format)).toBe(expected);
+  });
+
+  it("uses the requested browser locale without shifting the calendar date", () => {
+    expect(formatDisplayDate("2026-09-16", "locale", "en-US")).toBe("9/16/2026");
+    expect(formatDisplayDate("2026-09-16", "locale", "en-GB")).toBe("16/09/2026");
+  });
+
+  it("returns malformed and empty values unchanged", () => {
+    expect(formatDisplayDate("", "mdy")).toBe("");
+    expect(formatDisplayDate("not-a-date", "mdy")).toBe("not-a-date");
+    expect(formatDisplayDate("2026-02-30", "mdy")).toBe("2026-02-30");
+  });
+});
+
+describe("date display format preference", () => {
+  it("defaults to locale when the preference is missing or invalid", () => {
+    localStorage.clear();
+    expect(readDateDisplayFormat(localStorage)).toBe("locale");
+
+    localStorage.setItem(DATE_DISPLAY_FORMAT_STORAGE_KEY, "invalid");
+    expect(readDateDisplayFormat(localStorage)).toBe("locale");
+  });
+
+  it("persists and reads a supported preference", () => {
+    localStorage.clear();
+    writeDateDisplayFormat(localStorage, "mdy");
+    expect(readDateDisplayFormat(localStorage)).toBe("mdy");
+  });
+});
 
 describe("detectDateFormat", () => {
   it("returns null for empty samples", () => {
