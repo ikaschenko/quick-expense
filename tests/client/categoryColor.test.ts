@@ -15,4 +15,10 @@ describe("getCategoryColor", () => {
     const colors = new Set(names.map(getCategoryColor));
     expect(colors.size).toBeGreaterThan(1);
   });
+
+  it("covers at least 20 distinct colors so up to 20 categories can each get a unique one", () => {
+    const names = Array.from({ length: 500 }, (_, i) => `Category ${i}`);
+    const colors = new Set(names.map(getCategoryColor));
+    expect(colors.size).toBeGreaterThanOrEqual(20);
+  });
 });

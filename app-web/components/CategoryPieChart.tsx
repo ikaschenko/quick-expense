@@ -108,7 +108,8 @@ export function CategoryPieChart({ slices }: CategoryPieChartProps): JSX.Element
             fontSize: 11,
           },
           labelLine: { show: true, length: 8, length2: 8 },
-          labelLayout: { hideOverlap: true, moveOverlap: "shiftY" },
+          // Never hide a callout for overlap — shift it vertically instead so the amount stays visible.
+          labelLayout: { hideOverlap: false, moveOverlap: "shiftY" },
           emphasis: { focus: "self" },
           animation: false,
         },
