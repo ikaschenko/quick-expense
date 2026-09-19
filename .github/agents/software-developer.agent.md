@@ -61,7 +61,8 @@ Ask the human (and wait for an answer before proceeding) when:
 
 1. `npm run build` after TypeScript changes.
 2. `npm test` after logic changes.
-3. Fix failures before reporting done.
+3. If the only changes since the last successful build/test run are documentation-only files (`*.md`, `*.txt`), do not re-run build or tests; carry forward the most recent results and state that verification was skipped because the follow-up was docs-only.
+4. Fix failures before reporting done.
 
 ## Tests & Documentation — No Debt Policy
 
@@ -89,7 +90,7 @@ When invoked as a subagent by the `ticket-implementation-orchestrator` to addres
 
 1. Fix every BLOCKING finding and any Architect-confirmed guidance included in the seed. Fold in any MINOR findings batched into the same seed.
 2. Stay on the SAME branch — never create a new branch or PR.
-3. Run `npm run build` / `npm test` as relevant to the touched files.
+3. Run `npm run build` / `npm test` as relevant to the touched files, except when the fix only changes documentation files (`*.md`, `*.txt`) after an already successful verification run.
 4. Report a compact **Fix Summary** (below) instead of a full Dev Summary — this round only touches the flagged findings, so re-stating the whole feature is wasted output.
 
 ### Fix Summary Artifact
