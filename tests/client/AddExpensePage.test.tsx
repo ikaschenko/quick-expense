@@ -54,7 +54,7 @@ vi.mock("../../app-web/services/googleSheets", () => ({
 
 vi.mock("../../app-web/services/currency", () => ({
   currencyService: {
-    fetchLiveRates: vi.fn().mockResolvedValue({}),
+    fetchLiveRates: vi.fn().mockResolvedValue({ rates: {}, date: null }),
     parseManualFxRates: vi.fn().mockReturnValue({}),
     convertToUsdFromRates: vi.fn().mockReturnValue(null),
   },

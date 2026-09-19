@@ -222,6 +222,7 @@ export function AddExpensePage(): JSX.Element {
   );
   const [fxErrors, setFxErrors] = useState<Partial<Record<string, string>>>({});
   const [liveFxRates, setLiveFxRates] = useState<Partial<Record<string, number>>>({});
+  const [liveFxRatesDate, setLiveFxRatesDate] = useState<string | null>(null);
   const [isFetchingLiveRates, setIsFetchingLiveRates] = useState(false);
   const [activeNonUsdCurrency, setActiveNonUsdCurrency] = useState<string | null>(
     visibleCurrencies[0] ?? null,
@@ -348,15 +349,17 @@ export function AddExpensePage(): JSX.Element {
     if (isEditMode || visibleCurrencies.length === 0 || !normalizedDraftDate) return;
     if (hasFetchedLiveRates.current === normalizedDraftDate) return;
 
-    hasFetchedLiveRates.current = normalizedDraftDate;
     let isActive = true;
     setIsFetchingLiveRates(true);
 
     void currencyService
       .fetchLiveRates(visibleCurrencies, normalizedDraftDate)
-      .then((rates) => {
+      .then(({ rates, date }) => {
         if (!isActive) return;
+        // Marked only on success, guarded by isActive — a StrictMode-cancelled invocation must not poison the ref for the surviving one.
+        hasFetchedLiveRates.current = normalizedDraftDate;
         setLiveFxRates(rates);
+        setLiveFxRatesDate(date);
         setManualFxRates((current) => {
           const next = { ...current };
           for (const code of visibleCurrencies) {
@@ -844,7 +847,12 @@ export function AddExpensePage(): JSX.Element {
                       className="add-fx-card-live-btn"
                       onClick={() => updateFxRate(activeNonUsdCurrency, liveFxRates[activeNonUsdCurrency]!.toFixed(2))}
                     >
-                      <span className="add-fx-card-live-btn-tag">Live rate</span>
+                      <span className="add-fx-card-live-btn-tag">
+                        {/* Falls back to the nearest prior published date when today's rate isn't out yet. */}
+                        {liveFxRatesDate && liveFxRatesDate !== normalizedDraftDate
+                          ? `Live rate (${liveFxRatesDate})`
+                          : "Live rate"}
+                      </span>
                       <span className="add-fx-card-live-btn-val">{liveFxRates[activeNonUsdCurrency]!.toFixed(2)}</span>
                     </button>
                   ) : null

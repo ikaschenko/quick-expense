@@ -18,6 +18,7 @@ import {
   refreshAccessToken,
 } from "./google-client.js";
 import { validateMappingRequestBody, validateUsdMandatory, validateRequiredFields, isNonHideableField } from "./validation.js";
+import { resolveFxRates } from "./fx-rates.js";
 import {
   createSpreadsheet,
   appendExpenseRow,
@@ -782,9 +783,6 @@ app.get("/api/fx-backup", requireAuthenticatedUser, async (req, res) => {
   res.json({ backup });
 });
 
-const FX_API_BASE_URL = "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1";
-const FX_API_TIMEOUT_MS = 5_000;
-
 app.get("/api/fx/rates", requireAuthenticatedUser, async (req, res) => {
   emulateFailure(req.path);
   const raw = String(req.query.currencies ?? "").trim();
@@ -810,47 +808,12 @@ app.get("/api/fx/rates", requireAuthenticatedUser, async (req, res) => {
     return;
   }
 
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FX_API_TIMEOUT_MS);
-    let data;
-    try {
-      const fxUrl = dateParam
-        ? `${FX_API_BASE_URL}/dates/${dateParam}.json`
-        : `${FX_API_BASE_URL}/currencies/usd.json`;
-      logger.info("fx_api_request", {
-        event: "fx_api_request",
-        url: fxUrl,
-        currencies: requested,
-        date: dateParam || null,
-      });
-
-      const response = await fetch(fxUrl, { signal: controller.signal });
-      const responseText = await response.text();
-      logger.info("fx_api_response", {
-        event: "fx_api_response",
-        url: fxUrl,
-        statusCode: response.status,
-        responseBody: responseText,
-      });
-
-      if (!response.ok) throw new Error(`FX API responded with ${response.status}`);
-      data = JSON.parse(responseText);
-    } finally {
-      clearTimeout(timeout);
-    }
-
-    const usdRates = data?.usd ?? {};
-    const rates = {};
-    for (const code of requested) {
-      const value = usdRates[code.toLowerCase()];
-      if (typeof value === "number") rates[code] = value;
-    }
-
-    res.json({ rates, date: data?.date ?? null });
-  } catch {
+  const result = await resolveFxRates({ currencies: requested, date: dateParam || undefined });
+  if (!result) {
     res.status(503).json({ message: "Exchange rate service is temporarily unavailable." });
+    return;
   }
+  res.json(result);
 });
 
 app.post("/api/expenses", requireAuthenticatedUser, requireEditAccess, async (req, res) => {

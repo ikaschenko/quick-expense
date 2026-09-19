@@ -57,15 +57,20 @@ export const currencyService = {
     return roundUsd(usdTotal);
   },
 
-  async fetchLiveRates(currencies: string[], date?: string): Promise<Partial<Record<string, number>>> {
-    if (currencies.length === 0) return {};
+  async fetchLiveRates(
+    currencies: string[],
+    date?: string,
+  ): Promise<{ rates: Partial<Record<string, number>>; date: string | null }> {
+    if (currencies.length === 0) return { rates: {}, date: null };
     try {
       const params = new URLSearchParams({ currencies: currencies.join(",") });
       if (date) params.set("date", date);
-      const data = await requestJson<{ rates: Record<string, number> }>(`/api/fx/rates?${params.toString()}`);
-      return data.rates ?? {};
+      const data = await requestJson<{ rates: Record<string, number>; date: string | null }>(
+        `/api/fx/rates?${params.toString()}`,
+      );
+      return { rates: data.rates ?? {}, date: data.date ?? null };
     } catch {
-      return {};
+      return { rates: {}, date: null };
     }
   },
 };

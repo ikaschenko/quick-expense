@@ -76,7 +76,7 @@ vi.mock("../../app-web/services/googleSheets", () => ({
 
 vi.mock("../../app-web/services/currency", () => ({
   currencyService: {
-    fetchLiveRates: vi.fn().mockResolvedValue({}),
+    fetchLiveRates: vi.fn().mockResolvedValue({ rates: {}, date: null }),
     parseManualFxRates: vi.fn().mockReturnValue({}),
     convertToUsdFromRates: vi.fn().mockReturnValue(null),
   },
@@ -668,7 +668,7 @@ describe("AddExpensePage — repeat mode FX rates", () => {
       ...eurConfig,
       config: { ...eurConfig.config, currencies: ["PLN"] },
     });
-    vi.mocked(currencyService.fetchLiveRates).mockResolvedValue({ PLN: 3.68 });
+    vi.mocked(currencyService.fetchLiveRates).mockResolvedValue({ rates: { PLN: 3.68 }, date: "2026-08-25" });
     // The stale backup rate must never shadow the live rate for the prefilled historical date.
     vi.mocked(googleSheetsService.getLatestFxRateBackup).mockResolvedValueOnce({ rates: { PLN: "9.99" } });
 
