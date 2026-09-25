@@ -37,6 +37,8 @@ After user signs in, on main screen there are 4 key buttons: Setup, Add, Tail, S
 
 > **As of the Home Screen redesign (issue #36):** the main screen is no longer a menu of buttons. It is a spending dashboard — see **§2.7 Home Screen Dashboard**. The Setup, Tail, Search, and Add Expense functions are accessible via the global bottom navigation bar. The bottom nav's Setup icon shows a status badge (green ✓ or red ⚠) reflecting the current sheet connection state.
 
+The authenticated application shell shows the Quick Expense logo and title in the top-left corner on every screen. Clicking this brand area navigates to the Home screen (`/home`).
+
 Application is intended for any Google user who has access to the spreadsheet.
 
 Any Google user with edit access to the configured spreadsheet can use the application.

@@ -26,6 +26,7 @@ export function Layout({ children, title, onBack }: LayoutProps): JSX.Element {
   const isViewOnly = auth.session?.guestAccessLevel === 'view';
   const avatarLetter = auth.session?.email?.charAt(0) ?? "?";
   const avatarPicture = auth.session?.picture ?? null;
+  const pageTitle = title && title !== "Quick Expense" ? title : null;
 
   // Show banner when auth, config, or dataset has an error
   const activeError = auth.error || config.error || dataset.error;
@@ -54,6 +55,20 @@ export function Layout({ children, title, onBack }: LayoutProps): JSX.Element {
     <div className="app-shell">
       <header className="topbar">
         <div className="topbar-left">
+          <Link
+            to="/home"
+            className="topbar-brand"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          >
+            <img
+              src="/QuickExpense_logo_512x512.png"
+              alt=""
+              className="topbar-brand-logo"
+              width="28"
+              height="28"
+            />
+            <span>Quick Expense</span>
+          </Link>
           {!isHome ? (
             <button
               className="topbar-back"
@@ -66,7 +81,7 @@ export function Layout({ children, title, onBack }: LayoutProps): JSX.Element {
           ) : null}
         </div>
 
-        <span className="topbar-title">{title ?? "Quick Expense"}</span>
+        {pageTitle ? <span className="topbar-title">{pageTitle}</span> : null}
 
         <div className="topbar-right" ref={avatarRef}>
           {auth.session ? (
