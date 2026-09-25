@@ -8,12 +8,45 @@ export interface SearchOutcome {
   truncated: boolean;
 }
 
+interface AmountCondition {
+  op: "<" | ">" | "=";
+  value: number;
+}
+
+/** Recognizes tokens like ">1000", "<19900", "=350.50"; anything else (incl. malformed operators) is not an amount condition. */
+function parseAmountToken(token: string): AmountCondition | null {
+  const match = /^([<>=])(-?\d+(?:\.\d+)?)$/.exec(token);
+  if (!match) return null;
+  return { op: match[1] as AmountCondition["op"], value: Number.parseFloat(match[2]) };
+}
+
+function parseRecordUsd(record: ExpenseRecord): number {
+  return Number.parseFloat(record.USD.replace(/[$,]/g, ""));
+}
+
+/** All free-text fields eligible for the quick multi-field search. */
+function searchableTextFields(record: ExpenseRecord): string[] {
+  return [record.Category, record.spentBy, record.spentFor, record.Comment, ...Object.values(record.customFields)];
+}
+
 export function filterExpenses(records: ExpenseRecord[], filters: SearchFilters): SearchOutcome {
-  const normalizedComment = filters.comment.trim().toLowerCase();
   const selectedCategoriesLower = new Set(filters.categories.map((c) => c.toLowerCase()));
 
-  const parts = normalizedComment.split(/\s+/).filter((p) => p.length > 0);
-  const meaningfulChars = parts.join("");
+  const rawTokens = filters.comment.trim().split(/\s+/).filter((p) => p.length > 0);
+  const meaningfulChars = rawTokens.join("");
+
+  const textTokens: string[] = [];
+  const amountConditions: AmountCondition[] = [];
+  if (meaningfulChars.length >= 2) {
+    for (const token of rawTokens) {
+      const condition = parseAmountToken(token);
+      if (condition) {
+        amountConditions.push(condition);
+      } else {
+        textTokens.push(token.toLowerCase());
+      }
+    }
+  }
 
   const amountFromNum = filters.amountFrom !== "" ? Number.parseFloat(filters.amountFrom) : null;
   const amountToNum = filters.amountTo !== "" ? Number.parseFloat(filters.amountTo) : null;
@@ -40,9 +73,24 @@ export function filterExpenses(records: ExpenseRecord[], filters: SearchFilters)
 
     const categoryMatch =
       selectedCategoriesLower.size === 0 || selectedCategoriesLower.has(record.Category.trim().toLowerCase());
-    const commentMatch =
-      meaningfulChars.length < 2 ||
-      parts.every((p) => record.Comment.toLowerCase().includes(p));
+
+    const textMatch =
+      textTokens.length === 0 ||
+      textTokens.every((token) =>
+        searchableTextFields(record).some((field) => field.toLowerCase().includes(token)),
+      );
+    let amountConditionsMatch = true;
+    if (amountConditions.length > 0) {
+      const recordUSD = parseRecordUsd(record);
+      amountConditionsMatch =
+        !Number.isNaN(recordUSD) &&
+        amountConditions.every((condition) => {
+          if (condition.op === ">") return recordUSD > condition.value;
+          if (condition.op === "<") return recordUSD < condition.value;
+          return Math.round(recordUSD * 100) === Math.round(condition.value * 100);
+        });
+    }
+    const commentMatch = textMatch && amountConditionsMatch;
 
     if (filters.spentByExact) {
       if (record.spentBy.trim().toLowerCase() !== filters.spentBy.trim().toLowerCase()) return false;
@@ -60,7 +108,7 @@ export function filterExpenses(records: ExpenseRecord[], filters: SearchFilters)
 
     // Amount range filter
     if (amountFromNum !== null || amountToNum !== null) {
-      const recordUSD = Number.parseFloat(record.USD.replace(/[$,]/g, ""));
+      const recordUSD = parseRecordUsd(record);
       if (Number.isNaN(recordUSD)) return false;
       if (amountFromNum !== null && recordUSD < amountFromNum) return false;
       if (amountToNum !== null && recordUSD > amountToNum) return false;

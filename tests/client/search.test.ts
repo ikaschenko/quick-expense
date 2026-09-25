@@ -111,6 +111,114 @@ describe("expense search", () => {
   });
 });
 
+describe("expense search — cross-field quick search", () => {
+  it("matches a single word found only in Category, not Comment", () => {
+    const outcome = filterExpenses(records, f({ comment: "travel" }));
+    expect(outcome.allMatches.map((r) => r.rowNumber)).toEqual([3]);
+  });
+
+  it("matches a single word found only in a custom field (Channel)", () => {
+    const outcome = filterExpenses(records, f({ comment: "cash" }));
+    expect(outcome.allMatches.map((r) => r.rowNumber)).toEqual([2]);
+  });
+
+  it("matches two words landing in two different fields (spentBy + Category)", () => {
+    const outcome = filterExpenses(records, f({ comment: "maria travel" }));
+    expect(outcome.allMatches.map((r) => r.rowNumber)).toEqual([3]);
+  });
+
+  it("matches two words both landing in the same field", () => {
+    const outcome = filterExpenses(records, f({ comment: "dinner home" }));
+    expect(outcome.allMatches.map((r) => r.rowNumber)).toEqual([2]);
+  });
+
+  it("returns no match when one word has no match in any field", () => {
+    const outcome = filterExpenses(records, f({ comment: "maria unicorn" }));
+    expect(outcome.allMatches).toHaveLength(0);
+  });
+
+  it("amount-only token '>15' filters by USD with no text constraint", () => {
+    const outcome = filterExpenses(records, f({ comment: ">15" }));
+    expect(outcome.allMatches.map((r) => r.rowNumber)).toEqual([3]); // USD 20
+  });
+
+  it("amount range '>5 <15' combines both bounds with AND", () => {
+    const outcome = filterExpenses(records, f({ comment: ">5 <15" }));
+    expect(outcome.allMatches.map((r) => r.rowNumber)).toEqual([2]); // USD 10
+  });
+
+  it("exact amount token '=20' matches only that USD value", () => {
+    const outcome = filterExpenses(records, f({ comment: "=20" }));
+    expect(outcome.allMatches.map((r) => r.rowNumber)).toEqual([3]);
+  });
+
+  it("exact amount token rejects a near-miss value", () => {
+    const outcome = filterExpenses(records, f({ comment: "=20.01" }));
+    expect(outcome.allMatches).toHaveLength(0);
+  });
+
+  it("mixed text + amount token: 'taxi >15' requires both to hold", () => {
+    const outcome = filterExpenses(records, f({ comment: "taxi >15" }));
+    expect(outcome.allMatches.map((r) => r.rowNumber)).toEqual([3]);
+  });
+
+  it("mixed text + amount token: text matches but amount condition fails", () => {
+    const outcome = filterExpenses(records, f({ comment: "taxi >100" }));
+    expect(outcome.allMatches).toHaveLength(0);
+  });
+
+  it("negative amount condition '<0' matches negative USD (refund/profit)", () => {
+    const refund: ExpenseRecord = {
+      rowNumber: 30,
+      Date: "2026-03-06",
+      USD: "-15.00",
+      currencyAmounts: {},
+      Category: "Sale",
+      spentBy: "ivan@example.com",
+      spentFor: "",
+      Comment: "eBay sale",
+      customFields: {},
+    };
+    const outcome = filterExpenses([...records, refund], f({ comment: "<0" }));
+    expect(outcome.allMatches.map((r) => r.rowNumber)).toEqual([30]);
+  });
+
+  it("malformed operator token '>abc' is treated as a literal text token", () => {
+    const literal: ExpenseRecord = {
+      rowNumber: 31,
+      Date: "2026-03-07",
+      USD: "5.00",
+      currencyAmounts: {},
+      Category: "Other",
+      spentBy: "",
+      spentFor: "",
+      Comment: "code >abc found",
+      customFields: {},
+    };
+    const outcome = filterExpenses([...records, literal], f({ comment: ">abc" }));
+    expect(outcome.allMatches.map((r) => r.rowNumber)).toEqual([31]);
+  });
+
+  it("three-token AND: text + exact amount + text", () => {
+    const outcome = filterExpenses(records, f({ comment: "dinner =10 home" }));
+    expect(outcome.allMatches.map((r) => r.rowNumber)).toEqual([2]);
+  });
+
+  it("combines with an active Category chip and Date range filter (AND across quick search + panel filters)", () => {
+    const outcome = filterExpenses(
+      records,
+      f({ comment: "airport", categories: ["Travel"], dateFrom: "2026-03-02", dateTo: "2026-03-02" }),
+    );
+    expect(outcome.allMatches.map((r) => r.rowNumber)).toEqual([3]);
+
+    const wrongDate = filterExpenses(
+      records,
+      f({ comment: "airport", categories: ["Travel"], dateFrom: "2026-03-01", dateTo: "2026-03-01" }),
+    );
+    expect(wrongDate.allMatches).toHaveLength(0);
+  });
+});
+
 describe("filterExpenses — amount range", () => {
   it("amountFrom excludes records below threshold", () => {
     const outcome = filterExpenses(records, f({ amountFrom: "15" }));

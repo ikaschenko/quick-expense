@@ -420,18 +420,18 @@ describe("HistoryPage — UI Enhancements", () => {
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
   });
 
-  it("renders Comments input before the Filter toggle button", () => {
+  it("renders the quick search input before the Filter toggle button", () => {
     mockDataset({});
     const { container } = renderHistory();
 
-    const commentsInput = screen.getByRole("textbox", { name: /filter by comment/i });
+    const searchInput = screen.getByRole("textbox", { name: /search all fields/i });
     const filterToggleBtn = screen.getByRole("button", { name: /^filter$/i });
 
-    expect(commentsInput).toBeTruthy();
+    expect(searchInput).toBeTruthy();
     expect(filterToggleBtn).toBeTruthy();
 
-    // Verify DOM order: comments input precedes the filter toggle button
-    expect(commentsInput.compareDocumentPosition(filterToggleBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Verify DOM order: search input precedes the filter toggle button
+    expect(searchInput.compareDocumentPosition(filterToggleBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("has empty placeholders for Spent By and Spent For fields", async () => {

@@ -305,8 +305,8 @@ export function HistoryPage(): JSX.Element {
         <StatusBanner variant="info" message="Complete history is still loading…" />
       )}
 
-      {/* Comment search input (placed before Filters section) */}
-      <div className="input-label mb-2">Comments</div>
+      {/* Quick search input — matches words across all fields, plus >/</= amount conditions (placed before Filters section) */}
+      <div className="input-label mb-2">Search</div>
       <div className="search-hero-input mb-4">
         <SearchIcon size={18} className="search-icon" aria-hidden />
         <input
@@ -315,15 +315,15 @@ export function HistoryPage(): JSX.Element {
           onChange={(e) =>
             dataset.setSearchFilters({ ...dataset.searchFilters, comment: e.target.value })
           }
-          placeholder="Search by words…"
+          placeholder="Search by words, or >100, <50, =25.99…"
           inputMode="text"
-          aria-label="Filter by comment"
+          aria-label="Search all fields"
         />
         {dataset.searchFilters.comment !== "" && (
           <button
             className="search-hero-clear"
             type="button"
-            aria-label="Clear comment"
+            aria-label="Clear search"
             onClick={() =>
               dataset.setSearchFilters({ ...dataset.searchFilters, comment: "" })
             }
