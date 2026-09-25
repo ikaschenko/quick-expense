@@ -217,6 +217,7 @@ describe("buildPieSlices", () => {
     const rows = [makeRow("Food", 60), makeRow("Rent", 40)];
     const slices = buildPieSlices(rows, "top5");
     expect(slices).toHaveLength(2);
+    expect(slices.map((slice) => slice.color)).toEqual(["#FF6800", "#A8B400"]);
     expect(slices.find((s) => s.label === "Food")?.pct).toBeCloseTo(60);
     expect(slices.find((s) => s.label === "Rent")?.pct).toBeCloseTo(40);
     expect(slices.some((s) => s.label === "Other")).toBe(false);
@@ -227,6 +228,7 @@ describe("buildPieSlices", () => {
     const slices = buildPieSlices(rows, "all");
     expect(slices).toHaveLength(2);
     const other = slices.find((s) => s.label === "Other")!;
+    expect(slices.find((s) => s.label === "Food")?.color).toBe("#FF6800");
     expect(other.amount).toBe(11);
     expect(other.pct).toBeCloseTo(1.1);
   });

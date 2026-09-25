@@ -26,6 +26,24 @@ function truncateLegendLabel(label: string): string {
   return label.length > MAX_LEGEND_LABEL_LENGTH ? `${label.slice(0, MAX_LEGEND_LABEL_LENGTH - 3)}...` : label;
 }
 
+/** Blends a hex color toward white by `amount` (0-1), matching the reference chart's subtle highlight. */
+function lighten(hex: string, amount: number): string {
+  const num = Number.parseInt(hex.slice(1), 16);
+  const channel = (shift: number): number => {
+    const value = (num >> shift) & 0xff;
+    return Math.round(value + (255 - value) * amount);
+  };
+  return `#${((1 << 24) + (channel(16) << 16) + (channel(8) << 8) + channel(0)).toString(16).slice(1)}`;
+}
+
+/** Light-to-dark radial gradient from a base color, echoing the reference chart's subtle shading. */
+function toSliceGradient(color: string): InstanceType<typeof echarts.graphic.RadialGradient> {
+  return new echarts.graphic.RadialGradient(0.4, 0.4, 0.8, [
+    { offset: 0, color: lighten(color, 0.35) },
+    { offset: 1, color },
+  ]);
+}
+
 export function buildCategoryPieLegend(slices: PieSlice[], textColor: string): LegendComponentOption {
   return {
     type: "plain",
@@ -95,7 +113,7 @@ export function CategoryPieChart({ slices }: CategoryPieChartProps): JSX.Element
           data: slices.map((s) => ({
             name: s.label,
             value: s.amount,
-            itemStyle: { color: s.label === OTHER_LABEL ? otherColor : s.color },
+            itemStyle: { color: s.label === OTHER_LABEL ? otherColor : toSliceGradient(s.color) },
           })),
           itemStyle: {
             shadowBlur: 8,

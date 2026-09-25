@@ -175,22 +175,24 @@ export function buildPieSlices(rows: CategoryBreakdownRow[], topFilter: "top5" |
   if (total <= 0) return [];
 
   if (topFilter === "top5") {
-    return rows.map((r) => ({
+    return rows.map((r, index) => ({
       label: r.label,
       amount: r.currentAmount,
       pct: (r.currentAmount / total) * 100,
-      color: getCategoryColor(r.label),
+      color: getCategoryColor(index),
     }));
   }
 
   const slices: PieSlice[] = [];
   let otherAmount = 0;
+  let categoryIndex = 0;
   for (const r of rows) {
     const pct = (r.currentAmount / total) * 100;
     if (pct < OTHER_THRESHOLD_PCT) {
       otherAmount += r.currentAmount;
     } else {
-      slices.push({ label: r.label, amount: r.currentAmount, pct, color: getCategoryColor(r.label) });
+      slices.push({ label: r.label, amount: r.currentAmount, pct, color: getCategoryColor(categoryIndex) });
+      categoryIndex += 1;
     }
   }
   if (otherAmount > 0) {
@@ -198,7 +200,7 @@ export function buildPieSlices(rows: CategoryBreakdownRow[], topFilter: "top5" |
       label: OTHER_LABEL,
       amount: otherAmount,
       pct: (otherAmount / total) * 100,
-      color: getCategoryColor(OTHER_LABEL), // overridden with the fixed neutral color by the chart component
+      color: getCategoryColor(0), // overridden with the fixed neutral color by the chart component
     });
   }
   return slices;

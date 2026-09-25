@@ -2,23 +2,26 @@ import { describe, it, expect } from "vitest";
 import { getCategoryColor } from "../../app-web/utils/categoryColor";
 
 describe("getCategoryColor", () => {
-  it("returns the same color for the same category name across calls", () => {
-    expect(getCategoryColor("Food")).toBe(getCategoryColor("Food"));
+  it("starts with the colors sampled from the reference chart", () => {
+    expect(Array.from({ length: 5 }, (_, index) => getCategoryColor(index))).toEqual([
+      "#FF6800",
+      "#A8B400",
+      "#FF920F",
+      "#4F7F0F",
+      "#FFB74D",
+    ]);
   });
 
   it("returns a valid hex color", () => {
-    expect(getCategoryColor("Groceries")).toMatch(/^#[0-9A-F]{6}$/i);
+    expect(getCategoryColor(0)).toMatch(/^#[0-9A-F]{6}$/i);
   });
 
-  it("distributes distinct names across the palette rather than collapsing to one color", () => {
-    const names = Array.from({ length: 20 }, (_, i) => `Category ${i}`);
-    const colors = new Set(names.map(getCategoryColor));
-    expect(colors.size).toBeGreaterThan(1);
+  it("provides 25 unique colors before repeating", () => {
+    const colors = Array.from({ length: 25 }, (_, index) => getCategoryColor(index));
+    expect(new Set(colors)).toHaveLength(25);
   });
 
-  it("covers at least 20 distinct colors so up to 20 categories can each get a unique one", () => {
-    const names = Array.from({ length: 500 }, (_, i) => `Category ${i}`);
-    const colors = new Set(names.map(getCategoryColor));
-    expect(colors.size).toBeGreaterThanOrEqual(20);
+  it("restarts the palette after 25 colors", () => {
+    expect(getCategoryColor(25)).toBe(getCategoryColor(0));
   });
 });
