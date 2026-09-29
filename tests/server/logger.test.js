@@ -8,8 +8,56 @@ vi.mock("../../app-server/email.js", () => ({
   sendWarningDigestEmail: vi.fn(),
 }));
 
-import logger, { contextFormat, sweepLogDirectory, logRouteError } from "../../app-server/logger.js";
+import logger, { contextFormat, sweepLogDirectory, logRouteError, readLogEntries, LOG_DIR } from "../../app-server/logger.js";
 import { runWithContext } from "../../app-server/request-context.js";
+
+describe("readLogEntries", () => {
+  const filesToClean = [];
+
+  afterEach(() => {
+    for (const filePath of filesToClean.splice(0)) {
+      fs.rmSync(filePath, { recursive: true, force: true });
+    }
+  });
+
+  it("reads a known rotated log file", () => {
+    const file = "combined-1900-01-01.log";
+    const filePath = path.join(LOG_DIR, file);
+    filesToClean.push(filePath);
+    fs.writeFileSync(filePath, `${JSON.stringify({ level: "info", message: "ready" })}\n`);
+
+    expect(readLogEntries({ file })).toEqual([{ level: "info", message: "ready" }]);
+  });
+
+  it("rejects path traversal and non-rotated filenames", () => {
+    const filePath = path.join(LOG_DIR, "combined-1900-01-01.log");
+    filesToClean.push(filePath);
+    fs.writeFileSync(filePath, "{}\n");
+
+    expect(readLogEntries({ file: "../combined-1900-01-01.log" })).toBeNull();
+    expect(readLogEntries({ file: "other.log" })).toBeNull();
+  });
+
+  it("rejects a directory with a rotated-log filename", () => {
+    const file = "combined-1900-01-01.log";
+    const filePath = path.join(LOG_DIR, file);
+    filesToClean.push(filePath);
+    fs.mkdirSync(filePath);
+
+    expect(readLogEntries({ file })).toBeNull();
+  });
+
+  it.skipIf(process.platform === "win32")("does not read a rotated-log symlink", () => {
+    const target = path.join(os.tmpdir(), `qe-log-target-${process.pid}.txt`);
+    const file = "combined-1900-01-01.log";
+    const filePath = path.join(LOG_DIR, file);
+    filesToClean.push(filePath, target);
+    fs.writeFileSync(target, "sensitive data\n");
+    fs.symlinkSync(target, filePath);
+
+    expect(readLogEntries({ file })).toBeNull();
+  });
+});
 
 describe("sweepLogDirectory", () => {
   function makeFile(dir, name, sizeBytes, ageMsAgo) {

@@ -172,13 +172,50 @@ export function listLogFiles() {
  */
 export function readLogEntries({ file, level, q, lines = 200 }) {
   const knownFiles = listLogFiles().map((entry) => entry.name);
-  if (!knownFiles.includes(file)) {
+  if (typeof file !== "string") {
     return null;
+  }
+
+  const safeFile = path.basename(file);
+  if (
+    safeFile !== file ||
+    !/^(combined|error)-\d{4}-\d{2}-\d{2}\.log$/.test(safeFile) ||
+    !knownFiles.includes(safeFile)
+  ) {
+    return null;
+  }
+
+  const logDirectory = fs.realpathSync(LOG_DIR);
+  const filePath = path.resolve(logDirectory, safeFile);
+  if (path.dirname(filePath) !== logDirectory) {
+    return null;
+  }
+
+  let descriptor;
+  let content;
+  try {
+    if (!fs.lstatSync(filePath).isFile()) {
+      return null;
+    }
+    const flags = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0);
+    descriptor = fs.openSync(filePath, flags);
+    if (!fs.fstatSync(descriptor).isFile()) {
+      return null;
+    }
+    content = fs.readFileSync(descriptor, "utf-8");
+  } catch (error) {
+    if (error.code === "ENOENT" || error.code === "ELOOP") {
+      return null;
+    }
+    throw error;
+  } finally {
+    if (descriptor !== undefined) {
+      fs.closeSync(descriptor);
+    }
   }
 
   const normalizedLevel = level?.toLowerCase();
   const normalizedQuery = q?.toLowerCase();
-  const content = fs.readFileSync(path.join(LOG_DIR, file), "utf-8");
 
   return content
     .split("\n")

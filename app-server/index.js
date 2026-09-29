@@ -93,7 +93,7 @@ const EMULATE_FAILURES = false;  // use 'true' if need to emulate some random er
 const FAILURE_PROBABILITY = 0.1; // % of requests will fail with a 500 error when EMULATE_FAILURES is true.
 function emulateFailure(endpoint) {
   if (EMULATE_FAILURES) {
-    const r = Math.random();
+    const r = crypto.randomInt(0, 1_000_000) / 1_000_000;
     if (r <= FAILURE_PROBABILITY) {
       logger.debug(`Going to throw a simulated exception (prob=${r}, threshold=${FAILURE_PROBABILITY})...`);
       throw new Error(`Test error raised, endpoint ${endpoint}`);
