@@ -1,6 +1,13 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render } from "@testing-library/react";
 import type { BarSeriesOption } from "echarts/charts";
-import { buildSeries, resolveMonthClick } from "../../app-web/components/YearSpendChart";
+import { buildSeries, resolveMonthClick, YearSpendChart } from "../../app-web/components/YearSpendChart";
+import { createFakeChart, disableChartRendering, enableChartRendering } from "./fakeEchart";
+
+vi.mock("echarts/core", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("echarts/core")>()),
+  init: vi.fn(),
+}));
 
 function dataAt(series: BarSeriesOption, index: number) {
   return (series.data as unknown[])[index];
@@ -77,5 +84,83 @@ describe("YearSpendChart — resolveMonthClick", () => {
 
   it("navigates on a second touch tap of the same already-armed bar", () => {
     expect(resolveMonthClick(0, 0, monthlyAmounts, true, 0)).toEqual({ type: "navigate" });
+  });
+});
+
+describe("YearSpendChart — rendering", () => {
+  const monthlyAmounts: (number | null)[] = [100, 250.5, ...Array<null>(10).fill(null)];
+  const touchClick = (dataIndex: number) => ({ seriesIndex: 0, dataIndex, event: { event: { pointerType: "touch" } } });
+
+  beforeEach(enableChartRendering);
+  afterEach(disableChartRendering);
+
+  function renderChart(onMonthClick?: (year: number, month: number) => void) {
+    const fake = createFakeChart();
+    const view = render(
+      <YearSpendChart monthlyAmounts={monthlyAmounts} year={2026} averagePerMonth={175} currentMonthIndex={1} onMonthClick={onMonthClick} />,
+    );
+    const option = fake.chart.setOption.mock.calls[0][0] as { tooltip: { formatter: (params: unknown) => string } };
+    return { ...fake, view, formatter: option.tooltip.formatter };
+  }
+
+  it("should format the tooltip with month, year, and total", () => {
+    const { formatter } = renderChart();
+
+    expect(formatter([{ dataIndex: 1 }])).toBe("February 2026<br/>Total: $250.50");
+    expect(formatter({ dataIndex: 0 })).toBe("January 2026<br/>Total: $100.00");
+  });
+
+  it("should return an empty tooltip for a forecast-only month", () => {
+    const { formatter } = renderChart();
+
+    expect(formatter([{ dataIndex: 5 }])).toBe("");
+  });
+
+  it("should ignore clicks when no month handler is provided", () => {
+    const { chart, handlers } = renderChart();
+
+    handlers.click({ seriesIndex: 0, dataIndex: 0 });
+
+    expect(chart.dispatchAction).not.toHaveBeenCalled();
+  });
+
+  it("should navigate immediately on a mouse click", () => {
+    const onMonthClick = vi.fn();
+    const { handlers } = renderChart(onMonthClick);
+
+    handlers.click({ seriesIndex: 0, dataIndex: 1 });
+
+    expect(onMonthClick).toHaveBeenCalledWith(2026, 2);
+  });
+
+  it("should ignore clicks on a forecast-only month", () => {
+    const onMonthClick = vi.fn();
+    const { chart, handlers } = renderChart(onMonthClick);
+
+    handlers.click(touchClick(5));
+
+    expect(onMonthClick).not.toHaveBeenCalled();
+    expect(chart.dispatchAction).not.toHaveBeenCalled();
+  });
+
+  it("should show the tooltip on the first touch tap and navigate on the second", () => {
+    const onMonthClick = vi.fn();
+    const { chart, handlers } = renderChart(onMonthClick);
+
+    handlers.click(touchClick(0));
+    expect(chart.dispatchAction).toHaveBeenCalledWith({ type: "showTip", seriesIndex: 0, dataIndex: 0 });
+    expect(onMonthClick).not.toHaveBeenCalled();
+
+    handlers.click(touchClick(0));
+    expect(onMonthClick).toHaveBeenCalledWith(2026, 1);
+  });
+
+  it("should release the click listener and dispose the chart on unmount", () => {
+    const { chart, view } = renderChart();
+
+    view.unmount();
+
+    expect(chart.off).toHaveBeenCalledWith("click", expect.any(Function));
+    expect(chart.dispose).toHaveBeenCalled();
   });
 });
