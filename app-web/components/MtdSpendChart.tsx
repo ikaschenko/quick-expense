@@ -49,7 +49,7 @@ export function MtdSpendChart({ dailyAmounts, year, month }: MtdSpendChartProps)
 
     const hasForecast = todayIndex >= 0 && todayIndex < totalDays - 1;
     const forecast = hasForecast
-      ? cumulativeActual.map((value, index) => index >= todayIndex ? cumulativeToday : value === null ? null : null)
+      ? cumulativeActual.map((_, index) => (index >= todayIndex ? cumulativeToday : null))
       : [];
     const config: MtdChartOption = {
       animation: false,

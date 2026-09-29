@@ -76,6 +76,16 @@ describe("getYearlyAverageSpend", () => {
     expect(average).toBeCloseTo(200 / months, 4);
   });
 
+  it("finds earliest and latest dates regardless of record order (past year)", () => {
+    const records = [makeRecord("2024-04-01", "100"), makeRecord("2024-07-01", "100"), makeRecord("2024-01-01", "100")];
+    const toIso = buildIsoNormalizer(records);
+    const spanDays = Math.round(
+      (new Date(2024, 6, 1).getTime() - new Date(2024, 0, 1).getTime()) / (24 * 60 * 60 * 1000),
+    );
+    const average = getYearlyAverageSpend(records, 2024, toIso, "2026-06-15");
+    expect(average).toBeCloseTo(300 / (spanDays / (365.25 / 12)), 4);
+  });
+
   it("floors the denominator at 1 month when all records fall on the same day (past year)", () => {
     const records = [makeRecord("2024-03-10", "300")];
     const toIso = buildIsoNormalizer(records);

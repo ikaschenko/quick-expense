@@ -20,20 +20,25 @@
   .entry.warn { background: #2a2313; color: #ffcf7a; }
   .entry.info { color: #d8dbe0; }
   .meta { color: #8a8f99; }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 </style>
 </head>
 <body>
 <h1>QuickExpense — Admin Log Viewer</h1>
 <div class="toolbar">
+  <label for="file" class="visually-hidden">Log file</label>
   <select id="file"></select>
+  <label for="level" class="visually-hidden">Log level</label>
   <select id="level">
     <option value="">All levels</option>
     <option value="error">Error</option>
     <option value="warn">Warn</option>
     <option value="info">Info</option>
   </select>
+  <label for="q" class="visually-hidden">Search logs</label>
   <input type="text" id="q" placeholder="Search…">
-  <input type="number" id="lines" value="200" min="1" max="1000" style="width:80px" title="Lines">
+  <label for="lines" class="visually-hidden">Number of lines</label>
+  <input type="number" id="lines" value="200" min="1" max="1000" style="width:80px">
   <button id="refresh">Refresh</button>
 </div>
 <div id="status"></div>

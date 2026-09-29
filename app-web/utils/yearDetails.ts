@@ -86,8 +86,8 @@ export function getYearlyAverageSpend(
     return yearTotal / elapsedMonths;
   }
 
-  const earliestIso = yearIsoDates.reduce((min, iso) => (iso < min ? iso : min));
-  const latestIso = yearIsoDates.reduce((max, iso) => (iso > max ? iso : max));
+  const earliestIso = yearIsoDates.reduce((min, iso) => (iso < min ? iso : min), yearIsoDates[0]);
+  const latestIso = yearIsoDates.reduce((max, iso) => (iso > max ? iso : max), yearIsoDates[0]);
   const spanDays = Math.round((toDateLocal(latestIso).getTime() - toDateLocal(earliestIso).getTime()) / MS_PER_DAY);
   const months = Math.max(1, spanDays / AVG_DAYS_PER_MONTH);
   return yearTotal / months;
