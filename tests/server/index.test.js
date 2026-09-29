@@ -30,6 +30,11 @@ const mocks = vi.hoisted(() => ({
     listLogFiles: vi.fn(),
     readLogEntries: vi.fn(),
   },
+  sheets: {
+    createSpreadsheet: vi.fn(),
+    detectConfigSheet: vi.fn(),
+    validateSpreadsheet: vi.fn(),
+  },
 }));
 
 vi.mock("express-session", () => ({
@@ -44,6 +49,10 @@ vi.mock("../../app-server/db.js", () => ({ default: mocks.pool }));
 vi.mock("../../app-server/store.js", () => mocks.store);
 vi.mock("../../app-server/sharing.js", () => mocks.sharing);
 vi.mock("../../app-server/email.js", () => mocks.email);
+vi.mock("../../app-server/google-sheets.js", async (importOriginal) => ({
+  ...(await importOriginal()),
+  ...mocks.sheets,
+}));
 vi.mock("../../app-server/logger.js", async (importOriginal) => ({
   ...(await importOriginal()),
   ...mocks.logs,
@@ -321,6 +330,52 @@ describe("PATCH /api/config/column-visibility", () => {
 
     expect(res.status).toBe(403);
     expect(res.body.code).toBe("GUEST_CANNOT_MODIFY_CONFIG");
+  });
+});
+
+describe("POST /api/config and /api/config/create-spreadsheet", () => {
+  const NEW_URL = "https://docs.google.com/spreadsheets/d/new-sheet-id/edit";
+  const REPORT = { sheetCurrencies: ["EUR"], customColumns: ["Notes"], tabAction: "found", headersAction: "valid" };
+
+  beforeEach(() => {
+    const owner = { ...OWNER, accessToken: "token", accessTokenExpiresAt: Date.now() + 3_600_000 };
+    mocks.store.getUserRecord.mockImplementation(async (email) => (email === OWNER.email ? owner : USERS[email] ?? null));
+    mocks.store.updateUserRecord.mockImplementation(async (_email, updater) => updater(owner));
+    mocks.sheets.detectConfigSheet.mockResolvedValue({ mode: "default" });
+    mocks.sheets.validateSpreadsheet.mockResolvedValue(REPORT);
+    mocks.sheets.createSpreadsheet.mockResolvedValue({ spreadsheetId: "created-id", spreadsheetUrl: NEW_URL });
+  });
+
+  it("should return a complete config with stored hidden columns when connecting a sheet", async () => {
+    signInAs(OWNER);
+    mocks.store.getHiddenColumns.mockResolvedValue(["Notes"]);
+
+    const res = await request("POST", "/api/config", { body: { spreadsheetUrl: NEW_URL } });
+
+    expect(res.status).toBe(200);
+    expect(res.body.config).toMatchObject({
+      spreadsheetId: "new-sheet-id",
+      hiddenColumns: ["Notes"],
+      isGuest: false,
+      accessLevel: "edit",
+      ownerEmail: null,
+    });
+    expect(mocks.store.getHiddenColumns).toHaveBeenCalledWith(OWNER.id, "new-sheet-id");
+  });
+
+  it("should return a complete config with no hidden columns when creating a sheet", async () => {
+    signInAs(OWNER);
+
+    const res = await request("POST", "/api/config/create-spreadsheet", { body: {} });
+
+    expect(res.status).toBe(200);
+    expect(res.body.config).toMatchObject({
+      spreadsheetId: "created-id",
+      hiddenColumns: [],
+      isGuest: false,
+      accessLevel: "edit",
+      ownerEmail: null,
+    });
   });
 });
 

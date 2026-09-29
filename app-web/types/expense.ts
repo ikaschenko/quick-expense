@@ -86,6 +86,15 @@ export interface HeaderDetails {
 export type ColumnMapping = Record<string, string>; // QuickExpense field → user column name
 export type ConfigMode = "config-driven" | "config-no-mapping" | "default" | "config-invalid";
 
+export type ColumnType = "mandatory-field" | "mandatory-currency" | "optional-currency" | "custom-column";
+
+export interface ColumnInfo {
+  name: string;
+  type: ColumnType;
+  /** Whether this column can be hidden from the Add Expense form. */
+  hideable: boolean;
+}
+
 export type HeaderMatchStatus = "match" | "mismatch" | "missing" | "extra";
 
 export interface HeaderRowDetail {

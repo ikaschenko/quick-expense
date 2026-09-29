@@ -535,6 +535,7 @@ app.post("/api/config", requireAuthenticatedUser, requireOwner, async (req, res)
       await detectConfigSheet(accessToken, spreadsheetId);
 
     const setupReport = await validateSpreadsheet(accessToken, spreadsheetId, mapping);
+    const hiddenColumns = await getHiddenColumns(updatedUser.id, spreadsheetId);
 
     res.json({
       config: {
@@ -546,6 +547,10 @@ app.post("/api/config", requireAuthenticatedUser, requireOwner, async (req, res)
         customColumns: setupReport.customColumns,
         configMode,
         predefinedCategories,
+        hiddenColumns,
+        isGuest: false,
+        accessLevel: req.accessLevel,
+        ownerEmail: null,
         ...(configModeReason ? { configModeReason } : {}),
       },
       setupReport,
@@ -587,6 +592,10 @@ app.post("/api/config/create-spreadsheet", requireAuthenticatedUser, requireOwne
         customColumns: setupReport.customColumns,
         configMode: "default",
         predefinedCategories: [],
+        hiddenColumns: [],
+        isGuest: false,
+        accessLevel: req.accessLevel,
+        ownerEmail: null,
       },
       setupReport,
     });

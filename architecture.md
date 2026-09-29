@@ -115,7 +115,12 @@ quick-expense/
 │   │   ├── MtdSpendChart.tsx  ← ECharts line/area chart for MTD daily spend (Home dashboard)
 │   │   ├── ProtectedRoute.tsx ← redirect to login if unauthenticated
 │   │   ├── StatusBanner.tsx   ← error/success/info banner
-│   │   └── SharedConfigInvalidModal.tsx ← blocking modal shown when a guest's shared setup becomes invalid
+│   │   ├── SharedConfigInvalidModal.tsx ← blocking modal shown when a guest's shared setup becomes invalid
+│   │   ├── Setup{PathChooser,FreshPanel,ExistingPanel,ConfiguredPanel}.tsx ← one panel per Setup path
+│   │   ├── Setup{ReportList,StructureGuide}.tsx, HeaderMismatchTable.tsx ← Setup validation feedback
+│   │   ├── SheetStructureCard.tsx / SheetStructureRow.tsx ← sheet column management UI
+│   │   ├── ColumnMappingSection.tsx, SharingSection.tsx ← Setup sub-sections (configured path)
+│   │   └── ConnectedSheetCard.tsx, GuestUnlinkBanner.tsx, DisplayPreferencesCard.tsx ← Setup cards
 │   ├── constants/
 │   │   ├── expenses.ts        ← fixed header names, header builder, limits
 │   │   └── feedback.ts        ← Google Forms feedback URL
@@ -123,13 +128,19 @@ quick-expense/
 │   │   ├── AuthContext.tsx     ← authentication state + sign-in/sign-out
 │   │   ├── ConfigContext.tsx   ← spreadsheet config state
 │   │   └── DatasetContext.tsx  ← expense dataset loading, caching, surgical mutations
+│   ├── hooks/                 ← feature state + handler hooks (no JSX)
+│   │   ├── useSetupPath.ts     ← which Setup path is shown, synced to config load state
+│   │   ├── useSpreadsheetSetup.ts ← connect/create spreadsheet flow + its banners
+│   │   ├── useSheetStructure.ts ← add/rename/remove/reorder/hide sheet columns
+│   │   ├── useColumnMapping.ts ← column mapping load/edit state
+│   │   └── useSetupSharing.ts  ← owner share list + grant/update/revoke
 │   ├── pages/                 ← route-level page components
 │   │   ├── AddExpensePage.tsx  <- expense form with currency conversion; accepts repeat record via React Router location state
 │   │   ├── AuthCallbackPage.tsx ← post-OAuth redirect handler
 │   │   ├── HomePage.tsx       ← spending dashboard (TODAY / MTD / YTD)
 │   │   ├── LoginPage.tsx      ← sign-in screen
 │   │   ├── HistoryPage.tsx    <- unified history: recent records + collapsible filter panel (dates, amounts, category, people, comments, custom columns); Repeat navigates to /add with pre-filled state
-│   │   └── SetupPage.tsx      ← spreadsheet URL configuration + Google Picker
+│   │   └── SetupPage.tsx      ← Setup route shell: picks the active path panel (state lives in hooks/)
 │   ├── services/              ← API client layer
 │   │   ├── authApi.ts         ← /api/auth/* calls
 │   │   ├── currency.ts        ← manual FX rate parsing + conversion
@@ -147,6 +158,7 @@ quick-expense/
 │       ├── expenseTable.ts    ← expense card helpers: preview length, display amount, detail detection
 │       ├── monthDetails.ts    ← average-per-day, prior-month range clamping, category breakdown/grouping for MonthDetailsPanel
 │       ├── search.ts          ← client-side expense filtering
+│       ├── setupColumns.ts    ← sheet column classification + type/config-mode labels
 │       ├── setupStatus.ts     ← resolves Setup status banner state (loading/configured/needs-setup/invalid/load-error)
 │       ├── spreadsheet.ts     ← header validation, row mapping, distinct values
 │       ├── storage.ts         ← safe JSON localStorage helpers
