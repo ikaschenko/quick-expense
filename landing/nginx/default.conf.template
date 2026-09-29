@@ -1,0 +1,13 @@
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location / {
+        # VITE_POSTHOG_KEY comes from Fly secrets; the nginx image runs envsubst on this template at startup.
+        sub_filter '__POSTHOG_KEY__' '${VITE_POSTHOG_KEY}';
+        sub_filter_once on;
+        try_files $uri $uri/ =404;
+    }
+}

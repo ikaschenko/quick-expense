@@ -1,6 +1,7 @@
 import "dotenv/config";
 import "express-async-errors";
 import crypto from "node:crypto";
+import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import express from "express";
@@ -86,7 +87,7 @@ import {
 import { sendShareGrantedEmail, sendShareRevokedEmail } from "./email.js";
 import logger, { startWarningDigestScheduler, listLogFiles, readLogEntries, logRouteError } from "./logger.js";
 import pool from "./db.js";
-import { serializeError } from "./utils.js";
+import { injectPosthogKey, serializeError } from "./utils.js";
 import { getContext, runWithContext } from "./request-context.js";
 
 const EMULATE_FAILURES = false;  // use 'true' if need to emulate some random errors in backend logic
@@ -110,10 +111,10 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "https://apis.google.com"],
+        scriptSrc: ["'self'", "https://apis.google.com", "https://us-assets.i.posthog.com"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", "data:", "https://lh3.googleusercontent.com"],
-        connectSrc: ["'self'"],
+        connectSrc: ["'self'", "https://us.i.posthog.com", "https://us-assets.i.posthog.com"],
         frameSrc: ["https://docs.google.com", "https://drive.google.com"],
         frameAncestors: ["'none'"],
         objectSrc: ["'none'"],
@@ -1331,9 +1332,13 @@ app.use((error, req, res, next) => {
 
 if (process.env.NODE_ENV === "production") {
   const distPath = path.resolve(process.cwd(), "dist");
-  app.use(express.static(distPath));
+  const indexHtml = injectPosthogKey(
+    fs.readFileSync(path.join(distPath, "index.html"), "utf8"),
+    process.env.VITE_POSTHOG_KEY,
+  );
+  app.use(express.static(distPath, { index: false }));
   app.get("*", (_req, res) => {
-    res.sendFile(path.join(distPath, "index.html"));
+    res.type("html").send(indexHtml);
   });
 }
 

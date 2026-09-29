@@ -485,6 +485,26 @@
     <script>
     function decrypt(c,k){var b=atob(c),o='';for(var i=0;i<b.length;i++)o+=String.fromCharCode(b.charCodeAt(i)^k.charCodeAt(i%k.length));return decodeURIComponent(escape(o));}
     </script>
+    <script>
+    (function () {
+        var key = '__POSTHOG_KEY__';
+        if (key.indexOf('phc_') !== 0) return;
+        var s = document.createElement('script');
+        s.async = true;
+        s.crossOrigin = 'anonymous';
+        s.src = 'https://us-assets.i.posthog.com/static/array.js';
+        s.onload = function () {
+            window.posthog.init(key, {
+                api_host: 'https://us.i.posthog.com',
+                capture_pageview: true,
+                capture_pageleave: true,
+                cross_subdomain_cookie: true,
+                autocapture: { dom_event_allowlist: ['click'], element_allowlist: ['a', 'button'] }
+            });
+        };
+        document.head.appendChild(s);
+    })();
+    </script>
 </head>
 <body>
     <!-- Language Switcher -->
@@ -499,7 +519,7 @@
                 </div>
                 Quick Expense
             </div>
-            <a href="https://app.q-expense.com" class="header-cta" data-i18n="hero.cta">Sign in</a>
+            <a href="https://app.q-expense.com" class="header-cta" data-i18n="hero.cta" data-ph-capture-attribute-cta="header">Sign in</a>
         </div>
     </header>
 
@@ -512,7 +532,7 @@
                     <span>in seconds.</span>
                 </h1>
                 <p class="hero-sub" data-i18n="hero.subtitle">Log in seconds, see trends instantly. Dashboard, history, search — free and private in your Google Sheets.</p>
-                <a href="https://app.q-expense.com" class="hero-cta-btn" data-i18n="hero.cta">Start for Free →</a>
+                <a href="https://app.q-expense.com" class="hero-cta-btn" data-i18n="hero.cta" data-ph-capture-attribute-cta="hero">Start for Free →</a>
                 <p class="hero-note" data-i18n="hero.note">Sign in with Google · No signup · Start in 2 min</p>
             </div>
             <div class="hero-gallery">
@@ -594,7 +614,7 @@
     <section class="cta-section">
         <div class="container">
             <h2 data-i18n="cta.title">Ready to simplify?</h2>
-            <a href="https://app.q-expense.com" class="cta-btn" data-i18n="cta.button">Start Now — It's Free</a>
+            <a href="https://app.q-expense.com" class="cta-btn" data-i18n="cta.button" data-ph-capture-attribute-cta="bottom">Start Now — It's Free</a>
             <p class="cta-support"><img src="bmc-logo.svg" alt="Buy Me a Coffee" height="22" aria-hidden style="vertical-align: middle; margin-right: 6px;" /><a href="https://buymeacoffee.com/qexpensesux" target="_blank" rel="noopener noreferrer" data-i18n="cta.support">Support the project</a></p>
         </div>
     </section>

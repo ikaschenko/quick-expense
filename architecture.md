@@ -70,6 +70,7 @@ quick-expense/
 │   ├── Dockerfile             ← nginx:alpine image
 │   ├── fly.toml               ← Fly.io config for q-expense-landing
 │   ├── index.html             ← self-contained HTML + CSS + JS
+│   ├── nginx/default.conf.template ← nginx config; injects the PostHog key at startup
 │   └── lang/                  ← i18n language bundles
 │       ├── en.js
 │       ├── es.js
@@ -551,6 +552,18 @@ Frontend services in `app-web/services/` are thin wrappers around `fetch`:
 - **`currency.ts`** — manual FX rate parsing and USD conversion logic.
 - **`metricsCache.ts`** — `localStorage` cache for Home dashboard metrics (`qe_metrics_{email}`). Stores pre-computed `TodayStats`, `PeriodStats` (MTD/YTD/Rolling12M), chart daily amounts, `sheetLastModifiedTime`, and a `ytdForecast` (now including a `deviation` field comparing the forecast to last year's actual full-year total, same shape as the other `PeriodStats.deviation` fields). Entries are **not** expired at midnight — `load()` returns cross-day entries so `HomePage` can render them immediately while refreshing; only a `spreadsheetId` mismatch or a failed sanitize evicts. Cleared on sign-out and config clear; entries also carry a `schemaVersion` (currently `9`) and are discarded as a cache miss on mismatch, safely invalidating stale shapes without a migration.
 - **`sharingApi.ts`** — `/api/sharing/*` calls: list/add/update/remove shared users (owner); guest reset.
+- **`analytics.ts`** — PostHog wrapper: `initAnalytics()`, `identifyUser()`, `resetUser()`, `trackEvent()`. See §8.5.
+
+### 8.5 Product Analytics (PostHog)
+
+- **Provider:** PostHog Cloud (US, free tier), one project shared by the app and the landing page.
+- **Key delivery:** the `phc_` project key is the Fly.io secret `VITE_POSTHOG_KEY` on both Fly apps, read at runtime — never committed and not baked into the Vite build. Express injects `<meta name="posthog-key">` into `index.html` (`injectPosthogKey()` in `app-server/utils.js`); the landing page's nginx replaces the `__POSTHOG_KEY__` placeholder via `sub_filter`. In local dev, `VITE_POSTHOG_KEY` in `.env` is used as a fallback (leave blank to keep dev traffic out). Missing or non-`phc_` keys disable analytics; all wrapper functions become no-ops.
+- **App config:** `autocapture: false`, `capture_pageview: "history_change"` (SPA route changes), `capture_pageleave: true`.
+- **Identity:** `identify()` uses the SHA-256 hex of the lowercased, trimmed email — the raw email is never sent. `reset()` on sign-out.
+- **Custom events:** `sign_in`, `sign_out`, `setup_saved`, `setup_created`, `currency_added`, `column_added`, `expense_added`, `expense_added_close`, `expense_edited`, `search_performed`.
+- **Landing:** loads `array.js` from `us-assets.i.posthog.com`; pageview + pageleave + click autocapture on links/buttons. CTAs carry `data-ph-capture-attribute-cta` (`header`/`hero`/`bottom`). `cross_subdomain_cookie` shares the anonymous ID between `q-expense.com` and `app.q-expense.com`, enabling landing → sign-in funnels.
+- **CSP:** `scriptSrc` allows `https://us-assets.i.posthog.com`; `connectSrc` allows `https://us.i.posthog.com` and `https://us-assets.i.posthog.com`.
+- **SDK updates:** `.github/dependabot.yml` opens a monthly grouped PR for `posthog-js`/`@posthog/*`.
 
 ### 8.4 Key Front-End Conventions
 
@@ -612,6 +625,7 @@ In development, Vite proxies all `/api` requests to `http://localhost:3001` (con
 | `ALERT_ERROR_THROTTLE_MS` | *(Optional)* Minimum time between error-alert emails, in milliseconds. Default: `300000` (5 min). |
 | `ALERT_WARNING_DIGEST_INTERVAL_HOURS` | *(Optional)* How often the warning-digest email is sent (only if warnings occurred). Default: `24`. |
 | `ALERT_EMAIL_SUBJECT_PREFIX` | *(Optional)* Subject line prefix for alert emails. Default: `[QuickExpense Alert]`. |
+| `VITE_POSTHOG_KEY` | *(Optional)* PostHog project key (`phc_…`). Read at runtime in production (Fly secret on both apps); used as a build-time fallback in local dev. Analytics disabled when blank. See §8.5. |
 
 The backend validates all required env vars at startup and fails fast if any are missing. `EXPENSE_RECENT_MONTHS`, `RESEND_API_KEY`, `EMAIL_FROM`, and the logging/alerting vars above are optional; missing values generate a startup warning (or silently disable the feature) but do not fail the process.
 
@@ -632,7 +646,7 @@ Every Winston log entry receives `requestId` from the request context, plus nume
   - Single shared-cpu-1x VM (256 MB), always running (`auto_stop_machines = off`, `min_machines_running = 1`).
   - Forces HTTPS.
   - `NODE_ENV=production`, `PORT=3001`, plus the `LOG_*`/`ALERT_*` env vars (see §10).
-  - `DATABASE_URL`, `ADMIN_EMAIL`, and `ALERT_EMAIL_TO` set as Fly.io secrets.
+  - `DATABASE_URL`, `ADMIN_EMAIL`, `ALERT_EMAIL_TO`, and `VITE_POSTHOG_KEY` set as Fly.io secrets.
 
 ### Admin Log Viewer
 
@@ -643,8 +657,8 @@ Every Winston log entry receives `requestId` from the request context, plus nume
 
 ### Landing Page (`q-expense-landing`)
 
-- **Dockerfile:** Copies `index.html` and `lang/` into nginx default content directory.
-- **Fly.io config:** Region `fra`, auto-stop on idle (zero cost when no traffic), no persistent storage needed.
+- **Dockerfile:** Copies `index.html`, `lang/`, and images into nginx default content directory, and `nginx/default.conf.template` into `/etc/nginx/templates/` (rendered by the nginx image's `envsubst` step at startup).
+- **Fly.io config:** Region `fra`, auto-stop on idle (zero cost when no traffic), no persistent storage needed. `VITE_POSTHOG_KEY` set as a Fly.io secret (see §8.5).
 
 ---
 
