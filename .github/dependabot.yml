@@ -16,3 +16,9 @@ updates:
         patterns:
           - "posthog-js"
           - "@posthog/*"
+      vite-toolchain:
+        patterns:
+          - "vite"
+          - "@vitejs/plugin-react"
+          - "vitest"
+          - "@vitest/*"
