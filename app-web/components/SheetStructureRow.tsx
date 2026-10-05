@@ -1,7 +1,9 @@
+import { useEffect, useId, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronUp, Eye, EyeOff, Pencil, Trash2, X } from "lucide-react";
 import { ColumnInfo } from "../types/expense";
 import { typeLabel } from "../utils/setupColumns";
 import { SheetStructure } from "../hooks/useSheetStructure";
+import { useConfig } from "../contexts/ConfigContext";
 
 interface SheetStructureRowProps {
   col: ColumnInfo;
@@ -63,6 +65,7 @@ function ConfirmRemoveRow({ col, structure }: SheetStructureRowProps): JSX.Eleme
 }
 
 function DisplayRow({ col, structure }: SheetStructureRowProps): JSX.Element {
+  const { config, defaults } = useConfig();
   const { actionBusy, currencies, customColumns, hiddenColumns } = structure;
   const isMandatory = col.type === "mandatory-field" || col.type === "mandatory-currency";
   const isCurrency = col.type === "optional-currency";
@@ -74,11 +77,13 @@ function DisplayRow({ col, structure }: SheetStructureRowProps): JSX.Element {
 
   return (
     <li className="custom-columns-row">
-      <span className="custom-columns-name">
-        {col.name}
-        <span className={`custom-columns-type-badge custom-columns-type-badge--${col.type}`}>{typeLabel(col.type)}</span>
-      </span>
-      {(col.hideable || !isMandatory) ? (
+      <div className="custom-columns-name">
+        <span>{col.name} <span className={`custom-columns-type-badge custom-columns-type-badge--${col.type}`}>{typeLabel(col.type)}</span></span>
+        {(col.name === "Spent For" || isCustom) && defaults && Object.hasOwn(defaults.values, col.name) ? (
+          <DefaultValue field={col.name} value={defaults.values[col.name]} />
+        ) : null}
+      </div>
+      {!config?.isGuest && (col.hideable || !isMandatory) ? (
         <div className="custom-columns-actions">
           {isCurrency || isCustom ? (
             <>
@@ -139,5 +144,42 @@ function DisplayRow({ col, structure }: SheetStructureRowProps): JSX.Element {
         </div>
       ) : null}
     </li>
+  );
+}
+
+function DefaultValue({ field, value }: { field: string; value: string }): JSX.Element {
+  const [isOpen, setIsOpen] = useState(false);
+  const tooltipId = useId();
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const dismiss = (event: PointerEvent): void => {
+      if (!wrapperRef.current?.contains(event.target as Node)) setIsOpen(false);
+    };
+    document.addEventListener("pointerdown", dismiss);
+    return () => document.removeEventListener("pointerdown", dismiss);
+  }, [isOpen]);
+
+  return (
+    <div className="setup-default" ref={wrapperRef}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setIsOpen(false);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") { event.stopPropagation(); setIsOpen(false); }
+      }}>
+      <button type="button" className="field-default-summary setup-default-value"
+        aria-label={`Default value for ${field}: ${value}`}
+        aria-describedby={isOpen ? tooltipId : undefined}
+        onClick={() => setIsOpen((open) => !open)}>
+        Default: <strong>{value}</strong>
+      </button>
+      {isOpen ? (
+        <span className="field-default-tooltip setup-default-tooltip" role="tooltip" id={tooltipId}>
+          To manage the default values please use Add Expense screen
+        </span>
+      ) : null}
+    </div>
   );
 }

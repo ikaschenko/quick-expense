@@ -1,5 +1,53 @@
 import pool from "./db.js";
 
+export function defaultsConflict() {
+  return Object.assign(new Error("Defaults changed. Reload the page before trying again."), {
+    status: 409,
+    code: "DEFAULTS_CONFLICT",
+  });
+}
+
+function defaultsSnapshot(row, spreadsheetId) {
+  if (!row || row.spreadsheet_id !== spreadsheetId) throw defaultsConflict();
+  return { version: String(row.version), values: row.values };
+}
+
+export async function getSetupDefaults(ownerUserId, spreadsheetId) {
+  const { rows } = await pool.query(
+    "SELECT spreadsheet_id, values, version FROM setup_field_defaults WHERE owner_user_id = $1",
+    [ownerUserId],
+  );
+  return defaultsSnapshot(rows[0], spreadsheetId);
+}
+
+export async function withSetupDefaultsLock(ownerUserId, spreadsheetId, action) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows } = await client.query(
+      "SELECT spreadsheet_id, values, version FROM setup_field_defaults WHERE owner_user_id = $1 FOR UPDATE",
+      [ownerUserId],
+    );
+    const snapshot = defaultsSnapshot(rows[0], spreadsheetId);
+    const result = await action(client, snapshot);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function writeSetupDefaults(client, ownerUserId, values) {
+  const { rows } = await client.query(
+    "UPDATE setup_field_defaults SET values = $2::jsonb, version = version + 1 WHERE owner_user_id = $1 RETURNING spreadsheet_id, values, version",
+    [ownerUserId, JSON.stringify(values)],
+  );
+  return { version: String(rows[0].version), values: rows[0].values };
+}
+
 function rowToUserRecord(row) {
   return {
     id: Number(row.id),
@@ -125,8 +173,8 @@ export async function setColumnVisibility(userId, spreadsheetId, fieldName, hidd
   }
 }
 
-export async function renameVisibilityEntry(userId, spreadsheetId, oldName, newName) {
-  await pool.query(
+export async function renameVisibilityEntry(userId, spreadsheetId, oldName, newName, client = pool) {
+  await client.query(
     `UPDATE user_column_visibility
      SET canonical_field_name = $4
     WHERE user_id = $1 AND spreadsheet_id = $2 AND canonical_field_name = $3`,

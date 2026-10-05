@@ -46,7 +46,7 @@ export interface SheetStructure {
 }
 
 export function useSheetStructure(): SheetStructure {
-  const { config, updateStructure, toggleColumnVisibility } = useConfig();
+  const { config, updateStructure, toggleColumnVisibility, loadDefaults } = useConfig();
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
@@ -100,6 +100,7 @@ export function useSheetStructure(): SheetStructure {
     try {
       const result = await action();
       updateStructure(result.currencies, result.customColumns);
+      await loadDefaults();
       onSuccess();
     } catch (err) {
       setActionError((err as Error).message);

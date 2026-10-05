@@ -1,7 +1,17 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { AddExpensePage } from "../../app-web/pages/AddExpensePage";
+
+const defaultsContext = vi.hoisted(() => ({
+  defaults: { version: "0", values: {} },
+  defaultsError: null,
+  defaultsConflict: false,
+  isDefaultsLoading: false,
+  isDefaultsSaving: false,
+  loadDefaults: vi.fn().mockResolvedValue({ version: "0", values: {} }),
+  saveDefault: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock("../../app-web/contexts/AuthContext", () => ({
   useAuth: vi.fn(() => ({
@@ -24,6 +34,7 @@ vi.mock("../../app-web/contexts/AuthContext", () => ({
 
 vi.mock("../../app-web/contexts/ConfigContext", () => ({
   useConfig: vi.fn(() => ({
+    ...defaultsContext,
     config: {
       email: "test@example.com",
       spreadsheetId: "abc123",
@@ -89,8 +100,8 @@ import { useDataset } from "../../app-web/contexts/DatasetContext";
 import { ExpenseRecord } from "../../app-web/types/expense";
 import { getTodayLocalDate } from "../../app-web/utils/date";
 
-function renderAddPage() {
-  return render(
+async function renderAddPage() {
+  const view = render(
     <MemoryRouter initialEntries={["/add"]}>
       <Routes>
         <Route path="/add" element={<AddExpensePage />} />
@@ -98,10 +109,12 @@ function renderAddPage() {
       </Routes>
     </MemoryRouter>,
   );
+  await screen.findByRole("textbox", { name: /Amount in/ });
+  return view;
 }
 
-function renderAddPageWithRepeat(repeatRecord: ExpenseRecord) {
-  return render(
+async function renderAddPageWithRepeat(repeatRecord: ExpenseRecord, wait = true) {
+  const view = render(
     <MemoryRouter initialEntries={[{ pathname: "/add", state: { repeatRecord } }]}>
       <Routes>
         <Route path="/add" element={<AddExpensePage />} />
@@ -109,10 +122,12 @@ function renderAddPageWithRepeat(repeatRecord: ExpenseRecord) {
       </Routes>
     </MemoryRouter>,
   );
+  if (wait) await screen.findByRole("textbox", { name: /Amount in/ });
+  return view;
 }
 
-function renderAddPageWithPrefillDate(prefillDate: string) {
-  return render(
+async function renderAddPageWithPrefillDate(prefillDate: string) {
+  const view = render(
     <MemoryRouter initialEntries={[{ pathname: "/add", state: { prefillDate } }]}>
       <Routes>
         <Route path="/add" element={<AddExpensePage />} />
@@ -120,6 +135,8 @@ function renderAddPageWithPrefillDate(prefillDate: string) {
       </Routes>
     </MemoryRouter>
   );
+  await screen.findByRole("textbox", { name: /Amount in/ });
+  return view;
 }
 
 function renderEditPage(record: ExpenseRecord) {
@@ -155,7 +172,7 @@ describe("AddExpensePage — double-submit guard", () => {
         }),
     );
 
-    renderAddPage();
+    await renderAddPage();
     fillMinimalForm();
 
     const saveBtn = screen.getByRole("button", { name: /Save & Continue/i }) as HTMLButtonElement;
@@ -203,7 +220,7 @@ describe("AddExpensePage — Save & Continue field retention", () => {
   });
 
   it("A — non-amount fields are retained after Save & Continue", async () => {
-    renderAddPage();
+    await renderAddPage();
 
     const categoryInput = document.getElementById("category-field") as HTMLInputElement;
     fireEvent.change(categoryInput, { target: { value: "Transport" } });
@@ -226,7 +243,7 @@ describe("AddExpensePage — Save & Continue field retention", () => {
   });
 
   it("B — amount fields are cleared after Save & Continue", async () => {
-    renderAddPage();
+    await renderAddPage();
 
     const amountInput = screen.getByRole("textbox", { name: /Amount in USD/i }) as HTMLInputElement;
     fireEvent.change(amountInput, { target: { value: "10.00" } });
@@ -244,7 +261,7 @@ describe("AddExpensePage — Save & Continue field retention", () => {
   });
 
   it("C — Save & Close navigates to /home after save", async () => {
-    renderAddPage();
+    await renderAddPage();
 
     fillMinimalForm();
 
@@ -269,8 +286,8 @@ describe("AddExpensePage — repeat mode pre-fill", () => {
     rowNumber: 7,
   };
 
-  it("pre-fills Category, USD and Comment from repeatRecord", () => {
-    renderAddPageWithRepeat(repeatRecord);
+  it("pre-fills Category, USD and Comment from repeatRecord", async () => {
+    await renderAddPageWithRepeat(repeatRecord);
 
     const categoryInput = document.getElementById("category-field") as HTMLInputElement;
     expect(categoryInput.value).toBe("Transport");
@@ -285,8 +302,8 @@ describe("AddExpensePage — repeat mode pre-fill", () => {
     expect(spentByInput.value).toBe("alice@example.com");
   });
 
-  it("sets Date to today, not the original record date", () => {
-    renderAddPageWithRepeat(repeatRecord);
+  it("sets Date to today, not the original record date", async () => {
+    await renderAddPageWithRepeat(repeatRecord);
 
     const today = getTodayLocalDate();
     // Layout renders the title in a span, not a heading.
@@ -297,8 +314,8 @@ describe("AddExpensePage — repeat mode pre-fill", () => {
     expect(dateInput?.value).not.toContain("2025-03-15");
   });
 
-  it("treats the form as a fresh add — no rowNumber carried over (AC3)", () => {
-    renderAddPageWithRepeat(repeatRecord);
+  it("treats the form as a fresh add — no rowNumber carried over (AC3)", async () => {
+    await renderAddPageWithRepeat(repeatRecord);
     // Layout renders the title in a span (not a heading).
     expect(screen.getByText("Add Expense")).toBeTruthy();
     // Title must NOT be "Edit Expense" — confirms we are in add mode, not edit mode
@@ -344,10 +361,11 @@ describe("AddExpensePage — repeat currency during configuration loading", () =
       refreshConfig: vi.fn(),
       updateStructure: vi.fn(),
       toggleColumnVisibility: vi.fn(),
+      ...defaultsContext,
     };
     vi.mocked(useConfig).mockReturnValue({ ...configuredContext, config: null, isConfigLoading: true });
 
-    const view = renderAddPageWithRepeat(repeatRecord);
+    const view = await renderAddPageWithRepeat(repeatRecord, false);
 
     vi.mocked(useConfig).mockReturnValue(configuredContext);
     view.rerender(
@@ -366,7 +384,7 @@ describe("AddExpensePage — repeat currency during configuration loading", () =
 });
 
 describe("AddExpensePage — history date pre-fill", () => {
-  it("normalizes a historical sheet date instead of falling back to today", () => {
+  it("normalizes a historical sheet date instead of falling back to today", async () => {
     vi.mocked(useDataset).mockReturnValue({
       snapshot: {
         records: [{
@@ -401,7 +419,7 @@ describe("AddExpensePage — history date pre-fill", () => {
       clearError: vi.fn(),
     });
 
-    renderAddPageWithPrefillDate("15/06/2026");
+    await renderAddPageWithPrefillDate("15/06/2026");
 
     expect((screen.getByRole("textbox", { name: "Expense date" }) as HTMLInputElement).value).toBe("2026-06-15");
   });
@@ -442,7 +460,7 @@ describe("AddExpensePage — repeat mode submit", () => {
   });
 
   it("calls appendExpenseRow (not updateExpenseRow) and omits rowNumber from the add payload (AC3)", async () => {
-    renderAddPageWithRepeat(repeatRecord);
+    await renderAddPageWithRepeat(repeatRecord);
 
     // Form is pre-filled with USD and Category from the repeat record — submit immediately.
     fireEvent.click(screen.getByRole("button", { name: /Save & Close/i }));
@@ -480,6 +498,7 @@ describe("AddExpensePage — edit mode FX rate derivation", () => {
     refreshConfig: vi.fn(),
     updateStructure: vi.fn(),
     toggleColumnVisibility: vi.fn(),
+    ...defaultsContext,
   };
 
   beforeEach(() => {
@@ -597,6 +616,7 @@ describe("AddExpensePage — repeat mode FX rates", () => {
     refreshConfig: vi.fn(),
     updateStructure: vi.fn(),
     toggleColumnVisibility: vi.fn(),
+    ...defaultsContext,
   };
 
   beforeEach(() => {
@@ -631,11 +651,12 @@ describe("AddExpensePage — repeat mode FX rates", () => {
       refreshConfig: vi.fn(),
       updateStructure: vi.fn(),
       toggleColumnVisibility: vi.fn(),
+      ...defaultsContext,
     });
   });
 
   it("manualFxRates are empty in repeat mode — deriveInitialFxRates is not called (AC7)", async () => {
-    renderAddPageWithRepeat(repeatRecord);
+    await renderAddPageWithRepeat(repeatRecord);
 
     // The FX card renders because draft.currencyAmounts["EUR"] = "40.00" (from createDraftFromRecord).
     // If deriveInitialFxRates were accidentally called, the rate input would show a derived value (~0.94).
@@ -672,7 +693,7 @@ describe("AddExpensePage — repeat mode FX rates", () => {
     // The stale backup rate must never shadow the live rate for the prefilled historical date.
     vi.mocked(googleSheetsService.getLatestFxRateBackup).mockResolvedValueOnce({ rates: { PLN: "9.99" } });
 
-    renderAddPageWithPrefillDate("8/25/2026");
+    await renderAddPageWithPrefillDate("8/25/2026");
 
     await waitFor(() => {
       expect(vi.mocked(currencyService.fetchLiveRates)).toHaveBeenLastCalledWith(["PLN"], "2026-08-25");
@@ -715,6 +736,7 @@ describe("AddExpensePage — validation error focus (issue #87)", () => {
     refreshConfig: vi.fn(),
     updateStructure: vi.fn(),
     toggleColumnVisibility: vi.fn(),
+    ...defaultsContext,
   };
 
   const defaultConfig = {
@@ -742,6 +764,7 @@ describe("AddExpensePage — validation error focus (issue #87)", () => {
     refreshConfig: vi.fn(),
     updateStructure: vi.fn(),
     toggleColumnVisibility: vi.fn(),
+    ...defaultsContext,
   };
 
   beforeEach(() => {
@@ -755,7 +778,7 @@ describe("AddExpensePage — validation error focus (issue #87)", () => {
   });
 
   it("scrolls and focuses the first invalid field on validation failure", async () => {
-    renderAddPage();
+    await renderAddPage();
     const amountInput = document.getElementById("amount-field") as HTMLInputElement;
     fireEvent.change(amountInput, { target: { value: "abc" } });
 
@@ -773,7 +796,7 @@ describe("AddExpensePage — validation error focus (issue #87)", () => {
   });
 
   it("re-targets the new first invalid field when a different field fails validation (AC5)", async () => {
-    renderAddPage();
+    await renderAddPage();
     const amountInput = document.getElementById("amount-field") as HTMLInputElement;
 
     // Category is required natively — fill it so the browser doesn't block submission
@@ -806,7 +829,7 @@ describe("AddExpensePage — submission error toast (issue #87)", () => {
 
   it("renders a submission-level error as a toast StatusBanner", async () => {
     vi.mocked(googleSheetsService.appendExpenseRow).mockRejectedValue(new Error("Server exploded"));
-    renderAddPage();
+    await renderAddPage();
     fillMinimalForm();
 
     fireEvent.click(screen.getByRole("button", { name: /Save & Continue/i }));
@@ -817,7 +840,7 @@ describe("AddExpensePage — submission error toast (issue #87)", () => {
 });
 
 describe("AddExpensePage — Comment is always rendered", () => {
-  it("shows the Comment field even when hiddenColumns contains 'Comment'", () => {
+  it("shows the Comment field even when hiddenColumns contains 'Comment'", async () => {
     vi.mocked(useConfig).mockReturnValueOnce({
       config: {
         email: "test@example.com",
@@ -843,17 +866,18 @@ describe("AddExpensePage — Comment is always rendered", () => {
       refreshConfig: vi.fn(),
       updateStructure: vi.fn(),
       toggleColumnVisibility: vi.fn(),
+      ...defaultsContext,
     });
 
-    renderAddPage();
+    await renderAddPage();
 
     expect(document.getElementById("comment-field")).not.toBeNull();
   });
 });
 
 describe("AddExpensePage — required attributes on AutosuggestInput fields", () => {
-  it("category-field, spent-by-field, spent-for-field all carry required attribute", () => {
-    renderAddPage();
+  it("category-field, spent-by-field, spent-for-field all carry required attribute", async () => {
+    await renderAddPage();
 
     const categoryInput = document.getElementById("category-field") as HTMLInputElement;
     const spentByInput = document.getElementById("spent-by-field") as HTMLInputElement;
@@ -862,5 +886,109 @@ describe("AddExpensePage — required attributes on AutosuggestInput fields", ()
     expect(categoryInput.required).toBe(true);
     expect(spentByInput.required).toBe(true);
     expect(spentForInput.required).toBe(true);
+  });
+});
+
+describe("AddExpensePage — shared field defaults", () => {
+  let original: ReturnType<typeof useConfig>;
+  let context: ReturnType<typeof useConfig>;
+  const snapshot = { version: "5", values: { "Spent For": "Family", Theme: "Vacation" } };
+
+  beforeEach(() => {
+    original = useConfig();
+    context = {
+      ...original,
+      ...defaultsContext,
+      config: { ...original.config!, currencies: [], customColumns: ["Theme"], hiddenColumns: [] },
+      defaults: snapshot,
+      loadDefaults: vi.fn().mockResolvedValue(snapshot),
+      saveDefault: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.mocked(useConfig).mockReturnValue(context);
+    vi.mocked(googleSheetsService.appendExpenseRow).mockResolvedValue({
+      record: { Date: getTodayLocalDate(), USD: "10", Category: "Food", spentBy: "Test", spentFor: "Family", Comment: "", currencyAmounts: {}, customFields: { Theme: "Vacation" }, rowNumber: 2 },
+      insertMode: false,
+    });
+  });
+
+  afterEach(() => vi.mocked(useConfig).mockReturnValue(original));
+
+  it("prefills Spent For and custom fields on fresh Add", async () => {
+    await renderAddPage();
+    expect((screen.getByLabelText("Spent For") as HTMLInputElement).value).toBe("Family");
+    expect((screen.getByLabelText("Theme") as HTMLInputElement).value).toBe("Vacation");
+    expect(context.loadDefaults).toHaveBeenCalled();
+  });
+
+  it("includes hidden defaults when saving an expense", async () => {
+    context.config = { ...context.config!, hiddenColumns: ["Spent For", "Theme"] };
+    await renderAddPage();
+    expect(screen.queryByLabelText("Theme")).toBeNull();
+    fillMinimalForm();
+    fireEvent.click(screen.getByRole("button", { name: /Save & Continue/i }));
+    await waitFor(() => expect(googleSheetsService.appendExpenseRow).toHaveBeenCalled());
+    const values = vi.mocked(googleSheetsService.appendExpenseRow).mock.lastCall![0];
+    expect(values).toContain("Family");
+    expect(values).toContain("Vacation");
+  });
+
+  it("offers every distinct custom value when a default is populated", async () => {
+    const dataset = useDataset();
+    vi.mocked(useDataset).mockReturnValue({ ...dataset, distinctValues: { ...dataset.distinctValues, customFields: { Theme: ["Family", "Vacation"] } } });
+    try {
+      await renderAddPage();
+      const field = screen.getByLabelText("Theme") as HTMLInputElement;
+      const wrapper = field.closest(".autosuggest-wrapper") as HTMLElement;
+      fireEvent.click(within(wrapper).getByRole("button", { name: "Show suggestions" }));
+      expect(within(wrapper).getAllByRole("option").map((option) => option.textContent)).toEqual(["Family", "Vacation"]);
+      expect(field.value).toBe("Vacation");
+      fireEvent.mouseDown(within(wrapper).getByRole("option", { name: "Family" }));
+      expect(field.value).toBe("Family");
+      expect(context.saveDefault).not.toHaveBeenCalled();
+    } finally {
+      vi.mocked(useDataset).mockReturnValue(dataset);
+    }
+  });
+
+  it("uses matching heading containers for Spent By and Spent For", async () => {
+    await renderAddPage();
+    for (const field of ["Spent By", "Spent For"]) {
+      const input = screen.getByLabelText(field);
+      const label = document.querySelector(`label[for="${input.id}"]`);
+      expect(label?.parentElement?.className).toBe("field-default-heading");
+    }
+  });
+
+  it("preserves blank repeated values instead of inserting defaults", async () => {
+    await renderAddPageWithRepeat({ Date: "2025-01-01", USD: "12", Category: "Food", spentBy: "Me", spentFor: "", Comment: "", currencyAmounts: {}, customFields: { Theme: "" }, rowNumber: 3 });
+    expect((screen.getByLabelText("Spent For") as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText("Theme") as HTMLInputElement).value).toBe("");
+  });
+
+  it("does not check defaults or show management controls in Edit", () => {
+    context.config = { ...context.config!, currencies: ["EUR"] };
+    renderEditPage({ Date: "2025-01-01", USD: "12", Category: "Food", spentBy: "Me", spentFor: "Original", Comment: "", currencyAmounts: {}, customFields: { Theme: "" }, rowNumber: 3 });
+    expect(context.loadDefaults).not.toHaveBeenCalled();
+    expect((screen.getByLabelText("Spent For") as HTMLInputElement).value).toBe("Original");
+    expect(screen.queryByRole("button", { name: /View default/ })).toBeNull();
+  });
+
+  it("does not overwrite the draft when the saved snapshot changes", async () => {
+    const view = await renderAddPage();
+    fireEvent.change(screen.getByLabelText("Theme"), { target: { value: "One-off" } });
+    vi.mocked(useConfig).mockReturnValue({ ...context, defaults: { version: "6", values: { Theme: "New default" } } });
+    view.rerender(<MemoryRouter initialEntries={["/add"]}><Routes><Route path="/add" element={<AddExpensePage />} /><Route path="/home" element={<div>Home</div>} /></Routes></MemoryRouter>);
+    expect((screen.getByLabelText("Theme") as HTMLInputElement).value).toBe("One-off");
+  });
+
+  it("permits manual entry after a defaults load fails", async () => {
+    context.defaults = null;
+    context.defaultsError = "Defaults could not be loaded. You can enter this expense manually.";
+    context.loadDefaults = vi.fn().mockResolvedValue(null);
+    await renderAddPage();
+    fireEvent.change(screen.getByLabelText("Theme"), { target: { value: "Manual" } });
+    expect((screen.getByLabelText("Theme") as HTMLInputElement).value).toBe("Manual");
+    expect(screen.getByText(context.defaultsError)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Reload page" })).toBeTruthy();
   });
 });

@@ -66,6 +66,13 @@ function mockConfig(config: SpreadsheetConfig | null): void {
     refreshConfig: vi.fn(),
     updateStructure: vi.fn(),
     toggleColumnVisibility: vi.fn(),
+    defaults: null,
+    defaultsError: null,
+    defaultsConflict: false,
+    isDefaultsLoading: false,
+    isDefaultsSaving: false,
+    loadDefaults: vi.fn().mockResolvedValue(null),
+    saveDefault: vi.fn(),
   });
 }
 

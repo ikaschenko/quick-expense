@@ -11,6 +11,10 @@ const mocks = vi.hoisted(() => ({
     setColumnVisibility: vi.fn(),
     renameVisibilityEntry: vi.fn(),
     hasOwnIndependentSetup: vi.fn(),
+    getSetupDefaults: vi.fn(),
+    withSetupDefaultsLock: vi.fn(),
+    writeSetupDefaults: vi.fn(),
+    defaultsConflict: () => Object.assign(new Error("Reload defaults"), { status: 409, code: "DEFAULTS_CONFLICT" }),
   },
   sharing: {
     addShare: vi.fn(),
@@ -34,6 +38,11 @@ const mocks = vi.hoisted(() => ({
     createSpreadsheet: vi.fn(),
     detectConfigSheet: vi.fn(),
     validateSpreadsheet: vi.fn(),
+    findColumnIndex: vi.fn(),
+    renameColumnInSheet: vi.fn(),
+    isCustomColumnEmpty: vi.fn(),
+    deleteColumnFromSheet: vi.fn(),
+    insertCustomColumnInSheet: vi.fn(),
   },
 }));
 
@@ -96,6 +105,128 @@ beforeEach(() => {
   mocks.session.destroy = vi.fn((cb) => cb());
   mocks.store.getUserRecord.mockImplementation(async (email) => USERS[email] ?? null);
   mocks.sharing.getShareForGuest.mockResolvedValue(null);
+  mocks.store.getSetupDefaults.mockResolvedValue({ version: "2", values: { "Spent For": "Family" } });
+  mocks.store.withSetupDefaultsLock.mockImplementation(async (_owner, _sheet, action) => action({}, { version: "2", values: { "Spent For": "Family" } }));
+  mocks.store.writeSetupDefaults.mockImplementation(async (_client, _owner, values) => ({ version: "3", values }));
+});
+
+describe("shared defaults API", () => {
+  beforeEach(() => {
+    mocks.sheets.detectConfigSheet.mockResolvedValue({ mode: "default" });
+    mocks.sheets.validateSpreadsheet.mockResolvedValue({ customColumns: ["Theme", "__proto__"] });
+    mocks.store.getUserRecord.mockImplementation(async (email) => {
+      const user = USERS[email];
+      return user ? { ...user, accessToken: "token", accessTokenExpiresAt: Date.now() + 3600000 } : null;
+    });
+  });
+
+  it("lets view guests read the owner's defaults", async () => {
+    signInAsGuest("view");
+    const result = await request("GET", "/api/config/defaults");
+    expect(result).toMatchObject({ status: 200, body: { version: "2", values: { "Spent For": "Family" } } });
+    expect(mocks.store.withSetupDefaultsLock).toHaveBeenCalledWith(OWNER.id, OWNER.spreadsheetId, expect.any(Function));
+  });
+
+  it("returns unchanged for a matching version", async () => {
+    signInAs(OWNER);
+    expect((await request("GET", "/api/config/defaults?version=2")).body).toEqual({ unchanged: true, version: "2" });
+  });
+
+  it.each(["Spent For", "Theme", "__proto__"])("lets edit guests save %s on the owner's setup", async (field) => {
+    signInAsGuest();
+    const result = await request("PATCH", "/api/config/defaults", { body: { field, value: " Vacation ", expectedVersion: "2" } });
+    expect(result.status).toBe(200);
+    expect(Object.hasOwn(result.body.values, field)).toBe(true);
+    expect(result.body.values[field]).toBe("Vacation");
+    expect(mocks.store.writeSetupDefaults.mock.calls[0][1]).toBe(OWNER.id);
+  });
+
+  it("clears a default without deleting its version", async () => {
+    signInAs(OWNER);
+    const result = await request("PATCH", "/api/config/defaults", { body: { field: "Spent For", value: null, expectedVersion: "2" } });
+    expect(result.body).toEqual({ version: "3", values: {} });
+  });
+
+  it.each([
+    { field: "Theme", value: " ", expectedVersion: "2" },
+    { field: "Theme", value: 1, expectedVersion: "2" },
+    { field: "Theme", value: "x", expectedVersion: 2 },
+    { field: "Theme", value: "x", expectedVersion: "9223372036854775808" },
+    { field: "Category", value: "x", expectedVersion: "2" },
+    { field: "Theme", value: "x", expectedVersion: "2", ownerUserId: 9 },
+  ])("rejects malformed or ineligible input %j", async (body) => {
+    signInAs(OWNER);
+    expect((await request("PATCH", "/api/config/defaults", { body })).status).toBe(400);
+    expect(mocks.store.writeSetupDefaults).not.toHaveBeenCalled();
+  });
+
+  it("rejects stale changes before writing", async () => {
+    signInAs(OWNER);
+    const result = await request("PATCH", "/api/config/defaults", { body: { field: "Theme", value: "x", expectedVersion: "1" } });
+    expect(result).toMatchObject({ status: 409, body: { code: "DEFAULTS_CONFLICT" } });
+    expect(mocks.store.writeSetupDefaults).not.toHaveBeenCalled();
+  });
+
+  it("rejects view guests and requests without CSRF", async () => {
+    signInAsGuest("view");
+    const body = { field: "Theme", value: "x", expectedVersion: "2" };
+    expect((await request("PATCH", "/api/config/defaults", { body })).status).toBe(403);
+    signInAs(OWNER);
+    expect((await request("PATCH", "/api/config/defaults", { body, csrf: false })).status).toBe(403);
+    expect(mocks.store.writeSetupDefaults).not.toHaveBeenCalled();
+  });
+
+  it("prunes obsolete columns on read and advances the version", async () => {
+    signInAs(OWNER);
+    mocks.store.withSetupDefaultsLock.mockImplementationOnce(async (_owner, _sheet, action) => action({}, { version: "2", values: { Deleted: "Old", Theme: "Vacation" } }));
+    const result = await request("GET", "/api/config/defaults?version=2");
+    expect(result.body).toEqual({ version: "3", values: { Theme: "Vacation" } });
+  });
+
+  it("preserves a renamed field's default under the setup lock", async () => {
+    signInAs(OWNER);
+    mocks.store.withSetupDefaultsLock.mockImplementationOnce(async (_owner, _sheet, action) => action({}, { version: "2", values: { Theme: "Vacation" } }));
+    mocks.sheets.validateSpreadsheet.mockResolvedValueOnce({ sheetCurrencies: [], customColumns: ["Theme"] }).mockResolvedValueOnce({ sheetCurrencies: [], customColumns: ["Trip"] });
+    mocks.sheets.findColumnIndex.mockResolvedValue(6);
+    const result = await request("PATCH", "/api/sheet/column/rename", { body: { currentName: "Theme", newName: "Trip" } });
+    expect(result.status).toBe(200);
+    expect(mocks.store.writeSetupDefaults).toHaveBeenCalledWith({}, OWNER.id, { Trip: "Vacation" });
+  });
+
+  it("discards a removed column's default", async () => {
+    signInAs(OWNER);
+    mocks.store.withSetupDefaultsLock.mockImplementationOnce(async (_owner, _sheet, action) => action({}, { version: "2", values: { Theme: "Vacation", "Spent For": "Family" } }));
+    mocks.sheets.validateSpreadsheet.mockResolvedValue({ sheetCurrencies: [], customColumns: [] });
+    mocks.sheets.findColumnIndex.mockResolvedValue(6);
+    mocks.sheets.isCustomColumnEmpty.mockResolvedValue(true);
+    const result = await request("DELETE", "/api/sheet/column", { body: { name: "Theme" } });
+    expect(result.status).toBe(200);
+    expect(mocks.store.writeSetupDefaults).toHaveBeenCalledWith({}, OWNER.id, { "Spent For": "Family" });
+  });
+
+  it("reports partial failure rather than claiming a rename succeeded", async () => {
+    signInAs(OWNER);
+    mocks.sheets.validateSpreadsheet.mockResolvedValue({ sheetCurrencies: [], customColumns: ["Theme"] });
+    mocks.sheets.findColumnIndex.mockResolvedValue(6);
+    mocks.store.writeSetupDefaults.mockRejectedValueOnce(new Error("database failed"));
+    expect((await request("PATCH", "/api/sheet/column/rename", { body: { currentName: "Theme", newName: "Trip" } })).status).not.toBe(200);
+    expect(mocks.sheets.renameColumnInSheet).toHaveBeenCalled();
+  });
+
+  it("does not let edit guests rename or remove sheet columns", async () => {
+    signInAsGuest();
+    expect((await request("PATCH", "/api/sheet/column/rename", { body: { currentName: "Theme", newName: "Trip" } })).status).toBe(403);
+    expect((await request("DELETE", "/api/sheet/column", { body: { name: "Theme" } })).status).toBe(403);
+    expect(mocks.store.writeSetupDefaults).not.toHaveBeenCalled();
+  });
+
+  it("never lets a recreated column inherit a leftover default", async () => {
+    signInAs(OWNER);
+    mocks.store.withSetupDefaultsLock.mockImplementationOnce(async (_owner, _sheet, action) => action({}, { version: "2", values: { Theme: "Old" } }));
+    mocks.sheets.validateSpreadsheet.mockResolvedValueOnce({ sheetCurrencies: [], customColumns: [] }).mockResolvedValueOnce({ sheetCurrencies: [], customColumns: ["Theme"] });
+    expect((await request("POST", "/api/sheet/column", { body: { name: "Theme" } })).status).toBe(201);
+    expect(mocks.store.writeSetupDefaults).toHaveBeenCalledWith({}, OWNER.id, {});
+  });
 });
 
 function signInAs(user) {

@@ -1,10 +1,12 @@
 // @vitest-environment node
 const mockQuery = vi.fn();
+const mockRelease = vi.fn();
 
 vi.mock("pg", () => ({
   default: {
     Pool: class MockPool {
       query = (...args) => mockQuery(...args);
+      connect = async () => ({ query: (...args) => mockQuery(...args), release: mockRelease });
     },
   },
 }));
@@ -16,6 +18,9 @@ let getLatestFxRateBackup;
 let getHiddenColumns;
 let setColumnVisibility;
 let renameVisibilityEntry;
+let getSetupDefaults;
+let withSetupDefaultsLock;
+let writeSetupDefaults;
 
 beforeAll(async () => {
   ({
@@ -26,11 +31,52 @@ beforeAll(async () => {
     getHiddenColumns,
     setColumnVisibility,
     renameVisibilityEntry,
+    getSetupDefaults,
+    withSetupDefaultsLock,
+    writeSetupDefaults,
   } = await import("../../app-server/store.js"));
 });
 
 beforeEach(() => {
   mockQuery.mockReset();
+  mockRelease.mockReset();
+});
+
+describe("setup defaults", () => {
+  it("reads an empty snapshot without losing bigint precision", async () => {
+    mockQuery.mockResolvedValue({ rows: [{ spreadsheet_id: "sheet", values: {}, version: "9007199254740993" }] });
+    expect(await getSetupDefaults(7, "sheet")).toEqual({ values: {}, version: "9007199254740993" });
+    expect(mockQuery.mock.calls[0][1]).toEqual([7]);
+  });
+
+  it.each([undefined, { spreadsheet_id: "other", values: {}, version: "1" }])("rejects missing or relinked snapshots", async (row) => {
+    mockQuery.mockResolvedValue({ rows: row ? [row] : [] });
+    await expect(getSetupDefaults(7, "sheet")).rejects.toMatchObject({ status: 409, code: "DEFAULTS_CONFLICT" });
+  });
+
+  it("locks before mutation and commits the incremented snapshot", async () => {
+    mockQuery.mockResolvedValue({ rows: [] });
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    mockQuery.mockResolvedValueOnce({ rows: [{ spreadsheet_id: "sheet", values: {}, version: "0" }] });
+    mockQuery.mockResolvedValueOnce({ rows: [{ spreadsheet_id: "sheet", values: { "Spent For": "Family" }, version: "1" }] });
+    const result = await withSetupDefaultsLock(7, "sheet", (client) => writeSetupDefaults(client, 7, { "Spent For": "Family" }));
+    expect(result).toEqual({ values: { "Spent For": "Family" }, version: "1" });
+    expect(mockQuery.mock.calls[1][0]).toContain("FOR UPDATE");
+    expect(mockQuery.mock.calls[2][1]).toEqual([7, '{"Spent For":"Family"}']);
+    expect(mockQuery.mock.calls[3][0]).toBe("COMMIT");
+    expect(mockRelease).toHaveBeenCalledOnce();
+  });
+
+  it("rolls back and releases the connection when a stale writer is rejected", async () => {
+    mockQuery.mockResolvedValue({ rows: [] });
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    mockQuery.mockResolvedValueOnce({ rows: [{ spreadsheet_id: "sheet", values: {}, version: "2" }] });
+    await expect(withSetupDefaultsLock(7, "sheet", async () => {
+      throw new Error("stale");
+    })).rejects.toThrow("stale");
+    expect(mockQuery.mock.calls[2][0]).toBe("ROLLBACK");
+    expect(mockRelease).toHaveBeenCalledOnce();
+  });
 });
 
 describe("getUserRecord", () => {

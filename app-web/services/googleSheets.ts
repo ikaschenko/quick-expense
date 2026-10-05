@@ -8,6 +8,8 @@ import {
   FxRateBackupRecord,
   SetupReport,
   SpreadsheetConfig,
+  SetupDefaults,
+  SetupDefaultsResponse,
 } from "../types/expense";
 import { requestJson, requestNoContent } from "./http";
 
@@ -17,6 +19,17 @@ interface SheetStructure {
 }
 
 export const googleSheetsService = {
+  async getDefaults(version?: string): Promise<SetupDefaultsResponse> {
+    return requestJson(`/api/config/defaults${version ? `?version=${encodeURIComponent(version)}` : ""}`);
+  },
+
+  async saveDefault(field: string, value: string | null, expectedVersion: string): Promise<SetupDefaults> {
+    return requestJson("/api/config/defaults", {
+      method: "PATCH",
+      body: JSON.stringify({ field, value, expectedVersion }),
+    });
+  },
+
   async getPickerConfig(): Promise<{ accessToken: string; apiKey: string; appId: string }> {
     return requestJson("/api/auth/picker-config");
   },

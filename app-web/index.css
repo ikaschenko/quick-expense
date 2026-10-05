@@ -2752,6 +2752,83 @@ button { cursor: pointer; }
   position: relative;
 }
 
+.field-default {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+.field-default-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 44px;
+}
+.field-default-heading .input-label { margin-bottom: 0; }
+.field-default-summary {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--font-size-xs);
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+.field-default-summary strong { color: var(--color-text-primary); font-weight: 500; }
+.field-default-pin-wrap { position: relative; flex: 0 0 44px; }
+.field-default-pin { width: 44px; height: 44px; color: var(--color-text-secondary); }
+.field-default-pin--set { color: var(--color-accent); background: var(--color-accent-light); }
+.field-default-pin:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.field-default-tooltip {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 70;
+  width: 220px;
+  max-width: calc(100vw - 48px);
+  padding: var(--space-2);
+  background: var(--color-text-primary);
+  color: var(--color-surface);
+  font-size: var(--font-size-xs);
+  font-weight: 400;
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+}
+.field-default-pin-wrap:hover .field-default-tooltip,
+.field-default-pin-wrap:focus-within .field-default-tooltip { display: block; }
+.field-default-menu {
+  position: absolute;
+  left: 0;
+  top: 100%;
+  z-index: 60;
+  width: 100%;
+  max-width: 22rem;
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+}
+.field-default-menu .field-default-summary { padding-right: var(--space-6); margin-bottom: var(--space-2); }
+.field-default-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
+.field-default-actions .btn { white-space: normal; min-height: 44px; }
+.field-default-close { position: absolute; top: var(--space-1); right: var(--space-1); }
+.field-default-notice { margin-bottom: var(--space-3); }
+.custom-columns-name:has(.setup-default) { min-width: 0; }
+.setup-default { position: relative; width: 100%; min-width: 0; }
+.setup-default-value {
+  display: block;
+  max-width: 100%;
+  min-height: 44px;
+  padding: var(--space-1) 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.setup-default-value:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.setup-default-tooltip { display: block; left: 0; right: auto; }
+
 .autosuggest-dropdown {
   position: absolute;
   top: 100%;

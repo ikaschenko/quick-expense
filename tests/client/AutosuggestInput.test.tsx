@@ -32,6 +32,59 @@ function Controlled({ minChars = 3, clearable = false, showChevron = false, requ
 }
 
 describe("AutosuggestInput", () => {
+  it.each([
+    { label: undefined, withDefault: false },
+    { label: "Spent By", withDefault: false },
+    { label: "Spent For", withDefault: true },
+  ])("anchors controls to the textbox without including the label ($label)", ({ label, withDefault }) => {
+    render(<AutosuggestInput label={label} value="Ivan" onChange={vi.fn()} allSuggestions={[]} clearable showChevron
+      defaultSettings={withDefault ? { field: "Spent For", canEdit: true, disabled: false, save: vi.fn() } : undefined} />);
+    const textboxWrapper = screen.getByRole("combobox").parentElement;
+    expect(textboxWrapper?.classList.contains("autosuggest-wrapper")).toBe(true);
+    expect(textboxWrapper?.contains(screen.getByRole("button", { name: "Clear" }))).toBe(true);
+    expect(textboxWrapper?.contains(screen.getByRole("button", { name: "Show suggestions" }))).toBe(true);
+    expect(textboxWrapper?.querySelector("label")).toBeNull();
+  });
+
+  it("saves the current nonblank value without changing the field", async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const onChange = vi.fn();
+    render(<AutosuggestInput label="Theme" value="Vacation" onChange={onChange} allSuggestions={[]} defaultSettings={{ field: "Theme", canEdit: true, disabled: false, save }} />);
+    await userEvent.setup().click(screen.getByRole("button", { name: /Set this value as Default/ }));
+    expect(save).toHaveBeenCalledWith("Theme", "Vacation");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("shows a saved value to view guests without mutation actions", async () => {
+    const save = vi.fn();
+    render(<AutosuggestInput value="Vacation" onChange={vi.fn()} allSuggestions={[]} defaultSettings={{ field: "Theme", savedValue: "Vacation", canEdit: false, disabled: false, save }} />);
+    await userEvent.setup().click(screen.getByRole("button", { name: "View default value for Theme" }));
+    expect(screen.getByRole("dialog").textContent).toContain("Vacation");
+    expect(screen.queryByRole("button", { name: "Replace default" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Clear default" })).toBeNull();
+  });
+
+  it("supports replacing with the current field value and clearing from Add", async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    render(<AutosuggestInput value="Family" onChange={onChange} allSuggestions={[]} defaultSettings={{ field: "Theme", savedValue: "Vacation", canEdit: true, disabled: false, save }} />);
+    const pin = screen.getByRole("button", { name: "View default value for Theme" });
+    expect(pin.title).toBe("View default value for Theme");
+    await user.click(pin);
+    await user.click(screen.getByRole("button", { name: "Replace default" }));
+    expect(save).toHaveBeenCalledWith("Theme", "Family");
+    await user.click(pin);
+    await user.click(screen.getByRole("button", { name: "Clear default" }));
+    expect(save).toHaveBeenLastCalledWith("Theme", null);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("disables saving whitespace as a default", () => {
+    render(<AutosuggestInput value=" " onChange={vi.fn()} allSuggestions={[]} defaultSettings={{ field: "Theme", canEdit: true, disabled: false, save: vi.fn() }} />);
+    expect((screen.getByRole("button", { name: /Set this value as Default/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("renders an input with the given placeholder", () => {
     render(<Controlled />);
     expect(screen.getByPlaceholderText("Add a note…")).toBeTruthy();
@@ -163,6 +216,32 @@ describe("AutosuggestInput", () => {
     render(<Controlled required />);
     const input = screen.getByRole("combobox") as HTMLInputElement;
     expect(input.required).toBe(true);
+  });
+
+  it("shows all suggestions for a populated field and resumes filtering on typing", async () => {
+    const user = userEvent.setup();
+    render(<Controlled minChars={1} showChevron />);
+    const input = screen.getByRole("combobox") as HTMLInputElement;
+    await user.type(input, "co");
+    expect(screen.getAllByRole("option")).toHaveLength(2);
+    await user.click(screen.getByRole("button", { name: "Show suggestions" }));
+    expect(screen.getAllByRole("option")).toHaveLength(SUGGESTIONS.length);
+    expect(input.value).toBe("co");
+    await user.type(input, "f");
+    expect(screen.getAllByRole("option")).toHaveLength(2);
+    await user.click(screen.getByRole("button", { name: "Show suggestions" }));
+    await user.keyboard("{ArrowDown}{ArrowDown}{Enter}");
+    expect(input.value).toBe("Taxi to airport");
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("does not open an empty suggestion list or change the populated value", async () => {
+    const onChange = vi.fn();
+    render(<AutosuggestInput value="Vacation" onChange={onChange} allSuggestions={[]} showChevron />);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Show suggestions" }));
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(onChange).not.toHaveBeenCalled();
+    expect((screen.getByRole("combobox") as HTMLInputElement).value).toBe("Vacation");
   });
 
   it("invalid prop sets data-invalid on the underlying input", () => {

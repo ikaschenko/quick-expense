@@ -8,6 +8,11 @@ const { mockRefreshSession, mockNavigate, mockResetGuestConfig } = vi.hoisted(()
   mockNavigate: vi.fn(),
   mockResetGuestConfig: vi.fn(),
 }));
+const defaultsFixture = vi.hoisted(() => ({
+  accessLevel: "edit" as "edit" | "view",
+  save: vi.fn().mockResolvedValue(undefined),
+  load: vi.fn().mockResolvedValue(null),
+}));
 
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router-dom")>();
@@ -33,9 +38,10 @@ vi.mock("../../app-web/contexts/ConfigContext", () => ({
       spreadsheetId: "sheet123",
       spreadsheetUrl: "https://docs.google.com/spreadsheets/d/sheet123",
       currencies: [],
-      customColumns: [],
-      hiddenColumns: [],
+      customColumns: ["Theme"],
+      hiddenColumns: ["Theme"],
       isGuest: true,
+      accessLevel: defaultsFixture.accessLevel,
       ownerEmail: "owner@example.com",
       configMode: "default",
     },
@@ -46,6 +52,13 @@ vi.mock("../../app-web/contexts/ConfigContext", () => ({
     clearConfig: vi.fn(),
     updateStructure: vi.fn(),
     toggleColumnVisibility: vi.fn(),
+    defaults: { version: "2", values: { Theme: "Vacation" } },
+    defaultsError: null,
+    defaultsConflict: false,
+    isDefaultsLoading: false,
+    isDefaultsSaving: false,
+    loadDefaults: defaultsFixture.load,
+    saveDefault: defaultsFixture.save,
     fileName: "My Sheet",
     isFileNameLoading: false,
   }),
@@ -94,9 +107,38 @@ beforeEach(() => {
   mockResetGuestConfig.mockReset();
   mockRefreshSession.mockReset();
   mockNavigate.mockReset();
+  defaultsFixture.accessLevel = "edit";
+  defaultsFixture.save.mockClear();
 });
 
 describe("SetupPage — guest unlink", () => {
+  it("shows Edit guests a management hint for hidden defaults without mutation actions", async () => {
+    renderSetupPage();
+    expect(screen.getByText("Vacation")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Default value for Theme: Vacation" }));
+    expect(screen.getByRole("tooltip").textContent).toBe("To manage the default values please use Add Expense screen");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Replace default" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Clear default" })).toBeNull();
+    expect(defaultsFixture.save).not.toHaveBeenCalled();
+    await waitFor(() => expect(defaultsFixture.load).toHaveBeenCalled());
+    expect(screen.queryByRole("button", { name: "Rename Theme" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Remove Theme" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Show Theme/ })).toBeNull();
+  });
+
+  it("lets View guests inspect defaults with a tooltip instead of Replace or Clear", async () => {
+    defaultsFixture.accessLevel = "view";
+    renderSetupPage();
+    fireEvent.click(screen.getByRole("button", { name: "Default value for Theme: Vacation" }));
+    expect(screen.getByRole("tooltip").textContent).toBe("To manage the default values please use Add Expense screen");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Replace default" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Clear default" })).toBeNull();
+    expect(defaultsFixture.save).not.toHaveBeenCalled();
+    await waitFor(() => expect(defaultsFixture.load).toHaveBeenCalled());
+  });
+
   it("renders the Unlink button in the guest banner", () => {
     renderSetupPage();
     expect(screen.getByText(/This setup has been shared with you by/)).toBeTruthy();

@@ -22,6 +22,11 @@ afterEach(() => {
 });
 
 describe("requestJson", () => {
+  it("preserves a defaults conflict code and status", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ message: "Reload", code: "DEFAULTS_CONFLICT" }, false, 409)));
+    await expect(requestJson("/api/config/defaults")).rejects.toMatchObject({ status: 409, code: "DEFAULTS_CONFLICT", message: "Reload" });
+  });
+
   it("resolves with the parsed JSON body on success", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ hello: "world" })));
 
@@ -40,7 +45,7 @@ describe("requestJson", () => {
   it("re-throws AppError produced from a non-ok response without altering it", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ message: "Nope" }, false, 403)));
 
-    await expect(requestJson("/api/thing")).rejects.toMatchObject(new AppError("authorization", "Nope"));
+    await expect(requestJson("/api/thing")).rejects.toMatchObject({ kind: "authorization", message: "Nope", status: 403 });
   });
 });
 

@@ -67,9 +67,11 @@ export async function requestJson<T>(input: string, init?: RequestInit): Promise
       let headerDetails: HeaderDetails | undefined;
       let templateCopyFailed: boolean | undefined;
       let templateUrl: string | undefined;
+      let code: string | undefined;
 
       try {
-        const payload = (await response.json()) as { message?: string; headerDetails?: HeaderDetails; templateCopyFailed?: boolean; templateUrl?: string };
+        const payload = (await response.json()) as { message?: string; code?: string; headerDetails?: HeaderDetails; templateCopyFailed?: boolean; templateUrl?: string };
+        code = payload.code;
         if (payload.message) {
           message = payload.message;
         }
@@ -99,6 +101,8 @@ export async function requestJson<T>(input: string, init?: RequestInit): Promise
         err.templateCopyFailed = templateCopyFailed;
         err.templateUrl = templateUrl;
       }
+      err.status = response.status;
+      err.code = code;
       throw err;
     }
 

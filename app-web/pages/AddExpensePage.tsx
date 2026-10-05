@@ -155,7 +155,7 @@ function buildFxBackupPayload(
 export function AddExpensePage(): JSX.Element {
   const auth = useAuth();
   const isViewOnly = auth.session?.guestAccessLevel === 'view';
-  const { config, isConfigLoading } = useConfig();
+  const { config, isConfigLoading, defaults, defaultsError, defaultsConflict, isDefaultsLoading, isDefaultsSaving, loadDefaults, saveDefault } = useConfig();
   const dataset = useDataset();
   const navigate = useNavigate();
   const { rowNumber: rowNumberParam } = useParams<{ rowNumber?: string }>();
@@ -217,6 +217,10 @@ export function AddExpensePage(): JSX.Element {
   const [duplicateMatches, setDuplicateMatches] = useState<ExpenseRecord[]>([]);
   const [isInsertingHistorical, setIsInsertingHistorical] = useState(false);
   const [isLoadingFxBackup, setIsLoadingFxBackup] = useState(false);
+    const selectedExpenseDate = useMemo(() => {
+      const parsedDate = new Date(`${draft.Date}T00:00:00`);
+      return Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
+    }, [draft.Date]);
   const [manualFxRates, setManualFxRates] = useState<ManualFxRates>(
     createEmptyFxRates(activeCurrencies),
   );
@@ -237,10 +241,35 @@ export function AddExpensePage(): JSX.Element {
   const pendingSaveMode = useRef<'continue' | 'close'>('continue');
   const hasFetchedLiveRates = useRef<string | null>(null);
   const hasInitializedRecordPrefill = useRef(false);
+  const initializedDefaultsKey = useRef<string | null>(null);
+  const [checkedDefaultsKey, setCheckedDefaultsKey] = useState<string | null>(null);
+  const defaultsKey = config ? `${location.key}|${config.email}|${config.spreadsheetId}` : null;
   const isSavingRef = useRef(false);
   const pendingNormalizedDraft = useRef<ExpenseDraft | null>(null);
 
   useEffect(() => { amountInputRef.current?.focus(); }, []);
+
+  useEffect(() => {
+    if (isEditMode || isViewOnly || isConfigLoading || !defaultsKey || initializedDefaultsKey.current === defaultsKey) return;
+    let active = true;
+    void loadDefaults().then((snapshot) => {
+      if (!active) return;
+      if (!repeatRecord) {
+        setDraft((current) => ({
+          ...current,
+          spentFor: snapshot?.values["Spent For"] ?? current.spentFor,
+          customFields: Object.fromEntries(customColumns.map((field) => [field, snapshot && Object.hasOwn(snapshot.values, field) ? snapshot.values[field] : ""])),
+        }));
+      }
+      initializedDefaultsKey.current = defaultsKey;
+      setCheckedDefaultsKey(defaultsKey);
+    });
+    return () => { active = false; };
+  }, [defaultsKey, isEditMode, isViewOnly, isConfigLoading, loadDefaults, repeatRecord, customColumns]);
+
+  useEffect(() => {
+    if (checkedDefaultsKey === defaultsKey) amountInputRef.current?.focus();
+  }, [checkedDefaultsKey, defaultsKey]);
 
   // Load currency dictionary for tooltips
   useEffect(() => {
@@ -447,6 +476,10 @@ export function AddExpensePage(): JSX.Element {
 
   if (isEditMode && !editRecord) {
     return <Navigate to="/history" replace />;
+  }
+
+  if (!isEditMode && (isConfigLoading || checkedDefaultsKey !== defaultsKey)) {
+    return <Layout><LoadingBlock label="Loading defaults..." /></Layout>;
   }
 
   const updateDraft = <K extends keyof Omit<ExpenseDraft, "currencyAmounts" | "customFields">>(
@@ -708,11 +741,6 @@ export function AddExpensePage(): JSX.Element {
     await executeSave(normalizedDraft);
   };
 
-  const selectedExpenseDate = useMemo(() => {
-    const parsedDate = new Date(`${draft.Date}T00:00:00`);
-    return Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
-  }, [draft.Date]);
-
   return (
     <Layout title={isEditMode ? "Edit Expense" : "Add Expense"} onBack={isEditMode ? handleEditBack : (!prefillDate ? undefined : handleAddBack)}>
       {isInsertingHistorical ? (
@@ -722,6 +750,12 @@ export function AddExpensePage(): JSX.Element {
       ) : null}
       {success ? <StatusBanner variant="success" message={success} /> : null}
       {error ? <StatusBanner variant="error" message={error} toast /> : null}
+      {!isEditMode && defaultsError ? (
+        <div className="field-default-notice">
+          <StatusBanner variant="error" message={defaultsConflict ? "Defaults changed. Reload the page before changing defaults again." : defaultsError} />
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => window.location.reload()}><RotateCcw size={16} aria-hidden />Reload page</button>
+        </div>
+      ) : null}
 
       <form onSubmit={(event) => void onSubmit(event)}>
         {/* Date + Amount — Date sits compact beside the hero Amount input */}
@@ -913,9 +947,9 @@ export function AddExpensePage(): JSX.Element {
         <div className="two-col-row">
           {!isSpentByHidden ? (
           <div className="input-group">
-            <label className="input-label" htmlFor="spent-by-field">Spent By</label>
             <AutosuggestInput
               id="spent-by-field"
+              label="Spent By"
               value={draft.spentBy}
               onChange={(v) => updateDraft("spentBy", v)}
               allSuggestions={suggestionLists.spentBy ?? []}
@@ -931,9 +965,10 @@ export function AddExpensePage(): JSX.Element {
 
           {!isSpentForHidden ? (
           <div className="input-group">
-            <label className="input-label" htmlFor="spent-for-field">Spent For</label>
             <AutosuggestInput
               id="spent-for-field"
+              label="Spent For"
+              defaultSettings={isEditMode ? undefined : { field: "Spent For", savedValue: defaults?.values["Spent For"], canEdit: !isViewOnly, disabled: !defaults || isDefaultsLoading || isDefaultsSaving || defaultsConflict, save: saveDefault }}
               value={draft.spentFor}
               onChange={(v) => updateDraft("spentFor", v)}
               allSuggestions={suggestionLists.spentFor ?? []}
@@ -966,19 +1001,16 @@ export function AddExpensePage(): JSX.Element {
         {/* Custom columns */}
         {visibleCustomColumns.map((col) => (
           <div key={col} className="input-group">
-            <label className="input-label" htmlFor={`custom-field-${col}`}>{formatColumnLabel(col)}</label>
-            <input
+            <AutosuggestInput
               id={`custom-field-${col}`}
-              className="input"
-              list={`custom-field-options-${col}`}
+              label={formatColumnLabel(col)}
               value={draft.customFields[col] ?? ""}
-              onChange={(event) => updateCustomField(col, event.target.value)}
+              onChange={(value) => updateCustomField(col, value)}
+              allSuggestions={suggestionLists.customFields?.[col] ?? []}
+              minChars={1}
+              showChevron
+              defaultSettings={isEditMode ? undefined : { field: col, savedValue: defaults && Object.hasOwn(defaults.values, col) ? defaults.values[col] : undefined, canEdit: !isViewOnly, disabled: !defaults || isDefaultsLoading || isDefaultsSaving || defaultsConflict, save: saveDefault }}
             />
-            <datalist id={`custom-field-options-${col}`}>
-              {(suggestionLists.customFields?.[col] ?? []).map((value) => (
-                <option key={value} value={value} />
-              ))}
-            </datalist>
           </div>
         ))}
 

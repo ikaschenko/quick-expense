@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { RotateCcw } from "lucide-react";
 import { StatusBanner } from "./StatusBanner";
 import { SetupReportList } from "./SetupReportList";
 import { GuestUnlinkBanner } from "./GuestUnlinkBanner";
@@ -19,11 +21,13 @@ interface SetupConfiguredPanelProps {
 }
 
 export function SetupConfiguredPanel({ success, setupReport, onChangeSheet, onFixConfig }: SetupConfiguredPanelProps): JSX.Element {
-  const { config } = useConfig();
+  const { config, loadDefaults, defaultsError, defaultsConflict } = useConfig();
   const isGuest = config?.isGuest ?? false;
   const structure = useSheetStructure();
   const mapping = useColumnMapping(true, config?.spreadsheetId);
   const sharing = useSetupSharing(!isGuest);
+
+  useEffect(() => { void loadDefaults(); }, [loadDefaults]);
 
   return (
     <>
@@ -31,6 +35,12 @@ export function SetupConfiguredPanel({ success, setupReport, onChangeSheet, onFi
 
       {success ? <StatusBanner variant="success" message={success} /> : null}
       {setupReport ? <SetupReportList report={setupReport} /> : null}
+      {defaultsError ? (
+        <div className="field-default-notice">
+          <StatusBanner variant="error" message={defaultsConflict ? "Defaults changed. Reload the page before changing defaults again." : "Defaults could not be loaded or updated. Reload the page to try again."} />
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => window.location.reload()}><RotateCcw size={16} aria-hidden />Reload page</button>
+        </div>
+      ) : null}
 
       {config ? (
         <ConnectedSheetCard config={config} onChangeSheet={onChangeSheet} onFixConfig={onFixConfig} />

@@ -77,6 +77,21 @@ export interface ConfigResponse {
   config: SpreadsheetConfig | null;
 }
 
+export interface SetupDefaults {
+  version: string;
+  values: Record<string, string>;
+}
+
+export type SetupDefaultsResponse = SetupDefaults | { unchanged: true; version: string };
+
+export interface FieldDefaultSettings {
+  field: string;
+  savedValue?: string;
+  canEdit: boolean;
+  disabled: boolean;
+  save: (field: string, value: string | null) => Promise<void>;
+}
+
 export interface HeaderDetails {
   expected: string[];
   actual: string[];
@@ -144,6 +159,8 @@ export class AppError extends Error {
   readonly headerDetails?: HeaderDetails;
   templateCopyFailed?: boolean;
   templateUrl?: string;
+  status?: number;
+  code?: string;
 
   constructor(kind: AppErrorKind, message: string, headerDetails?: HeaderDetails) {
     super(message);

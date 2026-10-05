@@ -31,7 +31,7 @@ export function GuestUnlinkBanner({ ownerEmail }: GuestUnlinkBannerProps): JSX.E
   return (
     <>
       <div className="sharing-guest-banner" role="status">
-        <span>This setup has been shared with you by <strong>{ownerEmail}</strong>. You cannot modify it.</span>
+        <span>This setup has been shared with you by <strong>{ownerEmail}</strong>. Its spreadsheet structure is managed by the owner.</span>
         <button className="btn btn-danger btn-sm" onClick={() => setIsOpen(true)}>
           <Link2Off size={14} aria-hidden /> Unlink
         </button>

@@ -75,6 +75,9 @@ import {
   setColumnVisibility,
   renameVisibilityEntry,
   hasOwnIndependentSetup,
+  defaultsConflict,
+  withSetupDefaultsLock,
+  writeSetupDefaults,
 } from "./store.js";
 import {
   addShare,
@@ -473,6 +476,64 @@ app.get("/api/config", requireAuthenticatedUser, async (req, res) => {
   } catch (error) {
     logRouteError(req, "config_get_failed", error);
     res.status(500).json({ message: (error).message });
+  }
+});
+
+app.get("/api/config/defaults", requireAuthenticatedUser, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    if (!req.configRecord.spreadsheetId) {
+      res.status(400).json({ message: "Spreadsheet is not configured." });
+      return;
+    }
+    const accessToken = await getAuthorizedAccessToken(req.configRecord);
+    const snapshot = await withSetupDefaultsLock(req.configRecord.id, req.configRecord.spreadsheetId, async (client, current) => {
+      const { mapping = null } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
+      const report = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
+      const entries = Object.entries(current.values).filter(([field]) => field === "Spent For" || report.customColumns.includes(field));
+      return entries.length === Object.keys(current.values).length
+        ? current
+        : writeSetupDefaults(client, req.configRecord.id, Object.fromEntries(entries));
+    });
+    res.json(req.query.version === snapshot.version ? { unchanged: true, version: snapshot.version } : snapshot);
+  } catch (error) {
+    logRouteError(req, "defaults_get_failed", error);
+    res.status(error.status ?? 500).json({ message: error.status ? error.message : "Unable to load defaults.", code: error.code });
+  }
+});
+
+app.patch("/api/config/defaults", requireAuthenticatedUser, requireEditAccess, async (req, res) => {
+  const { field, value, expectedVersion } = req.body ?? {};
+  if (typeof field !== "string" || !field.trim() || field.length > 30 ||
+      (value !== null && (typeof value !== "string" || !value.trim() || value.length > 50_000)) ||
+      typeof expectedVersion !== "string" || !/^(0|[1-9]\d{0,18})$/.test(expectedVersion) ||
+      BigInt(expectedVersion) > 9223372036854775807n ||
+      Object.keys(req.body).some((key) => !["field", "value", "expectedVersion"].includes(key))) {
+    res.status(400).json({ message: "Provide an eligible field, a nonblank value (up to 50000 characters) or null, and a valid version." });
+    return;
+  }
+  if (!req.configRecord.spreadsheetId) {
+    res.status(400).json({ message: "Spreadsheet is not configured." });
+    return;
+  }
+  try {
+    const accessToken = await getAuthorizedAccessToken(req.configRecord);
+    const result = await withSetupDefaultsLock(req.configRecord.id, req.configRecord.spreadsheetId, async (client, snapshot) => {
+      if (expectedVersion !== snapshot.version) throw defaultsConflict();
+      const { mapping = null } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
+      const report = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
+      if (field !== "Spent For" && !report.customColumns.includes(field)) {
+        throw Object.assign(new Error("Defaults are available only for Spent For and current custom columns."), { status: 400 });
+      }
+      const values = { ...snapshot.values };
+      if (value === null) delete values[field];
+      else Object.defineProperty(values, field, { value: value.trim(), enumerable: true, configurable: true, writable: true });
+      return writeSetupDefaults(client, req.configRecord.id, values);
+    });
+    res.json(result);
+  } catch (error) {
+    logRouteError(req, "defaults_update_failed", error);
+    res.status(error.status ?? 500).json({ message: error.status ? error.message : "Unable to save defaults.", code: error.code });
   }
 });
 
@@ -983,6 +1044,7 @@ app.post("/api/sheet/column", requireAuthenticatedUser, requireOwner, async (req
 
     // Read current structure to validate against existing names
     const accessToken = await getAuthorizedAccessToken(req.configRecord);
+    const updated = await withSetupDefaultsLock(req.configRecord.id, req.configRecord.spreadsheetId, async (client, snapshot) => {
     const { mode: configMode, mapping: configMapping = null } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
     const mapping = configMode === "config-driven" ? configMapping : null;
     const report = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
@@ -1000,13 +1062,18 @@ app.post("/api/sheet/column", requireAuthenticatedUser, requireOwner, async (req
 
     await insertCustomColumnInSheet(accessToken, req.configRecord.spreadsheetId, name);
     invalidateSheetStructureCache(req.configRecord.spreadsheetId);
+    const values = { ...snapshot.values };
+    delete values[name];
+    await writeSetupDefaults(client, req.configRecord.id, values);
 
     // Re-read to return updated structure
-    const updated = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
+    return validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
+    });
+    if (!updated) return;
     res.status(201).json({ currencies: updated.sheetCurrencies, customColumns: updated.customColumns });
   } catch (error) {
     logRouteError(req, "sheet_column_add_failed", error);
-    res.status(400).json({ message: (error).message });
+    res.status(error.status ?? 400).json({ message: (error).message, code: error.code });
   }
 });
 
@@ -1028,6 +1095,7 @@ app.patch("/api/sheet/column/rename", requireAuthenticatedUser, requireOwner, as
 
     // Validate new name
     const accessToken = await getAuthorizedAccessToken(req.configRecord);
+    const updated = await withSetupDefaultsLock(req.configRecord.id, req.configRecord.spreadsheetId, async (client, snapshot) => {
     const { mode: configMode, mapping: configMapping = null } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
     const mapping = configMode === "config-driven" ? configMapping : null;
     const report = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
@@ -1057,14 +1125,22 @@ app.patch("/api/sheet/column/rename", requireAuthenticatedUser, requireOwner, as
     }
 
     await renameColumnInSheet(accessToken, req.configRecord.spreadsheetId, colIndex, newName);
-    await renameVisibilityEntry(req.configRecord.id, req.configRecord.spreadsheetId, currentName, newName);
     invalidateSheetStructureCache(req.configRecord.spreadsheetId);
+    const values = { ...snapshot.values };
+    if (Object.hasOwn(values, currentName) && currentName !== newName) {
+      Object.defineProperty(values, newName, { value: values[currentName], enumerable: true, configurable: true });
+      delete values[currentName];
+    }
+    await writeSetupDefaults(client, req.configRecord.id, values);
+    await renameVisibilityEntry(req.configRecord.id, req.configRecord.spreadsheetId, currentName, newName, client);
 
-    const updated = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
+    return validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
+    });
+    if (!updated) return;
     res.json({ currencies: updated.sheetCurrencies, customColumns: updated.customColumns });
   } catch (error) {
     logRouteError(req, "sheet_column_rename_failed", error);
-    res.status(400).json({ message: (error).message });
+    res.status(error.status ?? 400).json({ message: (error).message, code: error.code });
   }
 });
 
@@ -1158,6 +1234,7 @@ app.delete("/api/sheet/column", requireAuthenticatedUser, requireOwner, async (r
     }
 
     const accessToken = await getAuthorizedAccessToken(req.configRecord);
+    const updated = await withSetupDefaultsLock(req.configRecord.id, req.configRecord.spreadsheetId, async (client, snapshot) => {
     const { mode: configMode, mapping: configMapping = null } = await detectConfigSheet(accessToken, req.configRecord.spreadsheetId);
     const mapping = configMode === "config-driven" ? configMapping : null;
     const colIndex = await findColumnIndex(accessToken, req.configRecord.spreadsheetId, name, mapping);
@@ -1176,12 +1253,17 @@ app.delete("/api/sheet/column", requireAuthenticatedUser, requireOwner, async (r
 
     await deleteColumnFromSheet(accessToken, req.configRecord.spreadsheetId, colIndex);
     invalidateSheetStructureCache(req.configRecord.spreadsheetId);
+    const values = { ...snapshot.values };
+    delete values[name];
+    await writeSetupDefaults(client, req.configRecord.id, values);
 
-    const updated = await validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
+    return validateSpreadsheet(accessToken, req.configRecord.spreadsheetId, mapping);
+    });
+    if (!updated) return;
     res.json({ currencies: updated.sheetCurrencies, customColumns: updated.customColumns });
   } catch (error) {
     logRouteError(req, "sheet_column_delete_failed", error);
-    res.status(400).json({ message: (error).message });
+    res.status(error.status ?? 400).json({ message: (error).message, code: error.code });
   }
 });
 

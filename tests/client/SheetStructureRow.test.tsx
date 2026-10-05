@@ -1,8 +1,24 @@
 import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import userEvent from "@testing-library/user-event";
 import { SheetStructureRow } from "../../app-web/components/SheetStructureRow";
 import { SheetStructure } from "../../app-web/hooks/useSheetStructure";
-import { ColumnInfo } from "../../app-web/types/expense";
+import { ColumnInfo, SetupDefaults } from "../../app-web/types/expense";
+
+const configContext = vi.hoisted(() => ({
+  config: { isGuest: false, accessLevel: "edit" as "edit" | "view" },
+  defaults: null as SetupDefaults | null,
+  saveDefault: vi.fn(),
+}));
+
+vi.mock("../../app-web/contexts/ConfigContext", () => ({
+  useConfig: () => ({
+    ...configContext,
+    defaultsConflict: false,
+    isDefaultsLoading: false,
+    isDefaultsSaving: false,
+  }),
+}));
 
 function makeStructure(overrides: Partial<SheetStructure> = {}): SheetStructure {
   return {
@@ -53,6 +69,64 @@ function renderRow(col: ColumnInfo, structure: SheetStructure) {
 }
 
 describe("SheetStructureRow", () => {
+  beforeEach(() => {
+    configContext.config = { isGuest: false, accessLevel: "edit" };
+    configContext.defaults = null;
+    configContext.saveDefault.mockClear();
+  });
+
+  it.each(["owner", "edit guest", "view guest"])("shows a tooltip without default management actions for %s", async (role) => {
+    configContext.config = { isGuest: role !== "owner", accessLevel: role === "view guest" ? "view" : "edit" };
+    configContext.defaults = { version: "1", values: { Theme: "Vacation" } };
+    renderRow(column("Theme", "custom-column", true), makeStructure());
+    const button = screen.getByRole("button", { name: "Default value for Theme: Vacation" });
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    await userEvent.setup().click(button);
+    const tooltip = screen.getByRole("tooltip");
+    expect(tooltip.textContent).toBe("To manage the default values please use Add Expense screen");
+    expect(button.getAttribute("aria-describedby")).toBe(tooltip.id);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Replace default" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Clear default" })).toBeNull();
+    expect(configContext.saveDefault).not.toHaveBeenCalled();
+  });
+
+  it("supports keyboard activation and dismisses the tooltip on Escape, outside tap, and blur", async () => {
+    configContext.defaults = { version: "1", values: { "Spent For": "Family" } };
+    renderRow(column("Spent For", "mandatory-field", true), makeStructure());
+    const user = userEvent.setup();
+    const button = screen.getByRole("button", { name: "Default value for Spent For: Family" });
+    await user.tab();
+    expect(document.activeElement).toBe(button);
+    await user.keyboard("{Enter}");
+    expect(screen.getByRole("tooltip")).toBeTruthy();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    expect(document.activeElement).toBe(button);
+    await user.keyboard(" ");
+    expect(screen.getByRole("tooltip")).toBeTruthy();
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    await user.click(button);
+    await user.tab();
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    expect(configContext.saveDefault).not.toHaveBeenCalled();
+  });
+
+  it("does not display a default value when the field has none", () => {
+    configContext.defaults = { version: "1", values: {} };
+    renderRow(column("Theme", "custom-column", true), makeStructure());
+    expect(screen.queryByRole("button", { name: /Default value/ })).toBeNull();
+  });
+
+  it("displays a long default value without truncating its text", () => {
+    const value = "Vacation".repeat(100);
+    configContext.defaults = { version: "1", values: { Theme: value } };
+    renderRow(column("Theme", "custom-column", true), makeStructure());
+    expect(screen.getByRole("button", { name: `Default value for Theme: ${value}` }).textContent).toBe(`Default: ${value}`);
+  });
+
   it("renders the column name and its type badge", () => {
     renderRow(column("EUR", "optional-currency", true), makeStructure());
     expect(screen.getByText("EUR")).toBeTruthy();

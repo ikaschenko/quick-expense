@@ -211,6 +211,12 @@ Upon either Save button is clicked, the new record is added to the database (sha
 
 On **Back** — return to the previous screen without saving.
 
+**Field defaults and suggestions:**
+
+- Saved defaults for Spent For and custom fields are managed only on the Add Expense screen. Authorized users can pin a nonblank current value, replace a saved default with the current field value, or clear the saved default without changing the current expense draft. A saved-default pin uses the tooltip "View default value for <field_name>". Default management is not shown when editing an existing expense.
+- Spent By and Spent For have aligned field headings and inputs, including when the Spent For default pin is present. Clear and dropdown controls are vertically centered inside their textbox, independent of the field heading or default pin. Custom fields expose a dropdown arrow that shows all distinct previously entered values, even when the field is populated with a default or manually entered value. Opening the dropdown does not change that value; typing resumes case-insensitive substring filtering.
+- Setup displays saved default values without Set, Replace, or Clear actions. Clicking or tapping a displayed default value shows the tooltip "To manage the default values please use Add Expense screen". The hint is also keyboard-accessible and can be dismissed with Escape, an outside click/tap, or by moving focus away. Setup default values remain informational for owners and both Edit and View guests.
+
 ### 2.3.1 Date selection
 
 The date field defaults to today (client local timezone). The user may pick any date — past, today, or future — using a standard date picker. Future dates are allowed to support planned/upcoming expenses.
