@@ -25,6 +25,7 @@
   --color-error-light: #FEF2F2;
   --color-warning: #F59E0B;
   --color-warning-light: #FFFBEB;
+  --color-warning-text: #B45309;
 
   /* Column type tags */
   --color-tag-mandatory-bg: #EEF2FF;
@@ -1983,6 +1984,10 @@ button { cursor: pointer; }
   margin-bottom: var(--space-3);
 }
 
+.search-results-count--expanded {
+  margin-bottom: 0;
+}
+
 .search-results-badge {
   display: inline-flex;
   align-items: center;
@@ -2000,7 +2005,98 @@ button { cursor: pointer; }
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
+}
+
+.search-results-calculating {
   margin-left: auto;
+}
+
+/* ─── Track budget (History) ─── */
+.budget-tracker-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.budget-tracker-toggle:hover,
+.budget-tracker-toggle--active {
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+}
+
+.search-results-end {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  max-width: 100%;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.budget-tracker {
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-4);
+}
+
+.search-results-count--expanded + .budget-tracker {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.budget-tracker-header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.budget-tracker-verdict {
+  flex: 1;
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.budget-tracker-verdict--alert {
+  color: var(--color-error);
+}
+
+.budget-tracker-verdict--warning {
+  color: var(--color-warning-text);
+}
+
+.budget-tracker-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.budget-tracker-field {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.budget-tracker-field .react-datepicker-wrapper {
+  width: 100%;
+}
+
+.budget-chart-container {
+  height: 180px;
+  margin-top: var(--space-3);
 }
 
 .search-results-total {

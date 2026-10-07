@@ -299,6 +299,37 @@ While the background Phase-2 history load is still in progress, a non-blocking b
 
 Search is client-side. If the sheet exceeds the 10 MB payload cap, History is denied with an error (same rule as §3.5).
 
+### Track budget
+
+The Results row places the match count on the left and **Total** plus a **Budget** button together on the right. The button is hidden without an active filter, when there are no matches, or if the full history load fails. While the full history is loading, **Calculating…** replaces both Total and the button. The Budget button opens a collapsed-by-default panel directly below the row; while open, the button has an active state. It is available to owners and all guests (read-only feature).
+
+The panel shows a plain-text verdict, an ⓘ tooltip reading *"Range between your average daily spending since the start date and over the last 7 days."*, and optional clearable **Budget (USD)** and **Ends** date inputs. Budget must be > 0; Ends must be on or after the timeline start. Invalid values show an inline error and are ignored. Both values are remembered in browser storage per signed-in user across sessions on the same device, independently of filters (Clear filters does not reset them).
+
+Timeline start is the filter's From date, otherwise the earliest match. Actual spend runs through the later of today and the latest matching expense date (future-dated expenses count as actual on their own dates). Both forecasts start from that cumulative total:
+
+- **Overall pace:** matched USD spending from the timeline start through today divided by the inclusive calendar-day count.
+- **Recent pace:** matched USD spending in the last 7 calendar days divided by 7; zero-spend days count and future-dated expenses are excluded. This pace is included only when the timeline covers at least 7 calendar days, inclusive.
+
+With fewer than 3 distinct days with spending through today, no forecast is drawn and the verdict is *"Not enough data to project"*. Otherwise, forecast results show both paces when available; values that round to the same displayed amount/date collapse to one. A zero or negative pace has no run-out date. Exact cap-hit dates may be used in the verdict even when they are beyond the chart's 2-year forward horizon.
+
+The burn-up chart shows cumulative actual USD spending as a solid shaded line and the forecast as a dashed line or a faint band between the overall and recent paces. It includes a visible compact USD Y-axis with faint gridlines, an optional horizontal budget line (red after actual spending exceeds it), and Today/Ends markers. Past-point tooltips show date, daily (or weekly) amount, and cumulative total; future-point tooltips show each applicable pace's projected total. Spans over 90 days switch to weekly cumulative points (Monday–Sunday); date captions thin automatically.
+
+Verdicts:
+
+| Input/state | Verdict |
+|---|---|
+| Neither set | *"Add a budget or end date to see a projection."* |
+| Fewer than 3 spend days | *"Not enough data to project."* |
+| Ends in the past | *"Finished at $X"* (+ under/over budget when Budget is set), no projection |
+| Spend already above Budget | *"Over budget by $X since {date}"* |
+| Ends only | *"Projected $A–$B by {end}"* (one value when rounded values match) |
+| Budget only | Run-out date range; a mixed run-out/horizon result; *"…or lasts longer if spending stays paused"* when recent pace is non-positive; or *"Budget lasts beyond {date}"* when neither pace hits within 2 years |
+| Budget and Ends | On-track projected and under-budget ranges; run-out date range and days before end; or a mixed projected range warning when one pace exceeds the budget |
+
+The verdict is amber when exactly one applicable pace exceeds the budget by Ends, red when both do or actual spending is already over budget, and normal otherwise. A finished period over budget is red. Budget-only run-out verdicts remain normal. Amber text uses the accessible `--color-warning-text` design token.
+
+Amounts are USD only.
+
 Available actions: **Reload**, **Edit** (redirect to edit form), **Delete last row** (confirm dialog, last row only), **Repeat** (opens the Add Expense form pre-populated with all fields from the selected row; Date resets to today; the user may adjust any field and save as a new expense row).
 
 ## 2.7 Home Screen Dashboard

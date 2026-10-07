@@ -81,6 +81,7 @@ Acceptance Criteria:
 
 Scope Impact: DB: yes/no | API: yes/no | New pages/components: yes/no | User-scenario impact: low/medium/high | Effort-caliber: S/M/L/XL
 Out of Scope: [explicit exclusions agreed during discussion]
+
 Open Constraints for Architect: [any technical boundaries or open questions PO identified]
 ---END HANDOFF---
 ```
