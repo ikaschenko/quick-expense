@@ -109,6 +109,8 @@ quick-expense/
 │   ├── index.css              ← global styles
 │   ├── vite-env.d.ts
 │   ├── components/            ← reusable UI components
+│   │   ├── BudgetTrackerPanel.tsx ← History "Track budget" panel: verdict, Budget/Ends inputs (saved per user), burn-up chart
+│   │   ├── BudgetBurnUpChart.tsx ← ECharts cumulative actual + one/two-pace forecast band, USD axis, budget/today/end markers
 │   │   ├── ExpenseTable.tsx   <- expense card list; tap/click to expand full details inline; optional Repeat button pre-fills Add form
 │   │   ├── Layout.tsx         ← app shell: topbar + footer + page slot; Setup badge
 │   │   ├── LoadingBlock.tsx   ← spinner component
@@ -123,7 +125,7 @@ quick-expense/
 │   │   ├── ColumnMappingSection.tsx, SharingSection.tsx ← Setup sub-sections (configured path)
 │   │   └── ConnectedSheetCard.tsx, GuestUnlinkBanner.tsx, DisplayPreferencesCard.tsx ← Setup cards
 │   ├── constants/
-│   │   ├── expenses.ts        ← fixed header names, header builder, limits
+│   │   ├── expenses.ts        ← fixed header names, header builder, limits, budget pace thresholds
 │   │   └── feedback.ts        ← Google Forms feedback URL
 │   ├── contexts/              ← React context providers (global state)
 │   │   ├── AuthContext.tsx     ← authentication state + sign-in/sign-out
@@ -153,6 +155,8 @@ quick-expense/
 │   ├── types/
 │   │   └── expense.ts         ← all shared types and AppError class
 │   └── utils/                 ← pure utility functions
+│       ├── budgetTimeline.ts  ← burn-up timeline, overall/recent pace projections, daily→weekly switch; qe_budget_{email} storage helpers
+│       ├── budgetVerdict.ts   ← pure verdict copy and normal/warning/alert severity
 │       ├── currencyTotals.ts  ← raw number parsing (US/EU formats) + per-day dual-currency totals
 │       ├── dashboardStats.ts  ← TODAY / MTD / YTD aggregations, ISO normalizer, chart data
 │       ├── date.ts            ← local date formatting + sheet date-format detection
@@ -537,7 +541,7 @@ The SPA uses three nested context providers (wrapped in `App.tsx`):
 | `/add` | `AddExpensePage` | Yes | New expense form |
 | `/tail` | — | — | Legacy route — redirects to `/home` |
 | `/search` | — | — | Legacy route — redirects to `/home` |
-| `/history` | `HistoryPage` | Yes | Recent records + optional filtering (dates, comment, category, amount, people, custom columns), with full-match USD totals after complete history loads; Repeat button pre-fills `/add` via Router state |
+| `/history` | `HistoryPage` | Yes | Recent records + optional filtering (dates, comment, category, amount, people, custom columns), with full-match USD totals after complete history loads; optional "Track budget" burn-up panel for filtered results; Repeat button pre-fills `/add` via Router state |
 
 `ProtectedRoute` wraps all "Yes" routes — redirects to `/` if `auth.session` is null.
 
@@ -696,3 +700,5 @@ Every Winston log entry receives `requestId` from the request context, plus nume
 23. **Transactional email for share/revoke events** — dispatched via Resend after the HTTP response (fire-and-forget); failures are logged, never surfaced to the UI. Templates in `app-server/email-templates.js`. Silently skipped when `RESEND_API_KEY` is absent.
 
 24. **"Spent For" mandatory fixed column** — `Spent For` (ForWhom) sits between `Spent By` and `Comment` in the canonical header (server `parseSheetStructure`, client `expense.ts`), required by `validateRequiredFields()` and the Add form. Individually hideable like `Spent By` (both default to the signed-in user's email so hidden-field validation passes). History has matching `Spent By`/`Spent For` substring filters.
+
+25. **Track budget (History burn-up)** — client-only: `BudgetTrackerPanel.tsx` is mounted only while expanded from the Budget button beside the filtered Results total. `buildBudgetTimeline()` (`app-web/utils/budgetTimeline.ts`) computes cumulative USD spend from all filtered matches, not the display limit. Overall pace is spend from the timeline start (From filter, else earliest match) through today divided by inclusive calendar days. Recent pace is spend in the last 7 inclusive calendar days divided by 7 (zero-spend days count; future expenses are excluded), and is included after 7 elapsed days. Forecasts anchor at the later of today and the latest match. At least 3 distinct spend days are required; cap-hit dates are exact in verdict data while chart projection is capped at 730 days. Spans over 90 days switch to weekly points (Monday–Sunday weeks). Verdict copy and normal/warning/alert classification live in pure `app-web/utils/budgetVerdict.ts`; the chart renders one dashed pace or a shaded band between two paces with a compact USD Y-axis. The amber verdict uses `--color-warning-text: #B45309` for readable contrast. Budget and end date are persisted in `localStorage` under `qe_budget_{email}` (one pair per user, independent of filters, kept on sign-out — no expense data is stored).

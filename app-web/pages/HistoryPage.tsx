@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { RefreshCw, Search as SearchIcon, SearchX, X, FilterX, ChevronDown, ChevronUp } from "lucide-react";
+import { ChartLine, RefreshCw, Search as SearchIcon, SearchX, X, FilterX, ChevronDown, ChevronUp } from "lucide-react";
 import DatePicker from "react-datepicker";
 import { HISTORY_PAGE_SIZE, FILTER_DEBOUNCE_MS } from "../constants/expenses";
 import { AutosuggestInput } from "../components/AutosuggestInput";
+import { BudgetTrackerPanel } from "../components/BudgetTrackerPanel";
 import { ExpenseTable } from "../components/ExpenseTable";
 import { FormattedAmount } from "../components/FormattedAmount";
 import { Layout } from "../components/Layout";
@@ -105,6 +106,7 @@ export function HistoryPage(): JSX.Element {
     );
   });
   const [appliedFilters, setAppliedFilters] = useState<SearchFilters>(dataset.searchFilters);
+  const [budgetOpen, setBudgetOpen] = useState(false);
   const [confirmRecord, setConfirmRecord] = useState<ExpenseRecord | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -159,6 +161,8 @@ export function HistoryPage(): JSX.Element {
         : null,
     [isFiltered, dataset.snapshot, datasetIsComplete, appliedFilters],
   );
+  const resultsReady = !!outcome && !dataset.isLoadingHistory && !dataset.error;
+  const canTrackBudget = resultsReady && outcome.allMatches.length > 0;
 
   const filteredUsdTotal = useMemo(
     () => outcome?.allMatches.reduce((sum, record) => sum + parseUsd(record), 0) ?? null,
@@ -570,13 +574,28 @@ export function HistoryPage(): JSX.Element {
       {dataset.status === "ready" ? (
         isFiltered ? (
           <>
-            <div className="search-results-count">
+            <div className={`search-results-count${budgetOpen && canTrackBudget ? " search-results-count--expanded" : ""}`}>
               <span>Results</span>
-              {outcome ? (
+              {resultsReady && outcome ? (
                 <>
                   <span className="search-results-badge">{outcome.allMatches.length}</span>
-                  <span className="search-results-total">
-                    Total <FormattedAmount prefix="$" value={filteredUsdTotal ?? 0} />
+                  <span className="search-results-end">
+                    <span className="search-results-total">
+                      Total <FormattedAmount prefix="$" value={filteredUsdTotal ?? 0} />
+                    </span>
+                    {canTrackBudget ? (
+                      <button
+                        type="button"
+                        className={`budget-tracker-toggle${budgetOpen ? " budget-tracker-toggle--active" : ""}`}
+                        title="Track the budget over timeline"
+                        aria-label="Track the budget over timeline"
+                        aria-expanded={budgetOpen}
+                        onClick={() => setBudgetOpen((open) => !open)}
+                      >
+                        <ChartLine size={14} aria-hidden />
+                        Budget
+                      </button>
+                    ) : null}
                   </span>
                 </>
               ) : dataset.isLoadingHistory ? (
@@ -586,6 +605,9 @@ export function HistoryPage(): JSX.Element {
                 </span>
               ) : null}
             </div>
+            {budgetOpen && canTrackBudget && outcome && session?.email ? (
+              <BudgetTrackerPanel records={outcome.allMatches} dateFrom={appliedFilters.dateFrom} email={session.email} />
+            ) : null}
             {outcome ? outcome.allMatches.length === 0 ? (
               <div className="expense-empty">
                 <SearchX size={40} className="expense-empty-icon" />

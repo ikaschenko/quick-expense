@@ -39,3 +39,8 @@ export const HISTORY_PAGE_SIZE = 50;
 export const FILTER_DEBOUNCE_MS = 2500;
 export const MAX_SEARCH_RESULTS = 100;
 export const MAX_DATASET_BYTES = 10 * 1024 * 1024;
+
+export const BUDGET_WEEKLY_THRESHOLD_DAYS = 90;
+export const BUDGET_MIN_SPEND_DAYS = 3;
+export const BUDGET_RECENT_PACE_DAYS = 7;
+export const BUDGET_MAX_PROJECTION_DAYS = 730;

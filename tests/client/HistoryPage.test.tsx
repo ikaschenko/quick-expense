@@ -600,3 +600,84 @@ describe("HistoryPage — hidden columns in Filters panel", () => {
     expect(screen.getByRole("combobox", { name: /filter by theme/i })).toBeTruthy();
   });
 });
+
+describe("HistoryPage — Track budget toggle", () => {
+  const distinctValues = { Category: [], spentBy: [], spentFor: [], customFields: {} };
+  const miscFilter = { ...emptyFilters, categories: ["Misc"], dateFrom: "", dateTo: "" };
+
+  beforeEach(() => {
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+    localStorage.clear();
+  });
+
+  function queryToggle() {
+    return screen.queryByRole("button", { name: /track the budget over timeline/i });
+  }
+
+  it("should not show the toggle in the unfiltered view", () => {
+    mockDataset({ snapshot: { records: [makeRecord(1, "2026-06-09", "10")], distinctValues, loadedAt: 0, payloadBytes: 0, loadPhase: "full" } });
+
+    renderHistory();
+
+    expect(queryToggle()).toBeNull();
+  });
+
+  it("should not show the toggle when no record matches", () => {
+    mockDataset({
+      snapshot: { records: [makeRecord(1, "2026-06-09", "10")], distinctValues, loadedAt: 0, payloadBytes: 0, loadPhase: "full" },
+      searchFilters: { ...miscFilter, categories: ["Travel"] },
+    });
+
+    renderHistory();
+
+    expect(queryToggle()).toBeNull();
+  });
+
+  it("should hide Total and the Budget button together while the complete history is loading", () => {
+    mockDataset({
+      snapshot: { records: [makeRecord(1, "2026-06-09", "10")], distinctValues, loadedAt: 0, payloadBytes: 0, loadPhase: "recent" },
+      isLoadingHistory: true,
+      searchFilters: miscFilter,
+    });
+
+    renderHistory();
+
+    expect(queryToggle()).toBeNull();
+    expect(screen.getByText("Calculating…")).toBeTruthy();
+    expect(document.querySelector(".search-results-total")).toBeNull();
+  });
+
+  it("should not show the toggle when the history load failed", () => {
+    mockDataset({
+      snapshot: { records: [makeRecord(1, "2026-06-09", "10")], distinctValues, loadedAt: 0, payloadBytes: 0, loadPhase: "recent" },
+      isLoadingHistory: false,
+      searchFilters: miscFilter,
+    });
+
+    renderHistory();
+
+    expect(queryToggle()).toBeNull();
+  });
+
+  it("should expand and collapse the budget panel", () => {
+    mockDataset({
+      snapshot: { records: [makeRecord(1, "2026-06-09", "10")], distinctValues, loadedAt: 0, payloadBytes: 0, loadPhase: "full" },
+      searchFilters: miscFilter,
+    });
+    renderHistory();
+    const toggle = queryToggle() as HTMLButtonElement;
+
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(toggle.getAttribute("title")).toBe("Track the budget over timeline");
+    expect(toggle.parentElement?.className).toContain("search-results-end");
+    expect(document.querySelector(".budget-tracker")).toBeNull();
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(toggle.className).toContain("budget-tracker-toggle--active");
+    expect(screen.getByLabelText("Budget (USD)")).toBeTruthy();
+
+    fireEvent.click(toggle);
+    expect(document.querySelector(".budget-tracker")).toBeNull();
+  });
+});
