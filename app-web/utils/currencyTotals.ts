@@ -16,7 +16,7 @@ export interface DayTotal {
  * European format ("1.234,56"), and plain decimals ("1234.56").
  * The last separator character determines which is the decimal point.
  */
-export function parseRawNumber(raw: string): number {
+function parseRawNumberValue(raw: string, strict: boolean): number {
   let s = String(raw).trim().replace(/[$€£¥]/g, "").trim();
   if (!s) return 0;
 
@@ -37,7 +37,11 @@ export function parseRawNumber(raw: string): number {
   }
   // else: only dot or no separator — already correct
 
-  return Number.parseFloat(s) || 0;
+  return strict ? Number(s) : Number.parseFloat(s) || 0;
+}
+
+export function parseRawNumber(raw: string): number {
+  return parseRawNumberValue(raw, false);
 }
 
 export function parseUsd(record: ExpenseRecord): number {
@@ -50,19 +54,27 @@ export function parseAmount(value: string): number {
 
 /**
  * Dual-currency display: ALL given records share exactly one non-USD code AND
- * each has USD > 0.
+ * each has USD > 0 (or nonzero signed USD when allowRefunds is enabled).
  */
-export function computeDualCurrency(records: ExpenseRecord[]): DualCurrency | null {
+export function computeDualCurrency(
+  records: ExpenseRecord[],
+  { allowRefunds = false }: { allowRefunds?: boolean } = {},
+): DualCurrency | null {
   if (records.length === 0) return null;
 
   let commonCode: string | null = null;
   let totalNonUsd = 0;
 
   for (const r of records) {
-    if (!(parseUsd(r) > 0)) return null;
+    const usd = allowRefunds ? parseRawNumberValue(r.USD, true) : parseUsd(r);
+    if (allowRefunds ? !Number.isFinite(usd) || usd === 0 : !(usd > 0)) return null;
+
+    if (allowRefunds && Object.values(r.currencyAmounts).some((value) =>
+      !Number.isFinite(parseRawNumberValue(value, true)),
+    )) return null;
 
     const nonUsdEntries = Object.entries(r.currencyAmounts).filter(([, v]) => {
-      const n = parseAmount(v);
+      const n = allowRefunds ? parseRawNumberValue(v, true) : parseAmount(v);
       return !Number.isNaN(n) && n !== 0;
     });
 
@@ -72,7 +84,8 @@ export function computeDualCurrency(records: ExpenseRecord[]): DualCurrency | nu
     if (commonCode === null) commonCode = code;
     else if (commonCode !== code) return null;
 
-    totalNonUsd += parseAmount(value);
+    totalNonUsd += allowRefunds ? parseRawNumberValue(value, true) : parseAmount(value);
+    if (allowRefunds && !Number.isFinite(totalNonUsd)) return null;
   }
 
   return commonCode ? { code: commonCode, amount: totalNonUsd } : null;

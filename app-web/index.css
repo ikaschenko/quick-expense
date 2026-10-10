@@ -2034,11 +2034,11 @@ button { cursor: pointer; }
 .search-results-end {
   display: inline-flex;
   align-items: center;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--space-2);
   max-width: 100%;
   margin-left: auto;
-  white-space: nowrap;
 }
 
 .budget-tracker {
@@ -2101,6 +2101,14 @@ button { cursor: pointer; }
 
 .search-results-total {
   color: var(--color-text-primary);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 100%;
+}
+
+.search-results-amount {
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .search-results-calculating {

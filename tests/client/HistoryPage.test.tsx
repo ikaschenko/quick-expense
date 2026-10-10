@@ -1,8 +1,9 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { HistoryPage } from "../../app-web/pages/HistoryPage";
+import { FILTER_DEBOUNCE_MS } from "../../app-web/constants/expenses";
 import { useDataset } from "../../app-web/contexts/DatasetContext";
 import { ExpenseRecord } from "../../app-web/types/expense";
 
@@ -178,7 +179,7 @@ describe("HistoryPage — filtered total", () => {
     expect(document.body.textContent).not.toContain("NaN");
   });
 
-  it("shows only the USD aggregate when matches contain local currencies", () => {
+  it("shows only the USD aggregate when matches contain different local currencies", () => {
     const plnRecord = { ...makeRecord(1, "2026-06-09", "10"), currencyAmounts: { PLN: "40" } };
     const eurRecord = { ...makeRecord(2, "2026-06-09", "20"), currencyAmounts: { EUR: "18" } };
     mockDataset({
@@ -191,6 +192,71 @@ describe("HistoryPage — filtered total", () => {
     const summary = document.querySelector(".search-results-count");
     expect(summary?.textContent).toContain("Total $30.00");
     expect(summary?.textContent).not.toMatch(/PLN|EUR/);
+  });
+
+  it.each([
+    ["40", "-16", "PLN 24.00"],
+    ["40", "-40", "PLN 0.00"],
+  ])("shows the same-currency total including refunds %s and %s", (expense, refund, expected) => {
+    const records = [
+      { ...makeRecord(1, "2026-06-09", "10"), currencyAmounts: { PLN: expense } },
+      { ...makeRecord(2, "2026-06-09", "-4"), currencyAmounts: { PLN: refund } },
+    ];
+    mockDataset({
+      snapshot: { records, distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} }, loadedAt: 0, payloadBytes: 0, loadPhase: "full" },
+      searchFilters: { ...emptyFilters, categories: ["Misc"], dateFrom: "", dateTo: "" },
+    });
+
+    renderHistory();
+
+    const summary = document.querySelector(".search-results-total");
+    expect(summary?.textContent).toContain("Total $6.00");
+    expect(summary?.textContent).toContain(expected);
+    expect(screen.getByRole("button", { name: "Track the budget over timeline" })).toBeTruthy();
+  });
+
+  it.each([
+    [{ PLN: "4" }, "PLN 404.00"],
+    [{}, null],
+    [{ PLN: "0" }, null],
+    [{ EUR: "4" }, null],
+  ])("checks all 101 matches including the hidden oldest row %j", (oldestCurrency, expected) => {
+    const records = Array.from({ length: 101 }, (_, index) => ({
+      ...makeRecord(index + 1, "2026-06-09", "1"),
+      currencyAmounts: index === 0 ? oldestCurrency : { PLN: "4" },
+    }));
+    mockDataset({
+      snapshot: { records, distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} }, loadedAt: 0, payloadBytes: 0, loadPhase: "full" },
+      searchFilters: { ...emptyFilters, categories: ["Misc"], dateFrom: "", dateTo: "" },
+    });
+
+    renderHistory();
+
+    const summary = document.querySelector(".search-results-total");
+    expect(summary?.textContent).toContain("Total $101.00");
+    if (expected) expect(summary?.textContent).toContain(expected);
+    else expect(summary?.textContent).not.toMatch(/PLN|EUR/);
+    expect(screen.getByText(/showing most recent 100 of 101 results/i)).toBeTruthy();
+  });
+
+  it("recalculates the optional total after filtering out a different currency", async () => {
+    const records: ExpenseRecord[] = [
+      { ...makeRecord(1, "2026-06-09", "10"), Category: "Groceries", currencyAmounts: { PLN: "40" } },
+      { ...makeRecord(2, "2026-06-09", "20"), currencyAmounts: { EUR: "18" } },
+    ];
+    const snapshot = { records, distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} }, loadedAt: 0, payloadBytes: 0, loadPhase: "full" as const };
+    mockDataset({ snapshot, searchFilters: { ...emptyFilters, dateFrom: "2026-01-01", dateTo: "" } });
+    const { rerender } = renderHistory();
+    expect(document.querySelector(".search-results-total")?.textContent).toBe("Total $30.00");
+
+    mockDataset({ snapshot, searchFilters: { ...emptyFilters, categories: ["Groceries"], dateFrom: "", dateTo: "" } });
+    rerender(<MemoryRouter initialEntries={["/history"]}><HistoryPage /></MemoryRouter>);
+
+    await waitFor(() => {
+      const summary = document.querySelector(".search-results-total");
+      expect(summary?.textContent).toContain("Total $10.00");
+      expect(summary?.textContent).toContain("PLN 40.00");
+    }, { timeout: FILTER_DEBOUNCE_MS + 1000 });
   });
 
   it("shows an accessible calculating state without a partial count or total", () => {

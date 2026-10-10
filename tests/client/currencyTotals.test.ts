@@ -83,6 +83,76 @@ describe("computeDualCurrency", () => {
   });
 });
 
+describe("computeDualCurrency with refunds", () => {
+  const options = { allowRefunds: true };
+
+  it("returns null for no matches", () => {
+    expect(computeDualCurrency([], options)).toBeNull();
+  });
+
+  it("includes refunds and preserves the default USD-positive rule", () => {
+    const records = [
+      makeRecord("2026-06-09", "10", { currencyAmounts: { PLN: "40" } }),
+      makeRecord("2026-06-09", "-4", { currencyAmounts: { PLN: "-16" } }),
+    ];
+    expect(computeDualCurrency(records, options)).toEqual({ code: "PLN", amount: 24 });
+    expect(computeDualCurrency(records)).toBeNull();
+  });
+
+  it("displays a valid zero total when refunds cancel spending", () => {
+    const records = [
+      makeRecord("2026-06-09", "10", { currencyAmounts: { PLN: "40" } }),
+      makeRecord("2026-06-09", "-10", { currencyAmounts: { PLN: "-40" } }),
+    ];
+    expect(computeDualCurrency(records, options)).toEqual({ code: "PLN", amount: 0 });
+  });
+
+  it("accepts a single archived currency and ignores other blank or zero cells", () => {
+    const record = makeRecord("2026-06-09", "-10", {
+      currencyAmounts: { BYN: "-40", EUR: "", PLN: "0" },
+    });
+    expect(computeDualCurrency([record], options)).toEqual({ code: "BYN", amount: -40 });
+  });
+
+  it.each(["", " ", "0", "-0", "invalid", "10oops", "Infinity", "1e309"])(
+    "suppresses the extra total for invalid or zero USD %s",
+    (usd) => {
+      const record = makeRecord("2026-06-09", usd, { currencyAmounts: { PLN: "40" } });
+      expect(computeDualCurrency([record], options)).toBeNull();
+    },
+  );
+
+  it.each<Record<string, string>>([{}, { PLN: "" }, { PLN: "0" }, { PLN: "invalid" }, { PLN: "40oops" },
+    { PLN: "Infinity" }, { PLN: "40", EUR: "5" }, { PLN: "40", EUR: "invalid" }])(
+    "suppresses missing, zero, malformed or multiple currencies %j",
+    (currencyAmounts) => {
+      const record = makeRecord("2026-06-09", "10", { currencyAmounts });
+      expect(computeDualCurrency([record], options)).toBeNull();
+    },
+  );
+
+  it("suppresses differing currency codes", () => {
+    const records = [
+      makeRecord("2026-06-09", "10", { currencyAmounts: { PLN: "40" } }),
+      makeRecord("2026-06-09", "-5", { currencyAmounts: { EUR: "-5" } }),
+    ];
+    expect(computeDualCurrency(records, options)).toBeNull();
+  });
+
+  it("uses existing US and European number formatting", () => {
+    const records = [
+      makeRecord("2026-06-09", "$1,200.50", { currencyAmounts: { EUR: "1.100,50" } }),
+      makeRecord("2026-06-09", "-100.50", { currencyAmounts: { EUR: "-100,50" } }),
+    ];
+    expect(computeDualCurrency(records, options)).toEqual({ code: "EUR", amount: 1000 });
+  });
+
+  it("uses the same strict parsing for validation and summing", () => {
+    const record = makeRecord("2026-06-09", "10", { currencyAmounts: { PLN: "4e1" } });
+    expect(computeDualCurrency([record], options)).toEqual({ code: "PLN", amount: 40 });
+  });
+});
+
 describe("computeDayTotal", () => {
   it("returns zero usdTotal and null dualCurrency for an empty day", () => {
     const result = computeDayTotal([]);

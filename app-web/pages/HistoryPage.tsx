@@ -17,7 +17,7 @@ import { filterExpenses } from "../utils/search";
 import { googleSheetsService } from "../services/googleSheets";
 import { trackEvent } from "../services/analytics";
 import { getDisplayAmountFull, groupByDate } from "../utils/expenseTable";
-import { computeDayTotal, DayTotal, parseUsd } from "../utils/currencyTotals";
+import { computeDayTotal, computeDualCurrency, DayTotal, parseUsd } from "../utils/currencyTotals";
 import { ExpenseRecord, SearchFilters } from "../types/expense";
 import { formatLocalDate, isValidIsoDate, getDateShortcutRanges } from "../utils/date";
 
@@ -166,6 +166,10 @@ export function HistoryPage(): JSX.Element {
 
   const filteredUsdTotal = useMemo(
     () => outcome?.allMatches.reduce((sum, record) => sum + parseUsd(record), 0) ?? null,
+    [outcome],
+  );
+  const filteredDualCurrency = useMemo(
+    () => outcome ? computeDualCurrency(outcome.allMatches, { allowRefunds: true }) : null,
     [outcome],
   );
 
@@ -581,7 +585,15 @@ export function HistoryPage(): JSX.Element {
                   <span className="search-results-badge">{outcome.allMatches.length}</span>
                   <span className="search-results-end">
                     <span className="search-results-total">
-                      Total <FormattedAmount prefix="$" value={filteredUsdTotal ?? 0} />
+                      <span className="search-results-amount">Total <FormattedAmount prefix="$" value={filteredUsdTotal ?? 0} /></span>
+                      {filteredDualCurrency ? (
+                        <>
+                          <span aria-hidden="true">&middot;</span>
+                          <span className="search-results-amount">
+                            <FormattedAmount prefix={`${filteredDualCurrency.code} `} value={filteredDualCurrency.amount} />
+                          </span>
+                        </>
+                      ) : null}
                     </span>
                     {canTrackBudget ? (
                       <button
