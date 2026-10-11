@@ -8,6 +8,8 @@ import { useConfig } from "../contexts/ConfigContext";
 import { SetupPath, useSetupPath } from "../hooks/useSetupPath";
 import { useSpreadsheetSetup } from "../hooks/useSpreadsheetSetup";
 
+import type { JSX } from "react";
+
 const PAGE_TITLES: Record<SetupPath, string> = {
   choose: "Set up Quick Expense",
   fresh: "Create your spreadsheet",

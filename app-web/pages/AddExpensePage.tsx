@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type JSX } from "react";
 import { Navigate, useNavigate, useParams, useLocation } from "react-router-dom";
 import { Check, Calendar, RotateCcw, House } from "lucide-react";
 import DatePicker from "react-datepicker";

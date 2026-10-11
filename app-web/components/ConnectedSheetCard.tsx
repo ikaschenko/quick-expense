@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type JSX } from "react";
 import { FileSpreadsheet, Link2Off, Pencil } from "lucide-react";
 import { StatusBanner } from "./StatusBanner";
 import { SpreadsheetFileInfo } from "./SpreadsheetFileInfo";

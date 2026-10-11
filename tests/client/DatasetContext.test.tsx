@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useEffect } from "react";
+import { useEffect, type JSX } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { DatasetProvider, useDataset } from "../../app-web/contexts/DatasetContext";
 import { useConfig } from "../../app-web/contexts/ConfigContext";

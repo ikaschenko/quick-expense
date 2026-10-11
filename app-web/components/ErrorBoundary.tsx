@@ -1,4 +1,4 @@
-import React, { PropsWithChildren } from "react";
+import React, { PropsWithChildren, type JSX } from "react";
 
 interface ErrorBoundaryState {
   hasError: boolean;

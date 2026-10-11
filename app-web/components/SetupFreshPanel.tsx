@@ -4,6 +4,8 @@ import { StatusBanner } from "./StatusBanner";
 import { SetupReportList } from "./SetupReportList";
 import { SpreadsheetSetup } from "../hooks/useSpreadsheetSetup";
 
+import type { JSX } from "react";
+
 interface SetupFreshPanelProps {
   setup: SpreadsheetSetup;
   onBack: () => void;

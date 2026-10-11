@@ -9,6 +9,8 @@ import { formatLocalDate } from "../../app-web/utils/date";
 import { metricsCache } from "../../app-web/services/metricsCache";
 import { googleSheetsService } from "../../app-web/services/googleSheets";
 
+import type { JSX } from "react";
+
 vi.mock("../../app-web/contexts/AuthContext", () => ({
   useAuth: () => ({
     session: { guestAccessLevel: null, email: "test@example.com", givenName: "Test", picture: null },

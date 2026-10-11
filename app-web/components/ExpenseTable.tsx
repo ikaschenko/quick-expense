@@ -1,4 +1,4 @@
-import { useMemo, useRef, useEffect, useState } from "react";
+import { useMemo, useRef, useEffect, useState, type JSX } from "react";
 import {
   ShoppingCart,
   Bus,

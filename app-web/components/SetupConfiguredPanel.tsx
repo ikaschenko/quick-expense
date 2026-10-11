@@ -13,6 +13,8 @@ import { useColumnMapping } from "../hooks/useColumnMapping";
 import { useSetupSharing } from "../hooks/useSetupSharing";
 import { SetupReport } from "../types/expense";
 
+import type { JSX } from "react";
+
 interface SetupConfiguredPanelProps {
   success: string | null;
   setupReport: SetupReport | null;

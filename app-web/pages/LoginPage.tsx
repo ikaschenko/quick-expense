@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type JSX } from "react";
 import { Navigate } from "react-router-dom";
 import { Check } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";

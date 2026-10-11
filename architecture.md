@@ -189,9 +189,9 @@ Dependency versions are declared in `package.json`, the source of truth for vers
 
 | Layer | Technology | Notes |
 |---|---|---|
-| Front-end framework | React 18 + TypeScript | SPA, client-side routing via react-router-dom v7 (`BrowserRouter` declarative mode; `navigate()` returns `void`) |
+| Front-end framework | React 19 + TypeScript | SPA, client-side routing via react-router-dom v7 (`BrowserRouter` declarative mode; `navigate()` returns `void`) |
 | Build tool | Vite 8 | Dev server on port 5173, proxies `/api` to backend |
-| Test runner | Vitest 4 + jsdom | `npm test` runs `vitest run` |
+| Test runner | Vitest 5 + jsdom | `npm test` runs `vitest run` |
 | Charts | echarts | ECharts powers the MTD line/area chart and category pie chart; MTD actual data uses straight daily segments and remaining current-month days use a gray forecast region |
 | Icons | lucide-react | |
 | Back-end runtime | Node.js 22, Express 4 | ES modules (`"type": "module"` in package.json) |

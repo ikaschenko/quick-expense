@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type JSX } from "react";
 import { FormattedAmount } from "./FormattedAmount";
 import { LoadingBlock } from "./LoadingBlock";
 import { CategoryBreakdownPanel } from "./CategoryBreakdownPanel";

@@ -1,3 +1,4 @@
+import type { JSX } from "react";
 interface LoadingBlockProps {
   label?: string;
   variant?: "spinner" | "skeleton";

@@ -5,6 +5,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  type JSX,
 } from "react";
 import { authApi } from "../services/authApi";
 import { identifyUser, resetUser, trackEvent } from "../services/analytics";

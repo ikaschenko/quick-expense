@@ -5,6 +5,8 @@ import { typeLabel } from "../utils/setupColumns";
 import { SheetStructure } from "../hooks/useSheetStructure";
 import { useConfig } from "../contexts/ConfigContext";
 
+import type { JSX } from "react";
+
 interface SheetStructureRowProps {
   col: ColumnInfo;
   structure: SheetStructure;

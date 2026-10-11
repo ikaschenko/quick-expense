@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { PropsWithChildren, useState, useRef, useEffect } from "react";
+import { PropsWithChildren, useState, useRef, useEffect, type JSX } from "react";
 import { ChevronLeft, House, Plus, Search, LogOut, MessageSquareShare, X, Shield, FileText, Settings, Lock } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useConfig } from "../contexts/ConfigContext";

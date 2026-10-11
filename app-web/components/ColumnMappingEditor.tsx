@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type JSX } from "react";
 import { googleSheetsService } from "../services/googleSheets";
 import { ColumnMapping } from "../types/expense";
 import { StatusBanner } from "./StatusBanner";
