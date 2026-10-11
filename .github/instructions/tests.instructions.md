@@ -9,6 +9,7 @@ description: "Test conventions for Vitest test files."
 - Use `it.each` for tabular input/output scenarios.
 - Do not mock what you can call directly — test pure functions with real inputs.
 - Each test should test one behavior. Keep test data inline and minimal.
+- Target at least **85% test coverage for new code** to stay above SonarQube's 80% new-code quality gate, and maintain at least **75% overall codebase coverage**.
 - Integration tests use `*.integration.test.js` naming and the `vitest.integration.config.ts` config.
 - Cover the relevant risk categories for changed behavior:
 
