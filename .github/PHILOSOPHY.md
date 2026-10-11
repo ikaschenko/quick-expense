@@ -9,7 +9,7 @@ These principles explain the product and engineering mindset. Keep `.github/copi
 - **SOLID / low coupling, high cohesion.** One reason to change per module; extend via composition; keep ownership boundaries explicit.
 - **Do more with less.** Less code is the quality metric. Reuse existing utilities before adding new code, and prefer proven libraries when they reduce net complexity.
 - **Maintainability first.** Leave the codebase equal or better: no dead code, orphaned files, or commented-out blocks.
-- **Ask before deciding.** On architectural choices, trade-offs, or ambiguity, ask with options and a recommendation.
+- **Ask before deciding.** On architectural choices, trade-offs, or ambiguity, ask with options and a recommendation. If unsure, always ask. 
 
 ## Behavioral Guidelines
 

@@ -185,10 +185,12 @@ quick-expense/
 
 ## 4. Technology Stack
 
+Dependency versions are declared in `package.json`, the source of truth for version ranges.
+
 | Layer | Technology | Notes |
 |---|---|---|
-| Front-end framework | React 18 + TypeScript | SPA, client-side routing via react-router-dom v6 |
-| Build tool | Vite 7 | Dev server on port 5173, proxies `/api` to backend |
+| Front-end framework | React 18 + TypeScript | SPA, client-side routing via react-router-dom v7 (`BrowserRouter` declarative mode; `navigate()` returns `void`) |
+| Build tool | Vite 8 | Dev server on port 5173, proxies `/api` to backend |
 | Test runner | Vitest 4 + jsdom | `npm test` runs `vitest run` |
 | Charts | echarts | ECharts powers the MTD line/area chart and category pie chart; MTD actual data uses straight daily segments and remaining current-month days use a gray forecast region |
 | Icons | lucide-react | |
@@ -672,7 +674,7 @@ Every Winston log entry receives `requestId` from the request context, plus nume
 2. **Expense data in Google Sheets only** — the app is a thin client over Google Sheets API. No expense data is cached or stored server-side.
 3. **Client-side search** — the full dataset is loaded into the browser. Capped at 10 MB JSON payload.
 4. **Edit of existing records** — supported via `PUT /api/expenses/:rowNumber`. Returns `{ record, moveMode }`. When the date change keeps the row in chronological order, an in-place cell update is performed (`moveMode: false`). When the date change would break order, `moveExpenseRow` calls the existing `addExpenseRow` (insert/append decision fully reused), then deletes the original row (`moveMode: true`). The client performs a full dataset reload on `moveMode: true`, identical to the add insert-mode flow. Delete is scoped to the **last row only**, available from Tail view. Protected by a row-count conflict check: the client passes the expected row count; the backend rejects with HTTP 409 if the sheet was updated concurrently.
-5. **No duplicate detection** — each Save appends a new row unconditionally.
+5. **Client-side duplicate confirmation** — before saving a new expense, the Add form checks loaded dataset records for matching date, case-insensitive category, and amount (non-USD amounts when provided, otherwise USD; tolerance 0.005). Dates are converted to the detected sheet format before comparison. Possible duplicates require confirmation to save or can be cancelled; edits bypass this check. This is an advisory check against loaded records, not a server-side uniqueness constraint. Confirmed saves use the normal append/insert flow.
 6. **Currency:** Users configure up to 3 non-USD currencies from a dictionary of 25 (stored in `app-server/config/currencies.json` and `user_currencies` DB table). At most one non-USD currency at a time per expense, optionally alongside USD. Manual FX rate entry is supported; Add forms request a dated market rate via `GET /api/fx/rates` (proxied from `fawazahmed0/currency-api`, with a Cloudflare Pages fallback host and up-to-5-day backward date search — free, key-less, daily rates) and pre-fill it for the selected date. For today, the market rate is also displayed as a tappable *"Live rate"* hint, labeled with the resolved date when it falls back to an earlier day's published rate. Silent fallback to manual entry on any upstream failure. Edit forms derive a rate from the existing USD and non-USD amounts when both are available. Archived currency columns remain in the sheet.
 7. **No pagination** — search results capped at 100.
 8. **Single sheet named "Expenses"** — no multi-sheet support.

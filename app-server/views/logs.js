@@ -58,9 +58,9 @@ async function loadTail() {
 document.getElementById("refresh").addEventListener("click", loadTail);
 fileSelect.addEventListener("change", loadTail);
 levelSelect.addEventListener("change", loadTail);
-qInput.addEventListener("keydown", (e) => { if (e.key === "Enter") loadTail(); });
+qInput.addEventListener("keydown", (e) => { if (e.key === "Enter") void loadTail(); });
 
-(async function init() {
+void (async function init() {
   try {
     await loadFiles();
     await loadTail();
