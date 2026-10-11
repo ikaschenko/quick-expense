@@ -13,6 +13,8 @@ import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { SetupPage } from "./pages/SetupPage";
 
+import type { JSX } from "react";
+
 function AppRoutes(): JSX.Element {
   const { session } = useAuth();
 

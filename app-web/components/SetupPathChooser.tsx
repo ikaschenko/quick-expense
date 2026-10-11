@@ -2,6 +2,8 @@ import { FileSpreadsheet, Wand2 } from "lucide-react";
 import { LoadingBlock } from "./LoadingBlock";
 import { StatusBanner } from "./StatusBanner";
 
+import type { JSX } from "react";
+
 interface SetupPathChooserProps {
   isConfigLoading: boolean;
   configError: string | null;

@@ -1,3 +1,4 @@
+import type { JSX } from "react";
 interface FormattedAmountProps {
   /** Numeric value to display */
   value: number;

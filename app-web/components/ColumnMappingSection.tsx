@@ -5,6 +5,8 @@ import { ColumnMappingEditor } from "./ColumnMappingEditor";
 import { ColumnMappingState } from "../hooks/useColumnMapping";
 import { REQUIRED_QE_FIELDS } from "../constants/expenses";
 
+import type { JSX } from "react";
+
 interface ColumnMappingSectionProps {
   mapping: ColumnMappingState;
 }

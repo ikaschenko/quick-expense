@@ -2,6 +2,8 @@ import { ColumnMappingEditor } from "./ColumnMappingEditor";
 import { HeaderDetails } from "../types/expense";
 import { deriveHeaderRowDetails } from "../utils/spreadsheet";
 
+import type { JSX } from "react";
+
 const STATUS_BADGES: Record<string, string> = {
   match: "✓ Match",
   mismatch: "✗ Mismatch",

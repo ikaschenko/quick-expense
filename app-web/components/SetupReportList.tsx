@@ -1,5 +1,7 @@
 import { SetupReport } from "../types/expense";
 
+import type { JSX } from "react";
+
 interface SetupReportListProps {
   report: SetupReport;
   /** "full" adds the legacy-migration wording used outside the fresh-creation path. */

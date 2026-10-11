@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type JSX } from "react";
 import { X, ChevronDown, Pin } from "lucide-react";
 import { FieldDefaultSettings } from "../types/expense";
 

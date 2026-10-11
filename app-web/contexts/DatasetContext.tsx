@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type JSX,
 } from "react";
 import { googleSheetsService } from "../services/googleSheets";
 import { RetryBackoff } from "../services/retryBackoff";

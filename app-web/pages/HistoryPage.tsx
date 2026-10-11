@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type JSX } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ChartLine, RefreshCw, Search as SearchIcon, SearchX, X, FilterX, ChevronDown, ChevronUp } from "lucide-react";
 import DatePicker from "react-datepicker";

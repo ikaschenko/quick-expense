@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type JSX } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, FileSpreadsheet, Info, Loader2, Receipt } from "lucide-react";
 import { FormattedAmount } from "../components/FormattedAmount";

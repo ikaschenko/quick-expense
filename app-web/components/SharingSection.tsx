@@ -3,6 +3,8 @@ import { StatusBanner } from "./StatusBanner";
 import { SetupSharing } from "../hooks/useSetupSharing";
 import { ShareEntry } from "../types/expense";
 
+import type { JSX } from "react";
+
 interface SharingSectionProps {
   sharing: SetupSharing;
 }

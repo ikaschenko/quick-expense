@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type JSX } from "react";
 import { AlertCircle, CheckCircle, Info } from "lucide-react";
 
 interface StatusBannerProps {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type JSX } from "react";
 import { useNavigate } from "react-router-dom";
 import { Link2Off } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";

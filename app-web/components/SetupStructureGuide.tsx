@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type JSX } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
 export function SetupStructureGuide(): JSX.Element {

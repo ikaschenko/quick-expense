@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, type JSX } from "react";
 import { Plus, TableProperties } from "lucide-react";
 import { StatusBanner } from "./StatusBanner";
 import { SheetStructureRow } from "./SheetStructureRow";

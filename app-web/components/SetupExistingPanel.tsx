@@ -6,6 +6,8 @@ import { SetupStructureGuide } from "./SetupStructureGuide";
 import { HeaderMismatchTable } from "./HeaderMismatchTable";
 import { SpreadsheetSetup } from "../hooks/useSpreadsheetSetup";
 
+import type { JSX } from "react";
+
 interface SetupExistingPanelProps {
   setup: SpreadsheetSetup;
   onBack: () => void;
