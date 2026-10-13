@@ -204,6 +204,13 @@ app.get("/api/health", async (_req, res) => {
   });
 });
 
+const isProduction = process.env.NODE_ENV === "production";
+const distPath = path.resolve(process.cwd(), "dist");
+
+if (isProduction) {
+  app.use(express.static(distPath, { index: false }));
+}
+
 app.use(
   session({
     store: new PgSession({
@@ -1396,6 +1403,16 @@ app.get("/logs.js", requireAuthenticatedUser, requireAppAdmin, (_req, res) => {
   res.sendFile(path.resolve(process.cwd(), "app-server/views/logs.js"));
 });
 
+if (isProduction) {
+  const indexHtml = injectPosthogKey(
+    fs.readFileSync(path.join(distPath, "index.html"), "utf8"),
+    process.env.VITE_POSTHOG_KEY,
+  );
+  app.get("*", (_req, res) => {
+    res.type("html").send(indexHtml);
+  });
+}
+
 app.use((error, req, res, next) => {
   logRouteError(req, "unhandled_request_error", error);
 
@@ -1411,18 +1428,6 @@ app.use((error, req, res, next) => {
 
   res.status(500).send("Unexpected server error.");
 });
-
-if (process.env.NODE_ENV === "production") {
-  const distPath = path.resolve(process.cwd(), "dist");
-  const indexHtml = injectPosthogKey(
-    fs.readFileSync(path.join(distPath, "index.html"), "utf8"),
-    process.env.VITE_POSTHOG_KEY,
-  );
-  app.use(express.static(distPath, { index: false }));
-  app.get("*", (_req, res) => {
-    res.type("html").send(indexHtml);
-  });
-}
 
 const shutdownServer = createGracefulShutdown({
   getServer: () => server,

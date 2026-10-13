@@ -1,5 +1,3 @@
-import { vi } from "vitest";
-
 const posthogMock = vi.hoisted(() => ({
   init: vi.fn(),
   identify: vi.fn(),

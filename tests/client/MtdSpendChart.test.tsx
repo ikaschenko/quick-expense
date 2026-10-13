@@ -1,4 +1,3 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render } from "@testing-library/react";
 import { MtdSpendChart } from "../../app-web/components/MtdSpendChart";
 import { createFakeChart, disableChartRendering, enableChartRendering } from "./fakeEchart";

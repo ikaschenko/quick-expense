@@ -1,5 +1,4 @@
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { SetupPage } from "../../app-web/pages/SetupPage";
 

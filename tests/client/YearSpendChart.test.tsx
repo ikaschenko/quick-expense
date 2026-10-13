@@ -1,4 +1,3 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render } from "@testing-library/react";
 import type { BarSeriesOption } from "echarts/charts";
 import { buildSeries, resolveMonthClick, YearSpendChart } from "../../app-web/components/YearSpendChart";

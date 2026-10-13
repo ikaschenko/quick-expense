@@ -1,5 +1,4 @@
 import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, beforeEach } from "vitest";
 import { DisplayPreferencesCard } from "../../app-web/components/DisplayPreferencesCard";
 import { DATE_DISPLAY_FORMAT_STORAGE_KEY } from "../../app-web/utils/date";
 

@@ -1,4 +1,3 @@
-import { describe, it, expect } from "vitest";
 import { getCategoryColor } from "../../app-web/utils/categoryColor";
 
 describe("getCategoryColor", () => {

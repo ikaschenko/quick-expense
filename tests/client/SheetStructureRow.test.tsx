@@ -1,5 +1,4 @@
 import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { SheetStructureRow } from "../../app-web/components/SheetStructureRow";
 import { SheetStructure } from "../../app-web/hooks/useSheetStructure";

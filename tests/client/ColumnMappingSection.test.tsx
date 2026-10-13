@@ -1,5 +1,4 @@
 import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
 import { ColumnMappingSection } from "../../app-web/components/ColumnMappingSection";
 import { ColumnMappingState } from "../../app-web/hooks/useColumnMapping";
 

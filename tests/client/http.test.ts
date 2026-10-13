@@ -1,4 +1,3 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { requestJson, requestNoContent } from "../../app-web/services/http";
 import { AppError } from "../../app-web/types/expense";
 

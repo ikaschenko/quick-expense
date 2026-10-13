@@ -1,5 +1,4 @@
 import { render } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { buildCategoryPieLegend, CategoryPieChart } from "../../app-web/components/CategoryPieChart";
 import { OTHER_LABEL, PieSlice } from "../../app-web/utils/monthDetails";
 import { createFakeChart, disableChartRendering, enableChartRendering } from "./fakeEchart";

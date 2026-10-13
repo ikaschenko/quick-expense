@@ -1,6 +1,5 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { HistoryPage } from "../../app-web/pages/HistoryPage";
 import { FILTER_DEBOUNCE_MS } from "../../app-web/constants/expenses";

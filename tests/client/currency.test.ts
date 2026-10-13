@@ -1,4 +1,3 @@
-import { describe, it, expect, afterEach, vi } from "vitest";
 import { currencyService } from "../../app-web/services/currency";
 
 function jsonResponse(body: unknown, ok = true, status = 200): Response {

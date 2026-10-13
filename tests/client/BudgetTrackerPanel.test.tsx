@@ -1,5 +1,4 @@
 import { render, screen, fireEvent } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BudgetTrackerPanel } from "../../app-web/components/BudgetTrackerPanel";
 import { ExpenseRecord } from "../../app-web/types/expense";
 

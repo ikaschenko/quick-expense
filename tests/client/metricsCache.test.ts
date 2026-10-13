@@ -1,4 +1,3 @@
-import { describe, it, expect, beforeEach } from "vitest";
 import { metricsCache, type MetricsCacheEntry } from "../../app-web/services/metricsCache";
 
 const TODAY = "2026-06-24";

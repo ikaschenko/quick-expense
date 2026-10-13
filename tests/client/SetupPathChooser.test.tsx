@@ -1,5 +1,4 @@
 import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
 import { SetupPathChooser } from "../../app-web/components/SetupPathChooser";
 
 describe("SetupPathChooser", () => {

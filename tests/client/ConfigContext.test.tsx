@@ -1,6 +1,5 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useState, type JSX } from "react";
 import { ConfigProvider, useConfig } from "../../app-web/contexts/ConfigContext";
 import { useAuth } from "../../app-web/contexts/AuthContext";

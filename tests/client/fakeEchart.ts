@@ -1,4 +1,3 @@
-import { vi } from "vitest";
 import * as echarts from "echarts/core";
 
 type Handler = (event: unknown) => void;

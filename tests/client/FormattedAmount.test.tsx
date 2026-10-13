@@ -1,5 +1,4 @@
 import { render } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
 import { FormattedAmount } from "../../app-web/components/FormattedAmount";
 
 describe("FormattedAmount", () => {

@@ -1,5 +1,4 @@
 import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
 import { SharingSection } from "../../app-web/components/SharingSection";
 import { SetupSharing } from "../../app-web/hooks/useSetupSharing";
 

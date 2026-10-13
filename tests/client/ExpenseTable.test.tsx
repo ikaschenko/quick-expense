@@ -1,6 +1,5 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ExpenseTable } from "../../app-web/components/ExpenseTable";
 import { ExpenseRecord } from "../../app-web/types/expense";
 import { DayTotal } from "../../app-web/utils/currencyTotals";

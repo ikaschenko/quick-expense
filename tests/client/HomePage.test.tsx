@@ -1,6 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { HomePage } from "../../app-web/pages/HomePage";
 import { useDataset } from "../../app-web/contexts/DatasetContext";
