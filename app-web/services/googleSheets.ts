@@ -161,15 +161,15 @@ export const googleSheetsService = {
     });
   },
 
-  async getColumnMapping(spreadsheetId?: string): Promise<{ mapping: ColumnMapping | null; mode: ConfigMode; detectedColumns: string[] }> {
+  async getColumnMapping(spreadsheetId?: string): Promise<{ mapping: ColumnMapping | null; mode: ConfigMode; detectedColumns: string[]; spreadsheetId: string }> {
     const query = spreadsheetId ? `?spreadsheetId=${encodeURIComponent(spreadsheetId)}` : "";
     return requestJson(`/api/config/mapping${query}`);
   },
 
-  async saveColumnMapping(mapping: ColumnMapping, spreadsheetId?: string): Promise<{ mapping: ColumnMapping; mode: ConfigMode }> {
+  async saveColumnMapping(mapping: ColumnMapping, spreadsheetId: string | undefined, candidate = false): Promise<{ mapping: ColumnMapping; mode: ConfigMode }> {
     return requestJson("/api/config/mapping", {
       method: "POST",
-      body: JSON.stringify({ mapping, ...(spreadsheetId ? { spreadsheetId } : {}), confirmed: true }),
+      body: JSON.stringify({ mapping, spreadsheetId, candidate, confirmed: true }),
     });
   },
 

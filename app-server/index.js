@@ -476,6 +476,10 @@ app.post("/api/auth/logout", async (req, res) => {
         await endUsageSession(userRecord.id, browserId, req.sessionID);
       }
     }
+  } catch (error) {
+    logRouteError(req, "auth_logout_tracking_failed", error);
+  }
+  try {
     await destroySession(req.session);
     res.status(204).end();
   } catch (error) {
@@ -783,6 +787,7 @@ app.get("/api/config/mapping", requireAuthenticatedUser, async (req, res) => {
       readExpensesSheetHeader(accessToken, spreadsheetId),
     ]);
     res.json({
+      spreadsheetId,
       mapping: configResult.mode === "config-driven" ? configResult.mapping : null,
       mode: configResult.mode,
       detectedColumns,
@@ -795,7 +800,7 @@ app.get("/api/config/mapping", requireAuthenticatedUser, async (req, res) => {
 
 app.post("/api/config/mapping", requireAuthenticatedUser, requireOwner, async (req, res) => {
   emulateFailure(req.path);
-  const spreadsheetId = typeof req.body?.spreadsheetId === "string" ? req.body.spreadsheetId : req.userRecord.spreadsheetId;
+  const spreadsheetId = req.body?.spreadsheetId;
   if (!spreadsheetId) {
     res.status(400).json({ message: "Provide a spreadsheet candidate before saving a mapping." });
     return;
@@ -804,13 +809,17 @@ app.post("/api/config/mapping", requireAuthenticatedUser, requireOwner, async (r
     res.status(400).json({ message: "Explicit confirmation is required before writing a spreadsheet mapping." });
     return;
   }
-  if (!/^[A-Za-z0-9_-]{10,200}$/.test(spreadsheetId)) {
+  if (typeof spreadsheetId !== "string" || !/^[A-Za-z0-9_-]{10,200}$/.test(spreadsheetId)) {
     res.status(400).json({ message: "Provide a valid spreadsheet ID." });
     return;
   }
   const validation = validateMappingRequestBody(req.body);
   if (!validation.valid) {
     res.status(400).json({ message: validation.message });
+    return;
+  }
+  if (req.body.candidate !== true && spreadsheetId !== req.userRecord.spreadsheetId) {
+    res.status(409).json({ message: "Your spreadsheet changed. Reload the mapping editor." });
     return;
   }
   const mapping = req.body.mapping;
@@ -1474,7 +1483,12 @@ app.post("/api/activity", requireIdentityAuthenticatedUser, async (req, res) => 
       res.status(400).json({ message: "Activity event expired or invalid. Reload the screen and try again." });
       return;
     }
-    const result = await recordUsageActivity({ ...event, authSessionId: req.sessionID });
+    const expiresAt = duplicate ? undefined : JSON.parse(Buffer.from(envelope.split(".")[0], "base64url").toString("utf8")).expiresAt;
+    const result = await recordUsageActivity({ ...event, authSessionId: req.sessionID, expiresAt });
+    if (result.expired) {
+      res.status(400).json({ message: "Activity event expired while waiting to be recorded." });
+      return;
+    }
     if (result.rejected) {
       res.status(401).json({ message: "This sign-in session has ended." });
       return;

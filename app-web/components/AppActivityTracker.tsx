@@ -1,5 +1,5 @@
-import { useEffect, useRef, type JSX } from "react";
-import { useLocation } from "react-router-dom";
+import { useEffect, useRef } from "react";
+import { useLocation, useNavigationType } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { requestJson } from "../services/http";
 
@@ -13,23 +13,28 @@ function getScreen(pathname: string): string | null {
   return null;
 }
 
-function eventIdFor(key: string): string {
-  const storageKey = `qe-activity:${key}`;
-  try {
-    const saved = sessionStorage.getItem(storageKey);
-    if (saved) {
-      const pending = JSON.parse(saved) as { id: string; createdAt: number };
-      if (Date.now() - pending.createdAt <= 120_000) return pending.id;
-    }
-    const id = crypto.randomUUID();
-    sessionStorage.setItem(storageKey, JSON.stringify({ id, createdAt: Date.now() }));
-    return id;
-  } catch {
-    return crypto.randomUUID();
-  }
+interface Arrival {
+  id: string;
+  createdAt: number;
+  envelope?: string;
 }
 
-async function withActivityLock<T>(action: () => Promise<T>): Promise<T> {
+function arrivalFor(key: string): Arrival {
+  try {
+    const saved = sessionStorage.getItem(`qe-activity:${key}`);
+    if (saved) {
+      const pending = JSON.parse(saved) as Arrival;
+      if (typeof pending.id === "string" && Number.isFinite(pending.createdAt)) return pending;
+    }
+  } catch { /* Storage is optional. */ }
+  return { id: crypto.randomUUID(), createdAt: Date.now() };
+}
+
+function saveArrival(key: string, arrival: Arrival): void {
+  try { sessionStorage.setItem(`qe-activity:${key}`, JSON.stringify(arrival)); } catch { /* Storage is optional. */ }
+}
+
+async function withActivityLock<T>(deadline: number, action: () => Promise<T>): Promise<T | undefined> {
   if (navigator.locks) return navigator.locks.request("quickexpense-activity-bootstrap", action);
 
   const key = "qe-activity-lock";
@@ -38,6 +43,7 @@ async function withActivityLock<T>(action: () => Promise<T>): Promise<T> {
   try { storage = localStorage; } catch { return action(); }
   let acquired = false;
   while (!acquired) {
+    if (Date.now() >= deadline) return;
     try {
       const current = storage.getItem(key);
       const expiry = current ? Number(current.split(":")[1]) : 0;
@@ -54,37 +60,61 @@ async function withActivityLock<T>(action: () => Promise<T>): Promise<T> {
   }
 }
 
-export function AppActivityTracker(): null {
+export function AppActivityTracker({ eligible = true }: { eligible?: boolean }): null {
   const location = useLocation();
+  const navigationType = useNavigationType();
   const { status, session } = useAuth();
   const lastArrival = useRef("");
+  const navigation = useRef({ path: location.pathname, key: location.key });
+  // React Router gives state-only replacements a new key; they are not arrivals.
+  if (navigation.current.path !== location.pathname || navigationType !== "REPLACE") {
+    navigation.current = { path: location.pathname, key: location.key };
+  }
+  const arrivalLocationKey = navigation.current.key;
 
   useEffect(() => {
     const screen = getScreen(location.pathname);
-    if (status !== "signed_in" || !session || !screen || document.visibilityState !== "visible") return;
+    if (!eligible || status !== "signed_in" || !session || !screen || document.visibilityState !== "visible") return;
     if (screen === "admin" && !session.isAppAdmin) return;
-    const arrivalKey = `${session.email.toLowerCase()}:${location.key}:${screen}`;
+    const arrivalKey = `${session.email.toLowerCase()}:${arrivalLocationKey}:${screen}`;
     if (lastArrival.current === arrivalKey) return;
-    lastArrival.current = arrivalKey;
-    const eventId = eventIdFor(arrivalKey);
+    let cancelled = false;
+    let timer: number;
     let retries = 0;
+    const arrival = arrivalFor(arrivalKey);
+    const deadline = arrival.createdAt + 120_000;
+    const live = (): boolean => !cancelled && Date.now() < deadline && document.visibilityState === "visible";
 
     const submit = async (): Promise<void> => {
+      if (!live()) return;
       try {
-        await withActivityLock(async () => {
-          const { envelope } = await requestJson<{ envelope: string }>(`/api/activity/envelope?eventId=${encodeURIComponent(eventId)}&screen=${screen}`, { cache: "no-store" });
-          await requestJson("/api/activity", { method: "POST", body: JSON.stringify({ eventId, screen, envelope }) });
+        await withActivityLock(deadline, async () => {
+          if (!live()) return;
+          if (!arrival.envelope) {
+            const response = await requestJson<{ envelope: string }>(`/api/activity/envelope?eventId=${encodeURIComponent(arrival.id)}&screen=${screen}`, { cache: "no-store" });
+            arrival.envelope = response.envelope;
+            saveArrival(arrivalKey, arrival);
+          }
+          if (!live()) return;
+          await requestJson("/api/activity", { method: "POST", body: JSON.stringify({ eventId: arrival.id, screen, envelope: arrival.envelope }) });
+          try { sessionStorage.removeItem(`qe-activity:${arrivalKey}`); } catch { /* Storage is optional. */ }
         });
-        try { sessionStorage.removeItem(`qe-activity:${arrivalKey}`); } catch { /* Storage is optional. */ }
       } catch {
-        if (retries < 2 && document.visibilityState === "visible") {
+        if (retries < 2 && live()) {
           retries += 1;
-          window.setTimeout(() => { if (document.visibilityState === "visible") void submit(); }, retries * 1500);
+          timer = window.setTimeout(() => { void submit(); }, retries * 1500);
         }
       }
     };
-    void submit();
-  }, [location.key, location.pathname, session, status]);
+    // Wait for navigation effects/redirects to settle; cleanup cancels intermediates.
+    timer = window.setTimeout(() => {
+      if (!live()) return;
+      lastArrival.current = arrivalKey;
+      saveArrival(arrivalKey, arrival);
+      void submit();
+    }, 0);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [arrivalLocationKey, eligible, location.pathname, session?.email, session?.isAppAdmin, status]);
 
   return null;
 }

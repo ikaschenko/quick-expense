@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { act, render, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { AppActivityTracker } from "../../app-web/components/AppActivityTracker";
 
 const mockSession = vi.hoisted(() => ({
@@ -24,6 +24,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   sessionStorage.clear();
 });
@@ -48,18 +49,18 @@ describe("AppActivityTracker", () => {
     expect(JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body)).eventId).toBe("saved-event-id");
   });
 
-  it("replaces expired or malformed persisted event IDs", async () => {
+  it("never renews an expired original arrival", async () => {
     const key = "user@example.com:default:history";
-    sessionStorage.setItem(`qe-activity:${key}`, JSON.stringify({ id: "expired-id", createdAt: Date.now() - 120_001 }));
-    const { unmount } = render(<MemoryRouter initialEntries={["/history"]}><AppActivityTracker /></MemoryRouter>);
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
-    expect(String(vi.mocked(fetch).mock.calls[0][0])).not.toContain("expired-id");
-    unmount();
-    vi.mocked(fetch).mockClear();
-    sessionStorage.setItem(`qe-activity:${key}`, "not-json");
+    sessionStorage.setItem(`qe-activity:${key}`, JSON.stringify({ id: "expired-id", createdAt: Date.now() - 120_001, envelope: "original" }));
+    render(<MemoryRouter initialEntries={["/history"]}><AppActivityTracker /></MemoryRouter>);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("replaces malformed persisted arrivals", async () => {
+    sessionStorage.setItem("qe-activity:user@example.com:default:history", "not-json");
     render(<MemoryRouter initialEntries={["/history"]}><AppActivityTracker /></MemoryRouter>);
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
-    expect(String(vi.mocked(fetch).mock.calls[0][0])).toMatch(/eventId=[0-9a-f-]{36}/i);
   });
 
   it("retries failed activity delivery with the same event ID", async () => {
@@ -96,6 +97,80 @@ describe("AppActivityTracker", () => {
       if (locksDescriptor) Object.defineProperty(navigator, "locks", locksDescriptor);
       else delete (navigator as { locks?: LockManager }).locks;
     }
+  });
+
+  it("does not emit for ineligible screens", async () => {
+    render(<MemoryRouter initialEntries={["/add"]}><AppActivityTracker eligible={false} /></MemoryRouter>);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each(["/add", "/edit/invalid"])("ignores a redirect intermediate %s", async (path) => {
+    render(<MemoryRouter initialEntries={[path]}><Routes>
+      <Route path={path} element={<><AppActivityTracker /><Navigate to="/home" replace /></>} />
+      <Route path="/home" element={<AppActivityTracker />} />
+    </Routes></MemoryRouter>);
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect(String(vi.mocked(fetch).mock.calls[0][0])).toContain("screen=home");
+  });
+
+  it("ignores state replacements but records a real same-screen push", async () => {
+    function Navigation() {
+      const navigate = useNavigate();
+      return <><button onClick={() => navigate("/history", { replace: true, state: { cleared: true } })}>Replace</button>
+        <button onClick={() => navigate("/history")}>Push</button><AppActivityTracker /></>;
+    }
+    const { getByText } = render(<MemoryRouter initialEntries={["/history"]}><Navigation /></MemoryRouter>);
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    await act(async () => { getByText("Replace").click(); });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    await act(async () => { getByText("Push").click(); });
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(4));
+  });
+
+  it("reuses the original envelope after a lost POST response", async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetch).mockImplementation(async (input) => {
+      if (String(input).includes("/envelope")) return successfulJson({ envelope: "original-envelope" }) as Response;
+      throw new Error("lost response");
+    });
+    render(<MemoryRouter initialEntries={["/history"]}><AppActivityTracker /></MemoryRouter>);
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    const calls = vi.mocked(fetch).mock.calls;
+    expect(calls.filter(([url]) => String(url).includes("/envelope"))).toHaveLength(1);
+    const posts = calls.filter(([, options]) => options?.method === "POST");
+    expect(posts).toHaveLength(3);
+    expect(new Set(posts.map(([, options]) => String(options?.body))).size).toBe(1);
+  });
+
+  it("refuses submission after acquiring a lock beyond the original deadline", async () => {
+    vi.useFakeTimers();
+    let acquire: (() => Promise<void>) | undefined;
+    const descriptor = Object.getOwnPropertyDescriptor(navigator, "locks");
+    Object.defineProperty(navigator, "locks", { configurable: true, value: { request: vi.fn((_name, action) => { acquire = action; return new Promise(() => undefined); }) } });
+    try {
+      render(<MemoryRouter initialEntries={["/history"]}><AppActivityTracker /></MemoryRouter>);
+      await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+      expect(acquire).toBeDefined();
+      vi.setSystemTime(Date.now() + 120_000);
+      await act(async () => { await acquire?.(); });
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      if (descriptor) Object.defineProperty(navigator, "locks", descriptor);
+      else delete (navigator as { locks?: LockManager }).locks;
+    }
+  });
+
+  it("refuses a delayed retry once the original arrival is two minutes old", async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetch).mockRejectedValue(new Error("offline"));
+    render(<MemoryRouter initialEntries={["/history"]}><AppActivityTracker /></MemoryRouter>);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    vi.setSystemTime(Date.now() + 120_000);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1500); });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it.each(["/", "/auth/callback", "/logs"])("does not record redirect or non-SPA route %s", async (path) => {

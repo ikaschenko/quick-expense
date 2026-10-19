@@ -94,3 +94,21 @@ describe("AdminPage", () => {
     expect(await screen.findByText("Total users")).toBeTruthy();
   });
 });
+
+
+describe("per-period observation status", () => {
+  it("distinguishes an unavailable prior period from partially observed current counts and shows gaps", async () => {
+    vi.mocked(adminApi.getUsageMetrics).mockResolvedValue({
+      ...sampleMetrics,
+      coverage: { current: "insufficient", previous: "unavailable" },
+      users: { ...sampleMetrics.users, active: { current: 5, previous: null, change: { kind: "unavailable" } } },
+      sessions: { ...sampleMetrics.sessions, previous: null },
+      coverageGaps: [{ start: "2026-10-01T01:00:00Z", end: "2026-10-01T02:00:00Z" }],
+    });
+    renderPage();
+    await screen.findByText("Total users");
+    expect(screen.getAllByText(/Current:.*Observed partial counts.*Previous:.*Unavailable/)).toHaveLength(2);
+    expect(screen.getAllByText("Previous period: Unavailable").length).toBeGreaterThan(0);
+    expect(screen.getByRole("region", { name: "Tracking coverage gaps" }).textContent).toContain("2026-10-01T01:00:00.000Z");
+  });
+});

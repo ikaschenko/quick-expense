@@ -38,7 +38,7 @@ interface ConfigContextValue {
 
 const ConfigContext = createContext<ConfigContextValue | null>(null);
 
-export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
+export function ConfigProvider({ children, loadingEnabled = true }: PropsWithChildren<{ loadingEnabled?: boolean }>): JSX.Element {
   const { session } = useAuth();
   const [config, setConfig] = useState<SpreadsheetConfig | null>(null);
   const [isFetching, setIsFetching] = useState(false);
@@ -51,7 +51,7 @@ export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
   // the current session's config has not yet been fetched. Computing this in the render
   // phase (not an effect) prevents the effect-ordering race where a child page's
   // useEffect fires before ConfigContext's useEffect sets the loading flag.
-  const isConfigLoading = isFetching || (!!session && session.email !== fetchedForEmail);
+  const isConfigLoading = loadingEnabled && (isFetching || (!!session && session.email !== fetchedForEmail));
   const [fileName, setFileName] = useState<string | null>(null);
   const [isFileNameLoading, setIsFileNameLoading] = useState(false);
   const retryBackoffRef = useRef(new RetryBackoff());
@@ -163,6 +163,8 @@ export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
       return;
     }
 
+    if (!loadingEnabled) return;
+
     // Only load if retry backoff allows it
     if (!retryBackoffRef.current.canRetryNow()) {
       setIsFetching(false);
@@ -193,11 +195,11 @@ export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
     // Only session identity (email) matters here — re-running on every session mutation
     // (e.g. touchSession() bumping lastActivityAt) would re-fetch config needlessly and
     // flash the whole dashboard back to its loading skeleton on unrelated actions.
-  }, [session?.email]);
+  }, [session?.email, loadingEnabled]);
 
   // Fetch the live file display name from Drive whenever the spreadsheet changes.
   useEffect(() => {
-    if (!config?.spreadsheetId) {
+    if (!loadingEnabled || !config?.spreadsheetId) {
       setFileName(null);
       setIsFileNameLoading(false);
       return;
@@ -209,7 +211,7 @@ export function ConfigProvider({ children }: PropsWithChildren): JSX.Element {
       .then(({ fileName: name }) => setFileName(name))
       .catch(() => setFileName(null))
       .finally(() => setIsFileNameLoading(false));
-  }, [config?.spreadsheetId]);
+  }, [config?.spreadsheetId, loadingEnabled]);
 
   const value = useMemo<ConfigContextValue>(() => {
     return {

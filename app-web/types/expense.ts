@@ -226,12 +226,13 @@ export interface MetricChange {
 export interface AdminUsageMetrics {
   snapshotAt: string;
   timezone: "UTC";
-  trackingStartedAt: string;
+  trackingStartedAt: string | null;
   periods: {
     current: { start: string; end: string; endExclusive: string };
     previous: { start: string; end: string; endExclusive: string };
   };
-  coverage: { current: "complete" | "insufficient"; previous: "complete" | "insufficient" };
+  coverage: { current: "complete" | "insufficient" | "unavailable"; previous: "complete" | "insufficient" | "unavailable" };
+  coverageGaps?: Array<{ start: string; end: string }>;
   users: {
     total: number;
     connected: MetricCount;

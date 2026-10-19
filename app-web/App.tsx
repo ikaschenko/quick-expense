@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { SharedConfigInvalidModal } from "./components/SharedConfigInvalidModal";
@@ -13,7 +13,6 @@ import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { SetupPage } from "./pages/SetupPage";
 import { AdminPage } from "./pages/AdminPage";
-import { AppActivityTracker } from "./components/AppActivityTracker";
 
 import type { JSX } from "react";
 
@@ -26,7 +25,6 @@ function AppRoutes(): JSX.Element {
 
   return (
     <>
-    <AppActivityTracker />
     <Routes>
       <Route path="/" element={<LoginPage />} />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
@@ -93,10 +91,11 @@ function AppRoutes(): JSX.Element {
 }
 
 export default function App(): JSX.Element {
+  const { pathname } = useLocation();
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <ConfigProvider>
+        <ConfigProvider loadingEnabled={pathname !== "/admin"}>
           <DatasetProvider>
             <AppRoutes />
           </DatasetProvider>

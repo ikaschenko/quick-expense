@@ -1,3 +1,4 @@
+import { AppActivityTracker } from "../components/AppActivityTracker";
 import { useCallback, useEffect, useRef, useState, type JSX } from "react";
 import { Link } from "react-router-dom";
 import { ArrowDown, ArrowUp, RefreshCw, Shield } from "lucide-react";
@@ -41,7 +42,7 @@ function PeriodLabel({ metrics }: { metrics: AdminUsageMetrics }): JSX.Element {
   const { current, previous } = metrics.periods;
   return (
     <p className="admin-periods">
-      Current: {formatDate(current.start)} – {formatDate(current.end)} · Previous: {formatDate(previous.start)} – {formatDate(previous.end)} · UTC
+      Current: {formatDate(current.start)} – {formatDate(current.end)} ({metrics.coverage.current === "complete" ? "Complete" : metrics.coverage.current === "unavailable" ? "Unavailable" : "Observed partial counts"}) · Previous: {formatDate(previous.start)} – {formatDate(previous.end)} ({metrics.coverage.previous === "complete" ? "Complete" : metrics.coverage.previous === "unavailable" ? "Unavailable" : "Observed partial counts"}) · UTC
     </p>
   );
 }
@@ -97,6 +98,7 @@ export function AdminPage(): JSX.Element {
 
   return (
     <main className="admin-page">
+      <AppActivityTracker />
       <header className="admin-page-header">
         <div><p className="admin-eyebrow"><Shield size={15} aria-hidden /> Administration</p><h1>QuickExpense Administration Panel</h1></div>
         <div className="admin-header-actions">
@@ -135,7 +137,7 @@ export function AdminPage(): JSX.Element {
         <section className="admin-section" aria-labelledby="admin-adoption-heading">
           <h2 id="admin-adoption-heading">Recent adoption</h2>
           <PeriodLabel metrics={metrics} />
-          {!periodCoverage ? <p className="admin-coverage" role="status">Insufficient history for one or both complete periods. Figures below are observed partial counts; comparisons are withheld.</p> : null}
+          {!periodCoverage ? <p className="admin-coverage" role="status">Insufficient history for one or both complete periods. Unobserved periods are unavailable; partially observed periods show observed counts only. Comparisons are withheld.</p> : null}
           <div className="admin-metric-grid">
             <MetricCard title="Active users · last 30 days" value={metrics.users.active.current ?? "Unavailable"} detail={`Previous period: ${metrics.users.active.previous ?? "Unavailable"}`} trend={periodCoverage ? metrics.users.active.change : { kind: "unavailable" }} />
             <MetricCard title="New users · last 30 days" value={metrics.users.new.current ?? "Unavailable"} detail={`Previous period: ${metrics.users.new.previous ?? "Unavailable"}`} trend={metrics.users.new.change} />
@@ -151,9 +153,13 @@ export function AdminPage(): JSX.Element {
             <MetricCard title="Sessions · last 30 days" value={metrics.sessions.current ?? "Unavailable"} detail={`Previous period: ${metrics.sessions.previous ?? "Unavailable"}`} trend={periodCoverage ? metrics.sessions.change : { kind: "unavailable" }} />
             <MetricCard title="Average sessions per day" value={metrics.sessions.averagePerDay.current === null ? "Insufficient history" : metrics.sessions.averagePerDay.current.toFixed(1)} detail={`Previous period: ${metrics.sessions.averagePerDay.previous === null ? "Insufficient history" : metrics.sessions.averagePerDay.previous.toFixed(1)}`} trend={periodCoverage ? metrics.sessions.averageChange : { kind: "unavailable" }} />
           </div>
-          <p className="admin-note">Tracking started {new Date(metrics.trackingStartedAt).toLocaleDateString()} (UTC). A session starts on an authenticated screen visit and continues with activity less than 30 minutes apart.</p>
+          <p className="admin-note">Tracking started {metrics.trackingStartedAt ? new Date(metrics.trackingStartedAt).toLocaleDateString(undefined, { timeZone: "UTC" }) : "not yet enabled"} (UTC). A session starts on an authenticated screen visit and continues with activity less than 30 minutes apart.</p>
         </section>
 
+        {metrics.coverageGaps?.length ? <section className="admin-section" aria-label="Tracking coverage gaps">
+          <h2>Tracking coverage gaps</h2>
+          <ul>{metrics.coverageGaps.map((gap, index) => <li key={index}>{new Date(gap.start).toISOString()} – {new Date(gap.end).toISOString()}</li>)}</ul>
+        </section> : null}
         <section className="admin-section" aria-labelledby="admin-operations-heading">
           <h2 id="admin-operations-heading">Operations</h2>
           <p>Application logs are available in the existing guarded log viewer.</p>

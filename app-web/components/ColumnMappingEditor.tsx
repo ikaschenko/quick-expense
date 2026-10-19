@@ -9,8 +9,9 @@ import { REQUIRED_QE_FIELDS } from "../constants/expenses";
 interface Props {
   /** Actual column names found in the user's sheet. */
   detectedColumns: string[];
-  /** Explicit candidate sheet; not made active until setup validation succeeds. */
+  /** Explicit sheet represented by this editor; never substitute the active sheet. */
   spreadsheetId?: string;
+  candidate?: boolean;
   /** Pre-populate with an existing saved mapping. Only overrides (QE field ≠ user col) are stored. */
   initialMapping?: ColumnMapping;
   /** Called when the mapping has been saved successfully. */
@@ -21,7 +22,7 @@ interface Props {
 
 type EditorPhase = "edit" | "confirm";
 
-export function ColumnMappingEditor({ detectedColumns, spreadsheetId, initialMapping, onSaved, onCancel }: Props): JSX.Element {
+export function ColumnMappingEditor({ detectedColumns, spreadsheetId, candidate = false, initialMapping, onSaved, onCancel }: Props): JSX.Element {
   const [mapping, setMapping] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
     for (const field of REQUIRED_QE_FIELDS) {
@@ -40,7 +41,7 @@ export function ColumnMappingEditor({ detectedColumns, spreadsheetId, initialMap
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const allAssigned = REQUIRED_QE_FIELDS.every((f) => mapping[f]);
+  const allAssigned = !!spreadsheetId && REQUIRED_QE_FIELDS.every((f) => mapping[f]);
 
   // The effective mapping only includes entries where the user column differs from the QE field name.
   const effectiveMapping: ColumnMapping = {};
@@ -63,7 +64,7 @@ export function ColumnMappingEditor({ detectedColumns, spreadsheetId, initialMap
     setIsSaving(true);
     setSaveError(null);
     try {
-      await googleSheetsService.saveColumnMapping(effectiveMapping, spreadsheetId);
+      await googleSheetsService.saveColumnMapping(effectiveMapping, spreadsheetId, candidate);
       onSaved();
     } catch (err) {
       setSaveError((err as Error).message);

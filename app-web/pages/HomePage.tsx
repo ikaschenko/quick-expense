@@ -1,3 +1,4 @@
+import { AppActivityTracker } from "../components/AppActivityTracker";
 import { useEffect, useMemo, useRef, useState, type JSX } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, FileSpreadsheet, Info, Loader2, Receipt } from "lucide-react";
@@ -343,6 +344,7 @@ export function HomePage(): JSX.Element {
 
   return (
     <Layout title="Quick Expense">
+      <AppActivityTracker />
       {showSavedBanner ? (
         <StatusBanner variant="success" message="Expense saved successfully." />
       ) : null}

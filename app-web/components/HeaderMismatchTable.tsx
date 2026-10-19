@@ -72,6 +72,7 @@ export function HeaderMismatchTable({
           <ColumnMappingEditor
             detectedColumns={headerDetails.detectedColumns}
             spreadsheetId={spreadsheetId}
+            candidate
             onSaved={onMappingSaved}
             onCancel={onMappingCancel}
           />

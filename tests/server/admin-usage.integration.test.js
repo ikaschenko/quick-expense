@@ -10,6 +10,7 @@ const schema = `qe_admin_usage_${randomUUID().replaceAll("-", "")}`;
 let ownerId;
 let usage;
 let legacyBackfill;
+let migrationTrackingStart;
 
 beforeAll(async () => {
   if (!process.env.DATABASE_URL) throw new Error("Admin usage integration tests require DATABASE_URL in .env.");
@@ -33,6 +34,8 @@ beforeAll(async () => {
   await database.pool.query(migration);
   const { rows: [baseline] } = await database.pool.query("SELECT first_signed_in_at, connection_validated_at, connection_origin FROM users WHERE email = 'migration-legacy@example.invalid'");
   legacyBackfill = baseline;
+  const { rows: [coverage] } = await database.pool.query("SELECT tracking_started_at FROM usage_tracking_coverage");
+  migrationTrackingStart = coverage.tracking_started_at;
   usage = await import("../../app-server/usage.js");
 }, 30_000);
 
@@ -44,7 +47,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  await database.pool.query("TRUNCATE users RESTART IDENTITY CASCADE");
+  await database.pool.query("TRUNCATE users, usage_session_days, usage_tracking_gaps RESTART IDENTITY CASCADE");
   const { rows } = await database.pool.query(
     `INSERT INTO users (email, spreadsheet_id, created_at, first_signed_in_at) VALUES
       ('owner@example.invalid', 'saved-sheet', '2024-01-02T03:04:05Z', '2024-01-02T03:04:05Z'),
@@ -58,6 +61,50 @@ beforeEach(async () => {
 });
 
 describe("admin usage PostgreSQL migration and tracking", () => {
+  it("defers the tracking baseline until instrumentation is enabled", async () => {
+    expect(migrationTrackingStart).toBeNull();
+    await usage.initializeUsageTracking();
+    const { rows: [enabled] } = await database.pool.query("SELECT tracking_started_at FROM usage_tracking_coverage");
+    expect(enabled.tracking_started_at).toBeInstanceOf(Date);
+    await usage.initializeUsageTracking();
+    const { rows: [again] } = await database.pool.query("SELECT tracking_started_at FROM usage_tracking_coverage");
+    expect(again.tracking_started_at).toEqual(enabled.tracking_started_at);
+  });
+
+  it("keeps logout termination without prior activity, including across another sign-in", async () => {
+    const browserId = randomUUID();
+    await usage.endUsageSession(ownerId, browserId, "ended-auth");
+    const endedEvent = { userId: ownerId, browserId, authSessionId: "ended-auth", eventId: randomUUID() };
+    expect(await usage.recordUsageActivity(endedEvent)).toMatchObject({ rejected: true });
+    const { rows: [daily] } = await database.pool.query("SELECT count(*)::int AS count FROM user_activity_days");
+    const { rows: [receipts] } = await database.pool.query("SELECT count(*)::int AS count FROM usage_event_receipts");
+    expect(daily.count).toBe(0);
+    expect(receipts.count).toBe(0);
+    expect(await usage.recordUsageActivity({ ...endedEvent, authSessionId: "new-auth", eventId: randomUUID() })).toMatchObject({ sessionStarted: true });
+    expect(await usage.recordUsageActivity(endedEvent)).toMatchObject({ rejected: true });
+  });
+
+  it("rejects a first arrival already waiting on the logout lock", async () => {
+    const browserId = randomUUID();
+    const blocker = await database.pool.connect();
+    try {
+      await blocker.query("BEGIN");
+      await blocker.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`${ownerId}:${browserId}`]);
+      const logout = usage.endUsageSession(ownerId, browserId, "ended-auth");
+      // Wait until PostgreSQL confirms logout is queued on this schema's lock.
+      await vi.waitFor(async () => {
+        const { rows: [waiting] } = await database.pool.query(
+          "SELECT count(*)::int AS count FROM pg_locks WHERE locktype = 'advisory' AND NOT granted AND database = (SELECT oid FROM pg_database WHERE datname = current_database())",
+        );
+        expect(waiting.count).toBeGreaterThan(0);
+      });
+      const activity = usage.recordUsageActivity({ userId: ownerId, browserId, authSessionId: "ended-auth", eventId: randomUUID() });
+      await blocker.query("COMMIT");
+      await logout;
+      expect(await activity).toMatchObject({ rejected: true });
+    } finally { await blocker.query("ROLLBACK"); blocker.release(); }
+  });
+
   it("backfills only first sign-in evidence and leaves existing sheet candidates unvalidated", async () => {
     expect(new Date(legacyBackfill.first_signed_in_at).toISOString()).toBe("2020-01-02T03:04:05.000Z");
     expect(legacyBackfill.connection_validated_at).toBeNull();
@@ -97,6 +144,7 @@ describe("admin usage PostgreSQL migration and tracking", () => {
     expect(totals[0].count).toBe(5);
     await database.pool.query("UPDATE user_activity_days SET activity_date = (now() AT TIME ZONE 'UTC')::date - 1");
     await database.pool.query("UPDATE usage_session_days SET session_date = (now() AT TIME ZONE 'UTC')::date - 1");
+    await database.pool.query("UPDATE usage_tracking_coverage SET tracking_started_at = now() - interval '2 days'");
     const metrics = await usage.getAdminUsageMetrics();
     expect(metrics.users.total).toBe(3);
     expect(metrics.users.connected.count).toBe(2);

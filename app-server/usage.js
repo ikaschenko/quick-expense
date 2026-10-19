@@ -1,5 +1,8 @@
 import crypto from "node:crypto";
 import pool from "./db.js";
+import { getConnectedGuestEmails } from "./sharing.js";
+
+let activityFailureSince = null;
 
 const BROWSER_COOKIE = "qe_usage_browser";
 const TRACKING_INTERVAL_MS = 60_000;
@@ -74,12 +77,42 @@ export async function hasUsageEventReceipt({ userId, browserId, eventId }) {
   return rows.length > 0 && Number(rows[0].user_id) === Number(userId) && rows[0].browser_id === browserId;
 }
 
-export async function recordUsageActivity({ userId, browserId, eventId, authSessionId }) {
+export async function recordUsageActivity(event) {
+  const attemptedAt = new Date();
+  try {
+    return await writeUsageActivity(event);
+  } catch (error) {
+    activityFailureSince = activityFailureSince && activityFailureSince < attemptedAt ? activityFailureSince : attemptedAt;
+    // Best effort durable evidence, even if this process exits before recovery.
+    try {
+      await pool.query("INSERT INTO usage_tracking_gaps (started_at, ended_at) VALUES ($1, clock_timestamp())", [activityFailureSince]);
+    } catch { /* Recovery records the interval once persistence is available. */ }
+    throw error;
+  }
+}
+
+async function writeUsageActivity({ userId, browserId, eventId, authSessionId, expiresAt }) {
   const sessionHash = authSessionHash(authSessionId);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`${userId}:${browserId}`]);
+    const { rows: ended } = await client.query(
+      "SELECT 1 FROM usage_ended_auth_sessions WHERE user_id = $1 AND browser_id = $2 AND auth_session_hash = $3",
+      [userId, browserId, sessionHash],
+    );
+    if (ended.length) {
+      await client.query("ROLLBACK");
+      return { duplicate: false, sessionStarted: false, rejected: true };
+    }
+    const { rows: [current] } = await client.query(
+      "SELECT last_activity_at, ended_at, auth_session_hash FROM browser_usage_sessions WHERE user_id = $1 AND browser_id = $2 FOR UPDATE",
+      [userId, browserId],
+    );
+    if (current?.ended_at && current.auth_session_hash === sessionHash) {
+      await client.query("ROLLBACK");
+      return { duplicate: false, sessionStarted: false, rejected: true };
+    }
     const receipt = await client.query(
       `INSERT INTO usage_event_receipts (event_id, user_id, browser_id)
        VALUES ($1, $2, $3) ON CONFLICT (event_id) DO NOTHING RETURNING event_id`,
@@ -102,20 +135,21 @@ export async function recordUsageActivity({ userId, browserId, eventId, authSess
        FROM (SELECT clock_timestamp() AS received_at) receipt`,
     );
     const now = clock.now;
+    if (expiresAt !== undefined && new Date(now).getTime() >= expiresAt) {
+      await client.query("ROLLBACK");
+      return { expired: true };
+    }
+    await client.query(
+      `UPDATE usage_tracking_coverage SET tracking_started_at = coalesce(tracking_started_at, $1),
+       last_started_at = coalesce(last_started_at, $1), last_heartbeat_at = coalesce(last_heartbeat_at, $1)
+       WHERE singleton = TRUE AND tracking_started_at IS NULL`, [now],
+    );
     await client.query(
       `INSERT INTO user_activity_days (user_id, activity_date) VALUES ($1, $2)
        ON CONFLICT (user_id, activity_date) DO NOTHING`,
       [userId, clock.utc_date],
     );
 
-    const { rows: [current] } = await client.query(
-      "SELECT last_activity_at, ended_at, auth_session_hash FROM browser_usage_sessions WHERE user_id = $1 AND browser_id = $2 FOR UPDATE",
-      [userId, browserId],
-    );
-    if (current?.ended_at && current.auth_session_hash === sessionHash) {
-      await client.query("COMMIT");
-      return { duplicate: false, sessionStarted: false, rejected: true };
-    }
     const continues = current && !current.ended_at && new Date(current.last_activity_at).getTime() > new Date(now).getTime() - 30 * 60_000;
     if (continues) {
       await client.query(
@@ -157,8 +191,13 @@ export async function endUsageSession(userId, browserId, authSessionId) {
     await client.query("BEGIN");
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`${userId}:${browserId}`]);
     await client.query(
+      `INSERT INTO usage_ended_auth_sessions (user_id, browser_id, auth_session_hash)
+       VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+      [userId, browserId, authSessionHash(authSessionId)],
+    );
+    await client.query(
       `UPDATE browser_usage_sessions SET ended_at = now(), auth_session_hash = $3
-       WHERE user_id = $1 AND browser_id = $2 AND ended_at IS NULL`,
+       WHERE user_id = $1 AND browser_id = $2 AND auth_session_hash = $3 AND ended_at IS NULL`,
       [userId, browserId, authSessionHash(authSessionId)],
     );
     await client.query("COMMIT");
@@ -172,32 +211,47 @@ export async function endUsageSession(userId, browserId, authSessionId) {
 
 export async function cleanupUsageTracking() {
   await pool.query("DELETE FROM user_activity_days WHERE activity_date < (now() AT TIME ZONE 'UTC')::date - 90");
+  await pool.query("DELETE FROM usage_ended_auth_sessions WHERE ended_at < now() - interval '24 hours'");
   await pool.query("DELETE FROM usage_event_receipts WHERE received_at < now() - interval '24 hours'");
   await pool.query("DELETE FROM browser_usage_sessions WHERE last_activity_at < now() - interval '31 minutes'");
 }
 
 export async function initializeUsageTracking() {
+  await updateUsageHeartbeat(true);
+}
+
+export async function heartbeatUsageTracking() {
+  await updateUsageHeartbeat(false);
+}
+
+async function updateUsageHeartbeat(starting) {
   const client = await pool.connect();
+  const failure = activityFailureSince;
   try {
     await client.query("BEGIN");
     const { rows: [coverage] } = await client.query("SELECT last_heartbeat_at FROM usage_tracking_coverage WHERE singleton = TRUE FOR UPDATE");
-    const now = new Date();
-    const prior = new Date(coverage.last_heartbeat_at);
-    if (now.getTime() - prior.getTime() > TRACKING_INTERVAL_MS + 5_000) {
+    const { rows: [clock] } = await client.query("SELECT clock_timestamp() AS now");
+    const now = new Date(clock.now);
+    const prior = coverage.last_heartbeat_at && new Date(coverage.last_heartbeat_at);
+    if (prior && (starting || now.getTime() - prior.getTime() > TRACKING_INTERVAL_MS + 5_000)) {
       await client.query("INSERT INTO usage_tracking_gaps (started_at, ended_at) VALUES ($1, $2)", [prior, now]);
     }
-    await client.query("UPDATE usage_tracking_coverage SET last_started_at = $1, last_heartbeat_at = $1 WHERE singleton = TRUE", [now]);
+    if (failure) {
+      await client.query("INSERT INTO usage_tracking_gaps (started_at, ended_at) VALUES ($1, $2)", [failure, now]);
+    }
+    await client.query(
+      `UPDATE usage_tracking_coverage SET tracking_started_at = coalesce(tracking_started_at, $1),
+       last_started_at = CASE WHEN $2 THEN $1 ELSE last_started_at END, last_heartbeat_at = $1 WHERE singleton = TRUE`,
+      [now, starting],
+    );
     await client.query("COMMIT");
+    if (activityFailureSince === failure) activityFailureSince = null;
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
   } finally {
     client.release();
   }
-}
-
-export async function heartbeatUsageTracking() {
-  await pool.query("UPDATE usage_tracking_coverage SET last_heartbeat_at = now() WHERE singleton = TRUE");
 }
 
 function utcDate(date) {
@@ -223,7 +277,7 @@ export async function getAdminUsageMetrics() {
     const { rows: [snapshot] } = await client.query(
       `SELECT transaction_timestamp() AS snapshot_at,
               to_char((transaction_timestamp() AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD') AS today_utc,
-              tracking_started_at
+              tracking_started_at, last_heartbeat_at
        FROM usage_tracking_coverage WHERE singleton = TRUE`,
     );
     const todayDate = snapshot.today_utc instanceof Date
@@ -232,10 +286,11 @@ export async function getAdminUsageMetrics() {
     const today = new Date(`${todayDate}T00:00:00.000Z`);
     const currentStart = new Date(today.getTime() - 30 * 86_400_000);
     const previousStart = new Date(today.getTime() - 60 * 86_400_000);
-    const trackingStart = new Date(snapshot.tracking_started_at);
+    const trackingStart = snapshot.tracking_started_at ? new Date(snapshot.tracking_started_at) : null;
     const currentPeriod = period(currentStart, today);
     const previousPeriod = period(previousStart, currentStart);
 
+    const connectedGuestEmails = await getConnectedGuestEmails(client);
     const { rows: [users] } = await client.query(
       `WITH classifications AS (
          SELECT u.id,
@@ -243,11 +298,7 @@ export async function getAdminUsageMetrics() {
              WHEN u.connection_validated_at IS NOT NULL AND u.spreadsheet_id IS NOT NULL THEN
                CASE WHEN u.connection_origin = 'created' THEN 'created'
                     WHEN u.connection_origin = 'existing' THEN 'existing' ELSE 'unknown' END
-             WHEN EXISTS (
-               SELECT 1 FROM setup_shares s JOIN users shared_owner ON shared_owner.id = s.owner_user_id
-               WHERE s.guest_email = u.email AND shared_owner.connection_validated_at IS NOT NULL
-                 AND shared_owner.spreadsheet_id IS NOT NULL
-             ) THEN 'shared'
+             WHEN u.email = ANY($1::text[]) THEN 'shared'
              ELSE 'none'
            END AS category
          FROM users u
@@ -259,7 +310,7 @@ export async function getAdminUsageMetrics() {
          count(*) FILTER (WHERE category = 'shared')::int AS shared,
          count(*) FILTER (WHERE category = 'unknown')::int AS unknown,
          count(*) FILTER (WHERE category = 'none')::int AS no_setup
-       FROM classifications`,
+       FROM classifications`, [connectedGuestEmails],
     );
     const { rows: [signins] } = await client.query(
       `SELECT count(*) FILTER (WHERE first_signed_in_at >= $1 AND first_signed_in_at < $2)::int AS current_new,
@@ -281,18 +332,29 @@ export async function getAdminUsageMetrics() {
       `SELECT started_at, ended_at FROM usage_tracking_gaps
        WHERE started_at < $1 AND ended_at > $2`, [today, previousStart],
     );
-    const currentCovered = trackingStart <= currentStart && !gaps.some((gap) => new Date(gap.started_at) < today && new Date(gap.ended_at) > currentStart);
-    const previousCovered = trackingStart <= previousStart && !gaps.some((gap) => new Date(gap.started_at) < currentStart && new Date(gap.ended_at) > previousStart);
+    // A recovered connection may serve this snapshot before the next timer tick.
+    // Include the still-open interval rather than claiming complete coverage.
+    const snapshotAt = new Date(snapshot.snapshot_at);
+    if (snapshot.last_heartbeat_at && snapshotAt.getTime() - new Date(snapshot.last_heartbeat_at).getTime() > TRACKING_INTERVAL_MS + 5_000) {
+      gaps.push({ started_at: snapshot.last_heartbeat_at, ended_at: snapshotAt });
+    }
+    if (activityFailureSince && activityFailureSince < snapshotAt) {
+      gaps.push({ started_at: activityFailureSince, ended_at: snapshotAt });
+    }
+    const currentCovered = trackingStart !== null && trackingStart <= currentStart && !gaps.some((gap) => new Date(gap.started_at) < today && new Date(gap.ended_at) > currentStart);
+    const previousCovered = trackingStart !== null && trackingStart <= previousStart && !gaps.some((gap) => new Date(gap.started_at) < currentStart && new Date(gap.ended_at) > previousStart);
     const categories = {
       created: Number(users.created), existing: Number(users.existing), shared: Number(users.shared),
       unknown: Number(users.unknown), none: Number(users.no_setup),
     };
     const total = Number(users.total);
     const pct = (count) => total === 0 ? 0 : Number(((count / total) * 100).toFixed(1));
-    const currentSessions = Number(sessions.current_sessions);
-    const previousSessions = Number(sessions.previous_sessions);
-    const currentActive = Number(activity.current_active);
-    const previousActive = Number(activity.previous_active);
+    const currentObserved = trackingStart !== null && trackingStart < today;
+    const previousObserved = trackingStart !== null && trackingStart < currentStart;
+    const currentSessions = currentObserved ? Number(sessions.current_sessions) : null;
+    const previousSessions = previousObserved ? Number(sessions.previous_sessions) : null;
+    const currentActive = currentObserved ? Number(activity.current_active) : null;
+    const previousActive = previousObserved ? Number(activity.previous_active) : null;
     const currentNew = Number(signins.current_new);
     const previousNew = Number(signins.previous_new);
     const currentAverage = currentCovered ? Number((currentSessions / 30).toFixed(1)) : null;
@@ -307,9 +369,10 @@ export async function getAdminUsageMetrics() {
     return {
       snapshotAt: new Date(snapshot.snapshot_at).toISOString(),
       timezone: "UTC",
-      trackingStartedAt: trackingStart.toISOString(),
+      trackingStartedAt: trackingStart?.toISOString() ?? null,
       periods: { current: currentPeriod, previous: previousPeriod },
-      coverage: { current: currentCovered ? "complete" : "insufficient", previous: previousCovered ? "complete" : "insufficient" },
+      coverage: { current: !currentObserved ? "unavailable" : currentCovered ? "complete" : "insufficient", previous: !previousObserved ? "unavailable" : previousCovered ? "complete" : "insufficient" },
+      coverageGaps: gaps.map((gap) => ({ start: new Date(gap.started_at).toISOString(), end: new Date(gap.ended_at).toISOString() })),
       users: {
         total,
         connected: { count: Number(users.connected), percent: pct(Number(users.connected)) },

@@ -163,3 +163,14 @@ describe("removeShareAsGuest", () => {
     );
   });
 });
+
+
+describe("getConnectedGuestEmails", () => {
+  it.each([[[]], [[{ guest_email: "guest@example.com" }]]])("resolves validated shared connections using the supplied snapshot client: %j", async (rows) => {
+    const { getConnectedGuestEmails } = await import("../../app-server/sharing.js");
+    const client = { query: vi.fn().mockResolvedValue({ rows }) };
+    expect(await getConnectedGuestEmails(client)).toEqual(rows.map((row) => row.guest_email));
+    expect(client.query).toHaveBeenCalledWith(expect.stringContaining("owner.connection_validated_at IS NOT NULL"));
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
+});

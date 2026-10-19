@@ -423,6 +423,15 @@ describe("POST /api/auth/logout", () => {
     expect(mocks.session.destroy).toHaveBeenCalled();
   });
 
+  it.each(["lookup", "tracking"])("destroys authentication when %s fails during sign-out", async (failure) => {
+    signInAs(OWNER);
+    if (failure === "lookup") mocks.store.getUserRecord.mockRejectedValueOnce(new Error("lookup failed"));
+    else mocks.usage.endUsageSession.mockRejectedValueOnce(new Error("tracking failed"));
+    const res = await request("POST", "/api/auth/logout");
+    expect(res.status).toBe(204);
+    expect(mocks.session.destroy).toHaveBeenCalledOnce();
+  });
+
   it("should return 500 when the session cannot be destroyed", async () => {
     mocks.session.destroy = vi.fn((cb) => cb(new Error("store down")));
 
@@ -754,7 +763,7 @@ describe("admin metrics and usage activity", () => {
 
   it("records a verified activity event and rejects invalid or expired envelopes", async () => {
     signInAs(OWNER);
-    const event = { eventId: "123e4567-e89b-42d3-a456-426614174000", screen: "history", envelope: "signed-envelope" };
+    const event = { eventId: "123e4567-e89b-42d3-a456-426614174000", screen: "history", envelope: `${Buffer.from(JSON.stringify({ expiresAt: Date.now() + 120_000 })).toString("base64url")}.signature` };
     const res = await request("POST", "/api/activity", { body: event });
     expect(res.status).toBe(200);
     expect(mocks.usage.recordUsageActivity).toHaveBeenCalledWith(expect.objectContaining({ userId: OWNER.id, eventId: event.eventId }));
@@ -793,11 +802,11 @@ describe("candidate spreadsheet mapping", () => {
 
   it("requires confirmed consent and writes only to the explicit owner candidate", async () => {
     signInAs(OWNER);
-    const unconfirmed = await request("POST", "/api/config/mapping", { body: { spreadsheetId: "candidate-sheet", mapping: { Date: "When" }, confirmed: false } });
+    const unconfirmed = await request("POST", "/api/config/mapping", { body: { spreadsheetId: "candidate-sheet", candidate: true, mapping: { Date: "When" }, confirmed: false } });
     expect(unconfirmed.status).toBe(400);
     expect(mocks.sheets.writeConfigSheetMapping).not.toHaveBeenCalled();
 
-    const confirmed = await request("POST", "/api/config/mapping", { body: { spreadsheetId: "candidate-sheet", mapping: { Date: "When" }, confirmed: true } });
+    const confirmed = await request("POST", "/api/config/mapping", { body: { spreadsheetId: "candidate-sheet", candidate: true, mapping: { Date: "When" }, confirmed: true } });
     expect(confirmed.status).toBe(200);
     expect(mocks.sheets.writeConfigSheetMapping).toHaveBeenCalledWith("access-token", "candidate-sheet", { Date: "When" });
     expect(mocks.store.saveValidatedConnection).not.toHaveBeenCalled();
@@ -861,5 +870,20 @@ describe("admin logs", () => {
 
     expect(res.status).toBe(200);
     expect(mocks.logs.readLogEntries).toHaveBeenCalledWith({ file: "app.log", level: "error", q: "boom", lines: expected });
+  });
+});
+
+
+describe("mapping target validation", () => {
+  beforeEach(() => signInAs(OWNER));
+  it.each([undefined, null, 42, {}, "", "bad id"])("rejects malformed explicit target %j before Google writes", async (spreadsheetId) => {
+    const result = await request("POST", "/api/config/mapping", { body: { spreadsheetId, mapping: {}, confirmed: true } });
+    expect(result.status).toBe(400);
+    expect(mocks.sheets.writeConfigSheetMapping).not.toHaveBeenCalled();
+  });
+  it("rejects an old configured editor after the active sheet changed", async () => {
+    const result = await request("POST", "/api/config/mapping", { body: { spreadsheetId: "previous-sheet", mapping: {}, confirmed: true } });
+    expect(result.status).toBe(409);
+    expect(mocks.sheets.writeConfigSheetMapping).not.toHaveBeenCalled();
   });
 });

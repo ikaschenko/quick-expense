@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 const { pool, clientQuery, release } = vi.hoisted(() => ({
   pool: { connect: vi.fn(), query: vi.fn() },
   clientQuery: vi.fn(),
@@ -82,6 +83,7 @@ describe("usage lifecycle helpers", () => {
 
   it("records a restart gap when the last durable heartbeat is stale", async () => {
     clientQuery.mockImplementation(async (sql) => {
+      if (sql === "SELECT clock_timestamp() AS now") return { rows: [{ now: new Date() }] };
       if (sql.includes("SELECT last_heartbeat_at")) return { rows: [{ last_heartbeat_at: new Date(Date.now() - 120_000) }] };
       return { rows: [] };
     });
@@ -91,15 +93,42 @@ describe("usage lifecycle helpers", () => {
     expect(clientQuery.mock.calls.at(-1)[0]).toBe("COMMIT");
   });
 
-  it("does not record a gap for a recent heartbeat and refreshes the durable heartbeat", async () => {
+  it("does not record a gap for a recent heartbeat on regular heartbeat recovery", async () => {
     clientQuery.mockImplementation(async (sql) => {
+      if (sql === "SELECT clock_timestamp() AS now") return { rows: [{ now: new Date() }] };
       if (sql.includes("SELECT last_heartbeat_at")) return { rows: [{ last_heartbeat_at: new Date(Date.now() - 10_000) }] };
+      return { rows: [] };
+    });
+    await heartbeatUsageTracking();
+    expect(clientQuery.mock.calls.some(([sql]) => sql.includes("INSERT INTO usage_tracking_gaps"))).toBe(false);
+    expect(clientQuery).toHaveBeenCalledWith(expect.stringContaining("tracking_started_at = coalesce"), expect.any(Array));
+  });
+
+  it("persists a heartbeat recovery gap before replacing the prior heartbeat", async () => {
+    const prior = new Date(Date.now() - 120_000);
+    clientQuery.mockImplementation(async (sql) => {
+      if (sql.includes("SELECT last_heartbeat_at")) return { rows: [{ last_heartbeat_at: prior }] };
+      if (sql === "SELECT clock_timestamp() AS now") return { rows: [{ now: new Date() }] };
+      return { rows: [] };
+    });
+    await heartbeatUsageTracking();
+    const gapIndex = clientQuery.mock.calls.findIndex(([sql]) => sql.includes("INSERT INTO usage_tracking_gaps"));
+    const updateIndex = clientQuery.mock.calls.findIndex(([sql]) => sql.includes("UPDATE usage_tracking_coverage"));
+    expect(gapIndex).toBeGreaterThan(0);
+    expect(gapIndex).toBeLessThan(updateIndex);
+    expect(clientQuery.mock.calls[gapIndex][1][0]).toEqual(prior);
+  });
+
+  it("initializes instrumentation atomically without manufacturing a migration-to-enable gap", async () => {
+    clientQuery.mockImplementation(async (sql) => {
+      if (sql.includes("SELECT last_heartbeat_at")) return { rows: [{ last_heartbeat_at: null }] };
+      if (sql === "SELECT clock_timestamp() AS now") return { rows: [{ now: new Date() }] };
       return { rows: [] };
     });
     await initializeUsageTracking();
     expect(clientQuery.mock.calls.some(([sql]) => sql.includes("INSERT INTO usage_tracking_gaps"))).toBe(false);
-    await heartbeatUsageTracking();
-    expect(pool.query).toHaveBeenCalledWith(expect.stringContaining("UPDATE usage_tracking_coverage SET last_heartbeat_at"));
+    expect(clientQuery).toHaveBeenCalledWith(expect.stringContaining("tracking_started_at = coalesce(tracking_started_at, $1)"), [expect.any(Date), true]);
+    expect(clientQuery.mock.calls.at(-1)[0]).toBe("COMMIT");
   });
 
   it("does not attempt to end an absent browser or authentication session", async () => {
@@ -149,6 +178,28 @@ describe("recordUsageActivity", () => {
     expect(clientQuery.mock.calls.some(([sql]) => sql.includes("INSERT INTO user_activity_days"))).toBe(false);
   });
 
+  it("rejects a terminated authentication session before committing any receipt or activity", async () => {
+    configure();
+    const base = clientQuery.getMockImplementation();
+    clientQuery.mockImplementation(async (sql, values) => sql.includes("SELECT 1 FROM usage_ended_auth_sessions") ? { rows: [{}] } : base(sql, values));
+    await expect(recordUsageActivity(event)).resolves.toMatchObject({ rejected: true });
+    expect(clientQuery.mock.calls.some(([sql]) => sql.includes("INSERT INTO usage_event_receipts") || sql.includes("INSERT INTO user_activity_days"))).toBe(false);
+    expect(clientQuery).toHaveBeenCalledWith("ROLLBACK");
+  });
+
+  it("rejects legacy ended browser state before receipts and daily activity", async () => {
+    configure({ current: { ended_at: now, auth_session_hash: crypto.createHash("sha256").update(event.authSessionId).digest("hex") } });
+    await expect(recordUsageActivity(event)).resolves.toMatchObject({ rejected: true });
+    expect(clientQuery.mock.calls.some(([sql]) => sql.includes("INSERT INTO usage_event_receipts") || sql.includes("INSERT INTO user_activity_days"))).toBe(false);
+  });
+
+  it("rolls back an unseen event that expires while waiting for the lock", async () => {
+    configure();
+    await expect(recordUsageActivity({ ...event, expiresAt: now.getTime() })).resolves.toEqual({ expired: true });
+    expect(clientQuery).toHaveBeenCalledWith("ROLLBACK");
+    expect(clientQuery.mock.calls.some(([sql]) => sql.includes("INSERT INTO user_activity_days"))).toBe(false);
+  });
+
   it("rolls back failed writes and releases the pooled client", async () => {
     clientQuery.mockImplementation(async (sql) => {
       if (sql.includes("INSERT INTO user_activity_days")) throw new Error("database unavailable");
@@ -160,13 +211,22 @@ describe("recordUsageActivity", () => {
     await expect(recordUsageActivity(event)).rejects.toThrow("database unavailable");
     expect(clientQuery).toHaveBeenCalledWith("ROLLBACK");
     expect(release).toHaveBeenCalledOnce();
+    expect(pool.query).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO usage_tracking_gaps"), expect.any(Array));
+    clientQuery.mockImplementation(async (sql) => {
+      if (sql.includes("SELECT last_heartbeat_at")) return { rows: [{ last_heartbeat_at: new Date() }] };
+      if (sql === "SELECT clock_timestamp() AS now") return { rows: [{ now: new Date() }] };
+      return { rows: [] };
+    });
+    await heartbeatUsageTracking();
+    expect(clientQuery).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO usage_tracking_gaps"), expect.any(Array));
   });
 
   it("ends sessions under the same cross-tab advisory lock and retains only the session hash", async () => {
     clientQuery.mockResolvedValue({ rows: [] });
     await endUsageSession(event.userId, event.browserId, event.authSessionId);
     expect(clientQuery.mock.calls[1][0]).toContain("pg_advisory_xact_lock");
-    expect(clientQuery.mock.calls[2][0]).toContain("ended_at = now()");
+    expect(clientQuery.mock.calls[2][0]).toContain("INSERT INTO usage_ended_auth_sessions");
+    expect(clientQuery.mock.calls[3][0]).toContain("ended_at = now()");
     expect(clientQuery.mock.calls[2][1][2]).not.toBe(event.authSessionId);
   });
 
@@ -221,7 +281,9 @@ describe("getAdminUsageMetrics", () => {
     const metrics = await getAdminUsageMetrics();
     expect(metrics.users.connected.percent).toBe(0);
     expect(metrics.users.setup.none.percent).toBe(0);
-    expect(metrics.coverage).toEqual({ current: "insufficient", previous: "insufficient" });
+    expect(metrics.coverage).toEqual({ current: "insufficient", previous: "unavailable" });
+    expect(metrics.users.active.previous).toBeNull();
+    expect(metrics.sessions.previous).toBeNull();
     expect(metrics.sessions.averagePerDay).toEqual({ current: null, previous: null });
     expect(metrics.sessions.change).toEqual({ kind: "unavailable" });
     expect(metrics.users.active.current).toBe(0);
@@ -241,5 +303,39 @@ describe("getAdminUsageMetrics", () => {
     const metrics = await getAdminUsageMetrics();
     expect(metrics.users.active.change).toEqual({ kind: "no-previous-activity", absolute: 2, percent: null });
     expect(metrics.sessions.change).toEqual({ kind: "no-previous-activity", absolute: 2, percent: null });
+  });
+});
+
+
+describe("unobserved reporting windows and gaps", () => {
+  function snapshot({ start = "2026-10-19T09:00:00Z", heartbeat = "2026-10-19T12:00:00Z", gaps = [] } = {}) {
+    clientQuery.mockImplementation(async (sql) => {
+      if (sql.includes("snapshot_at")) return { rows: [{ snapshot_at: "2026-10-19T12:00:00Z", today_utc: "2026-10-19", tracking_started_at: start, last_heartbeat_at: heartbeat }] };
+      if (sql.includes("WITH classifications")) return { rows: [{ total: 0, connected: 0, created: 0, existing: 0, shared: 0, unknown: 0, no_setup: 0 }] };
+      if (sql.includes("first_signed_in_at")) return { rows: [{ current_new: 0, previous_new: 0 }] };
+      if (sql.includes("user_activity_days")) return { rows: [{ current_active: 0, previous_active: 0 }] };
+      if (sql.includes("usage_session_days")) return { rows: [{ lifetime: "0", current_sessions: "0", previous_sessions: "0" }] };
+      if (sql.includes("usage_tracking_gaps")) return { rows: gaps };
+      return { rows: [] };
+    });
+  }
+  it.each([null, "2026-10-19T00:00:00Z", "2026-10-19T09:00:00Z"])("returns unavailable instead of zero when tracking starts at %s", async (start) => {
+    snapshot({ start });
+    const metrics = await getAdminUsageMetrics();
+    expect(metrics.coverage).toEqual({ current: "unavailable", previous: "unavailable" });
+    expect(metrics.users.active).toMatchObject({ current: null, previous: null });
+    expect(metrics.sessions).toMatchObject({ current: null, previous: null });
+  });
+  it("labels a full prior window separately from a current window with a durable gap", async () => {
+    snapshot({ start: "2026-07-01T00:00:00Z", gaps: [{ started_at: "2026-10-01T00:00:00Z", ended_at: "2026-10-01T01:00:00Z" }] });
+    const metrics = await getAdminUsageMetrics();
+    expect(metrics.coverage).toEqual({ current: "insufficient", previous: "complete" });
+    expect(metrics.coverageGaps).toEqual([{ start: "2026-10-01T00:00:00.000Z", end: "2026-10-01T01:00:00.000Z" }]);
+  });
+  it("exposes a still-open heartbeat outage before the recovery timer runs", async () => {
+    snapshot({ start: "2026-07-01T00:00:00Z", heartbeat: "2026-10-18T23:59:00Z" });
+    const metrics = await getAdminUsageMetrics();
+    expect(metrics.coverage.current).toBe("insufficient");
+    expect(metrics.coverageGaps).toEqual([{ start: "2026-10-18T23:59:00.000Z", end: "2026-10-19T12:00:00.000Z" }]);
   });
 });

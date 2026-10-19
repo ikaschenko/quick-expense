@@ -52,11 +52,20 @@ CREATE TABLE usage_event_receipts (
 );
 CREATE INDEX usage_event_receipts_received_idx ON usage_event_receipts (received_at);
 
+-- Logout tombstones survive an absent browser row and subsequent sign-ins.
+CREATE TABLE usage_ended_auth_sessions (
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  browser_id UUID NOT NULL,
+  auth_session_hash TEXT NOT NULL,
+  ended_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, browser_id, auth_session_hash)
+);
+
 CREATE TABLE usage_tracking_coverage (
   singleton BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton),
-  tracking_started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  last_started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  last_heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  tracking_started_at TIMESTAMPTZ,
+  last_started_at TIMESTAMPTZ,
+  last_heartbeat_at TIMESTAMPTZ
 );
 INSERT INTO usage_tracking_coverage (singleton) VALUES (TRUE);
 
@@ -72,20 +81,21 @@ ALTER TABLE user_activity_days ENABLE ROW LEVEL SECURITY;
 ALTER TABLE usage_session_days ENABLE ROW LEVEL SECURITY;
 ALTER TABLE browser_usage_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE usage_event_receipts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE usage_ended_auth_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE usage_tracking_coverage ENABLE ROW LEVEL SECURITY;
 ALTER TABLE usage_tracking_gaps ENABLE ROW LEVEL SECURITY;
 
 REVOKE ALL ON setup_connection_provenance, user_activity_days, usage_session_days,
-  browser_usage_sessions, usage_event_receipts, usage_tracking_coverage, usage_tracking_gaps FROM PUBLIC;
+  browser_usage_sessions, usage_event_receipts, usage_ended_auth_sessions, usage_tracking_coverage, usage_tracking_gaps FROM PUBLIC;
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
     REVOKE ALL ON setup_connection_provenance, user_activity_days, usage_session_days,
-      browser_usage_sessions, usage_event_receipts, usage_tracking_coverage, usage_tracking_gaps FROM anon;
+      browser_usage_sessions, usage_event_receipts, usage_ended_auth_sessions, usage_tracking_coverage, usage_tracking_gaps FROM anon;
   END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
     REVOKE ALL ON setup_connection_provenance, user_activity_days, usage_session_days,
-      browser_usage_sessions, usage_event_receipts, usage_tracking_coverage, usage_tracking_gaps FROM authenticated;
+      browser_usage_sessions, usage_event_receipts, usage_ended_auth_sessions, usage_tracking_coverage, usage_tracking_gaps FROM authenticated;
   END IF;
 END;
 $$;

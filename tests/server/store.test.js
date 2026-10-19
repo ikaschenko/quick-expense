@@ -402,3 +402,13 @@ describe("validated connection provenance", () => {
     expect(mockQuery.mock.calls[1][0]).toContain("connection_validated_at = NULL");
   });
 });
+
+
+describe("legacy connection provenance", () => {
+  it.each([["legacy-sheet", "unknown"], ["different-sheet", "existing"]])("revalidating %s records %s when no provenance exists", async (target, origin) => {
+    mockQuery.mockResolvedValue({ rows: [] });
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    mockQuery.mockResolvedValueOnce({ rows: [{ id: "7", spreadsheet_id: "legacy-sheet", connection_revision: "4" }] });
+    await expect(saveValidatedConnection(7, target, "https://sheet", "existing", 4)).resolves.toEqual({ origin, stale: false });
+  });
+});

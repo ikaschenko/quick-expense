@@ -3,6 +3,7 @@ import { googleSheetsService } from "../services/googleSheets";
 import { ColumnMapping, ConfigMode } from "../types/expense";
 
 interface MappingData {
+  spreadsheetId?: string;
   mapping: ColumnMapping | null;
   mode: ConfigMode;
   detectedColumns: string[];

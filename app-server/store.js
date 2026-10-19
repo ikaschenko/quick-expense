@@ -142,7 +142,9 @@ export async function saveValidatedConnection(userId, spreadsheetId, spreadsheet
       "SELECT origin FROM setup_connection_provenance WHERE user_id = $1 AND spreadsheet_id = $2",
       [userId, spreadsheetId],
     );
-    const origin = prior[0]?.origin ?? requestedOrigin;
+    const origin = prior[0]?.origin ?? (
+      user.spreadsheet_id === spreadsheetId && requestedOrigin !== "created" ? "unknown" : requestedOrigin
+    );
     await client.query(
       `INSERT INTO setup_connection_provenance (user_id, spreadsheet_id, origin)
        VALUES ($1, $2, $3) ON CONFLICT (user_id, spreadsheet_id) DO NOTHING`,
