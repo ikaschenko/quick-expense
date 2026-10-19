@@ -549,6 +549,38 @@ describe("POST /api/config and /api/config/create-spreadsheet", () => {
       ownerEmail: null,
     });
   });
+
+  it("does not activate or record provenance for a first setup that fails validation", async () => {
+    signInAs({ ...OWNER, spreadsheetId: null, spreadsheetUrl: null });
+    mocks.sheets.validateSpreadsheet.mockRejectedValueOnce(new Error("candidate validation failed"));
+
+    const res = await request("POST", "/api/config", { body: { spreadsheetUrl: NEW_URL } });
+
+    expect(res.status).toBe(400);
+    expect(mocks.store.reserveConnectionChange).toHaveBeenCalledOnce();
+    expect(mocks.store.saveValidatedConnection).not.toHaveBeenCalled();
+  });
+
+  it("preserves an established setup and its provenance when a replacement fails validation", async () => {
+    signInAs(OWNER);
+    mocks.sheets.validateSpreadsheet.mockRejectedValueOnce(new Error("replacement validation failed"));
+
+    const res = await request("POST", "/api/config", { body: { spreadsheetUrl: NEW_URL } });
+
+    expect(res.status).toBe(400);
+    expect(mocks.store.saveValidatedConnection).not.toHaveBeenCalled();
+    expect(mocks.store.disconnectValidatedConnection).not.toHaveBeenCalled();
+  });
+
+  it("does not persist a newly created setup when post-creation validation fails", async () => {
+    signInAs({ ...OWNER, spreadsheetId: null, spreadsheetUrl: null });
+    mocks.sheets.validateSpreadsheet.mockRejectedValueOnce(new Error("created sheet validation failed"));
+
+    const res = await request("POST", "/api/config/create-spreadsheet", { body: {} });
+
+    expect(res.status).toBe(400);
+    expect(mocks.store.saveValidatedConnection).not.toHaveBeenCalled();
+  });
 });
 
 describe("GET /api/sharing", () => {
@@ -773,6 +805,29 @@ describe("admin metrics and usage activity", () => {
     expect(expired.status).toBe(400);
   });
 
+  it("derives activity identity and browser scope from the authenticated request, not event payload claims", async () => {
+    signInAs(OWNER);
+    const eventId = "123e4567-e89b-42d3-a456-426614174000";
+    const event = {
+      eventId,
+      screen: "history",
+      envelope: `${Buffer.from(JSON.stringify({ expiresAt: Date.now() + 120_000 })).toString("base64url")}.signature`,
+      userId: ADMIN.id,
+      browserId: "attacker-controlled-browser",
+      timestamp: "2001-01-01T00:00:00Z",
+    };
+
+    const res = await request("POST", "/api/activity", { body: event });
+
+    expect(res.status).toBe(200);
+    expect(mocks.usage.recordUsageActivity).toHaveBeenCalledWith(expect.objectContaining({
+      userId: OWNER.id,
+      browserId: "123e4567-e89b-42d3-a456-426614174000",
+      eventId,
+    }));
+    expect(mocks.usage.recordUsageActivity).not.toHaveBeenCalledWith(expect.objectContaining({ userId: ADMIN.id, browserId: event.browserId }));
+  });
+
   it("returns a privacy-safe error for a receipt lookup failure without blocking later activity", async () => {
     signInAs(OWNER);
     const event = { eventId: "123e4567-e89b-42d3-a456-426614174000", screen: "history", envelope: `${Buffer.from(JSON.stringify({ expiresAt: Date.now() + 120_000 })).toString("base64url")}.signature` };
@@ -813,6 +868,21 @@ describe("candidate spreadsheet mapping", () => {
     expect(result.status).toBe(200);
     expect(mocks.sheets.readExpensesSheetHeader).toHaveBeenCalledWith("access-token", "candidate-sheet");
     expect(mocks.store.saveValidatedConnection).not.toHaveBeenCalled();
+  });
+
+  it("prevents a shared guest from reading or writing an owner-only mapping candidate", async () => {
+    signInAsGuest("edit");
+    mocks.sharing.getShareForGuest.mockResolvedValue({ ownerEmail: OWNER.email, ownerUserId: OWNER.id, accessLevel: "edit" });
+
+    const read = await request("GET", "/api/config/mapping?spreadsheetId=candidate-sheet");
+    const write = await request("POST", "/api/config/mapping", {
+      body: { spreadsheetId: "candidate-sheet", candidate: true, mapping: { Date: "When" }, confirmed: true },
+    });
+
+    expect(read.status).toBe(403);
+    expect(write.status).toBe(403);
+    expect(mocks.sheets.readExpensesSheetHeader).not.toHaveBeenCalled();
+    expect(mocks.sheets.writeConfigSheetMapping).not.toHaveBeenCalled();
   });
 
   it("requires confirmed consent and writes only to the explicit owner candidate", async () => {

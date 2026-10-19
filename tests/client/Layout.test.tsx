@@ -3,9 +3,11 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { Layout } from "../../app-web/components/Layout";
 
+const mockAdminAccess = vi.hoisted(() => ({ isAppAdmin: false }));
+
 vi.mock("../../app-web/contexts/AuthContext", () => ({
   useAuth: () => ({
-    session: { guestAccessLevel: null, email: "test@example.com", givenName: "Test", picture: null },
+    session: { guestAccessLevel: null, email: "test@example.com", givenName: "Test", picture: null, isAppAdmin: mockAdminAccess.isAppAdmin },
     error: null,
     status: "signed_in",
     signIn: vi.fn(),
@@ -45,6 +47,8 @@ vi.mock("../../app-web/contexts/DatasetContext", () => ({
 }));
 
 describe("Layout", () => {
+  beforeEach(() => { mockAdminAccess.isAppAdmin = false; });
+
   it("renders a Quick Expense brand link that navigates to /home", async () => {
     const user = userEvent.setup();
 
@@ -72,4 +76,28 @@ describe("Layout", () => {
 
     expect(screen.getByText("Home page")).toBeTruthy();
   });
+  it("shows an accessible Admin view link after Sign out with a separator for admins", async () => {
+    mockAdminAccess.isAppAdmin = true;
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={["/history"]}><Layout><div>History</div></Layout></MemoryRouter>);
+
+    await user.click(screen.getByRole("button", { name: "Account menu" }));
+
+    const signOut = screen.getByRole("button", { name: "Sign out" });
+    const adminLink = screen.getByRole("link", { name: "Admin view" });
+    expect(adminLink.getAttribute("href")).toBe("/admin");
+    expect(signOut.compareDocumentPosition(adminLink) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(document.querySelector('[role="separator"].admin-menu-separator')).toBeTruthy();
+  });
+
+  it("does not expose the Admin view entry to non-admin users", async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={["/history"]}><Layout><div>History</div></Layout></MemoryRouter>);
+
+    await user.click(screen.getByRole("button", { name: "Account menu" }));
+
+    expect(screen.queryByRole("link", { name: "Admin view" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
+  });
+
 });

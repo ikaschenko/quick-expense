@@ -142,12 +142,12 @@ describe("recordUsageActivity", () => {
   const event = { userId: 9, browserId: "browser-id", eventId: "event-id", authSessionId: "session-id" };
   const now = new Date("2026-10-19T12:00:00Z");
 
-  function configure({ receiptRowCount = 1, current = null } = {}) {
+  function configure({ receiptRowCount = 1, current = null, clock = now, utcDate = "2026-10-19" } = {}) {
     clientQuery.mockImplementation(async (sql) => {
       if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") return { rows: [], rowCount: 0 };
       if (sql.includes("INSERT INTO usage_event_receipts")) return { rows: [{ event_id: event.eventId }], rowCount: receiptRowCount };
       if (sql.includes("SELECT user_id, browser_id FROM usage_event_receipts")) return { rows: [{ user_id: event.userId, browser_id: event.browserId }] };
-      if (sql.includes("FROM (SELECT clock_timestamp")) return { rows: [{ now, utc_date: "2026-10-19" }] };
+      if (sql.includes("FROM (SELECT clock_timestamp")) return { rows: [{ now: clock, utc_date: utcDate }] };
       if (sql.includes("SELECT last_activity_at")) return { rows: current ? [current] : [] };
       return { rows: [], rowCount: 1 };
     });
@@ -170,6 +170,19 @@ describe("recordUsageActivity", () => {
     clientQuery.mockReset();
     configure({ current: { ...recent, last_activity_at: new Date(now.getTime() - 30 * 60_000) } });
     await expect(recordUsageActivity({ ...event, eventId: "event-2" })).resolves.toMatchObject({ sessionStarted: true });
+  });
+
+  it("records next-day activity for a continuing session without counting the session twice", async () => {
+    configure({
+      current: { last_activity_at: new Date("2026-10-18T23:59:50Z"), ended_at: null, auth_session_hash: "previous-auth" },
+      clock: new Date("2026-10-19T00:00:10Z"),
+      utcDate: "2026-10-19",
+    });
+
+    await expect(recordUsageActivity(event)).resolves.toMatchObject({ sessionStarted: false });
+
+    expect(clientQuery).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO user_activity_days"), [event.userId, "2026-10-19"]);
+    expect(clientQuery.mock.calls.some(([sql]) => sql.includes("INSERT INTO usage_session_days"))).toBe(false);
   });
 
   it("deduplicates repeated delivery without writing a second activity or session", async () => {
@@ -264,6 +277,9 @@ describe("getAdminUsageMetrics", () => {
     expect(metrics.users.connected).toEqual({ count: 6, percent: 60 });
     expect(metrics.sessions.averagePerDay).toEqual({ current: 0.2, previous: 0.1 });
     expect(metrics.sessions.change).toEqual({ kind: "increase", absolute: 2, percent: 50 });
+    // Averages display to one decimal, but comparisons use the underlying 6/30 and 4/30 values.
+    expect(metrics.sessions.averageChange).toMatchObject({ kind: "increase", percent: 50 });
+    expect(metrics.sessions.averageChange.absolute).toBeCloseTo(2 / 30, 14);
     expect(metrics.coverage).toEqual({ current: "complete", previous: "complete" });
   });
 
