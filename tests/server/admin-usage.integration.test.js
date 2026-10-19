@@ -87,22 +87,55 @@ describe("admin usage PostgreSQL migration and tracking", () => {
   it("rejects a first arrival already waiting on the logout lock", async () => {
     const browserId = randomUUID();
     const blocker = await database.pool.connect();
+    let logout;
+    let activity;
     try {
       await blocker.query("BEGIN");
       await blocker.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`${ownerId}:${browserId}`]);
-      const logout = usage.endUsageSession(ownerId, browserId, "ended-auth");
-      // Wait until PostgreSQL confirms logout is queued on this schema's lock.
+      logout = usage.endUsageSession(ownerId, browserId, "ended-auth");
+      // PostgreSQL startup/contention can delay lock visibility; do not strand
+      // the queued logout transaction if the probe itself times out.
       await vi.waitFor(async () => {
         const { rows: [waiting] } = await database.pool.query(
-          "SELECT count(*)::int AS count FROM pg_locks WHERE locktype = 'advisory' AND NOT granted AND database = (SELECT oid FROM pg_database WHERE datname = current_database())",
+          `SELECT count(*)::int AS count FROM pg_locks
+           WHERE locktype = 'advisory' AND NOT granted
+             AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
+             AND classid::bigint = ((hashtextextended($1, 0) >> 32) & 4294967295)
+             AND objid::bigint = (hashtextextended($1, 0) & 4294967295)
+             AND objsubid = 1`,
+          [`${ownerId}:${browserId}`],
         );
         expect(waiting.count).toBeGreaterThan(0);
-      });
-      const activity = usage.recordUsageActivity({ userId: ownerId, browserId, authSessionId: "ended-auth", eventId: randomUUID() });
+      }, { timeout: 10_000, interval: 50 });
+      activity = usage.recordUsageActivity({ userId: ownerId, browserId, authSessionId: "ended-auth", eventId: randomUUID() });
       await blocker.query("COMMIT");
       await logout;
       expect(await activity).toMatchObject({ rejected: true });
-    } finally { await blocker.query("ROLLBACK"); blocker.release(); }
+    } finally {
+      // Always release the held advisory lock, then drain both queued operations
+      // before the next test truncates shared tables in this disposable schema.
+      let rollbackError;
+      try {
+        await blocker.query("ROLLBACK");
+      } catch (error) {
+        rollbackError = error;
+      }
+      blocker.release(rollbackError);
+      await Promise.allSettled([logout, activity].filter((operation) => operation !== undefined));
+      if (rollbackError) throw rollbackError;
+    }
+  }, 15_000);
+
+  it("does not count a shared guest as connected when the owner's saved sheet is unvalidated", async () => {
+    await database.pool.query("UPDATE users SET connection_validated_at = NULL, connection_origin = NULL WHERE id = $1", [ownerId]);
+    await database.pool.query("UPDATE usage_tracking_coverage SET tracking_started_at = now() - interval '90 days'");
+
+    const metrics = await usage.getAdminUsageMetrics();
+
+    expect(metrics.users.total).toBe(3);
+    expect(metrics.users.connected.count).toBe(0);
+    expect(metrics.users.setup.shared.count).toBe(0);
+    expect(metrics.users.setup.none.count).toBe(3);
   });
 
   it("backfills only first sign-in evidence and leaves existing sheet candidates unvalidated", async () => {
