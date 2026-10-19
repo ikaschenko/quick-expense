@@ -773,6 +773,21 @@ describe("admin metrics and usage activity", () => {
     expect(expired.status).toBe(400);
   });
 
+  it("returns a privacy-safe error for a receipt lookup failure without blocking later activity", async () => {
+    signInAs(OWNER);
+    const event = { eventId: "123e4567-e89b-42d3-a456-426614174000", screen: "history", envelope: `${Buffer.from(JSON.stringify({ expiresAt: Date.now() + 120_000 })).toString("base64url")}.signature` };
+    mocks.usage.hasUsageEventReceipt.mockRejectedValueOnce(new Error("private database detail"));
+
+    const failed = await request("POST", "/api/activity", { body: event });
+    expect(failed.status).toBe(503);
+    expect(failed.body).toEqual({ message: "Activity could not be recorded." });
+    expect(mocks.usage.recordUsageActivity).not.toHaveBeenCalled();
+
+    const recovered = await request("POST", "/api/activity", { body: event });
+    expect(recovered.status).toBe(200);
+    expect(recovered.body.accepted).toBe(true);
+  });
+
   it("does not accept activity events without authentication or for unapproved screens", async () => {
     const unauthenticated = await request("POST", "/api/activity", { body: { eventId: "123e4567-e89b-42d3-a456-426614174000", screen: "home" } });
     expect(unauthenticated.status).toBe(401);

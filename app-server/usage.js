@@ -70,11 +70,25 @@ export function verifyUsageEnvelope(token, { userId, browserId, authSessionId, e
 }
 
 export async function hasUsageEventReceipt({ userId, browserId, eventId }) {
-  const { rows } = await pool.query(
-    "SELECT user_id, browser_id FROM usage_event_receipts WHERE event_id = $1",
-    [eventId],
-  );
-  return rows.length > 0 && Number(rows[0].user_id) === Number(userId) && rows[0].browser_id === browserId;
+  const attemptedAt = new Date();
+  try {
+    const { rows } = await pool.query(
+      "SELECT user_id, browser_id FROM usage_event_receipts WHERE event_id = $1",
+      [eventId],
+    );
+    return rows.length > 0 && Number(rows[0].user_id) === Number(userId) && rows[0].browser_id === browserId;
+  } catch (error) {
+    await recordActivityFailure(attemptedAt);
+    throw error;
+  }
+}
+
+async function recordActivityFailure(attemptedAt) {
+  activityFailureSince = activityFailureSince && activityFailureSince < attemptedAt ? activityFailureSince : attemptedAt;
+  // Best effort durable evidence, even if this process exits before recovery.
+  try {
+    await pool.query("INSERT INTO usage_tracking_gaps (started_at, ended_at) VALUES ($1, clock_timestamp())", [activityFailureSince]);
+  } catch { /* Recovery records the interval once persistence is available. */ }
 }
 
 export async function recordUsageActivity(event) {
@@ -82,11 +96,7 @@ export async function recordUsageActivity(event) {
   try {
     return await writeUsageActivity(event);
   } catch (error) {
-    activityFailureSince = activityFailureSince && activityFailureSince < attemptedAt ? activityFailureSince : attemptedAt;
-    // Best effort durable evidence, even if this process exits before recovery.
-    try {
-      await pool.query("INSERT INTO usage_tracking_gaps (started_at, ended_at) VALUES ($1, clock_timestamp())", [activityFailureSince]);
-    } catch { /* Recovery records the interval once persistence is available. */ }
+    await recordActivityFailure(attemptedAt);
     throw error;
   }
 }

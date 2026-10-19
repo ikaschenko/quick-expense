@@ -326,6 +326,41 @@ describe("unobserved reporting windows and gaps", () => {
     expect(metrics.users.active).toMatchObject({ current: null, previous: null });
     expect(metrics.sessions).toMatchObject({ current: null, previous: null });
   });
+  it.each([false, true])("reports receipt lookup failures and durably recovers gaps when the initial gap write fails: %s", async (gapWriteFails) => {
+    const attemptedAt = new Date("2026-10-18T23:59:00Z");
+    const recoveredAt = new Date("2026-10-19T12:00:00Z");
+    const failure = new Error("receipt lookup unavailable");
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(attemptedAt);
+      pool.query.mockRejectedValueOnce(failure);
+      if (gapWriteFails) pool.query.mockRejectedValueOnce(new Error("gap persistence unavailable"));
+      await expect(hasUsageEventReceipt({ userId: 9, browserId: "browser-id", eventId: "event-id" })).rejects.toBe(failure);
+      expect(pool.query).toHaveBeenLastCalledWith(expect.stringContaining("INSERT INTO usage_tracking_gaps"), [attemptedAt]);
+
+      snapshot({ start: "2026-07-01T00:00:00Z" });
+      const pending = await getAdminUsageMetrics();
+      expect(pending.coverage).toEqual({ current: "insufficient", previous: "complete" });
+      expect(pending.coverageGaps).toContainEqual({ start: attemptedAt.toISOString(), end: recoveredAt.toISOString() });
+      expect(pending.sessions.change).toEqual({ kind: "unavailable" });
+
+      clientQuery.mockImplementation(async (sql) => {
+        if (sql.includes("SELECT last_heartbeat_at")) return { rows: [{ last_heartbeat_at: recoveredAt }] };
+        if (sql === "SELECT clock_timestamp() AS now") return { rows: [{ now: recoveredAt }] };
+        return { rows: [] };
+      });
+      await heartbeatUsageTracking();
+      expect(clientQuery).toHaveBeenCalledWith(expect.stringContaining("INSERT INTO usage_tracking_gaps"), [attemptedAt, recoveredAt]);
+
+      snapshot({ start: "2026-07-01T00:00:00Z", gaps: [{ started_at: attemptedAt, ended_at: recoveredAt }] });
+      const recovered = await getAdminUsageMetrics();
+      expect(recovered.coverage.current).toBe("insufficient");
+      expect(recovered.coverageGaps).toEqual([{ start: attemptedAt.toISOString(), end: recoveredAt.toISOString() }]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("labels a full prior window separately from a current window with a durable gap", async () => {
     snapshot({ start: "2026-07-01T00:00:00Z", gaps: [{ started_at: "2026-10-01T00:00:00Z", ended_at: "2026-10-01T01:00:00Z" }] });
     const metrics = await getAdminUsageMetrics();
