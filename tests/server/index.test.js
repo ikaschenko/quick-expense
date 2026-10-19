@@ -5,6 +5,13 @@ const mocks = vi.hoisted(() => ({
   store: {
     getUserRecord: vi.fn(),
     updateUserRecord: vi.fn(),
+    saveValidatedConnection: vi.fn(async (_id, spreadsheetId, spreadsheetUrl, origin) => {
+      const user = Object.values(USERS).find((entry) => entry.email === Object.values(USERS).find((candidate) => candidate.id === _id)?.email);
+      if (user) Object.assign(user, { spreadsheetId, spreadsheetUrl });
+      return { origin, stale: false };
+    }),
+    reserveConnectionChange: vi.fn(async () => 1),
+    disconnectValidatedConnection: vi.fn(),
     saveFxRateBackup: vi.fn(),
     getLatestFxRateBackup: vi.fn(),
     getHiddenColumns: vi.fn(),
@@ -34,10 +41,25 @@ const mocks = vi.hoisted(() => ({
     listLogFiles: vi.fn(),
     readLogEntries: vi.fn(),
   },
+  usage: {
+    cleanupUsageTracking: vi.fn(),
+    endUsageSession: vi.fn(),
+    getAdminUsageMetrics: vi.fn(),
+    getOrCreateBrowserId: vi.fn(() => "123e4567-e89b-42d3-a456-426614174000"),
+    createUsageEnvelope: vi.fn(() => "signed-envelope"),
+    verifyUsageEnvelope: vi.fn(() => true),
+    hasUsageEventReceipt: vi.fn(async () => false),
+    heartbeatUsageTracking: vi.fn(),
+    initializeUsageTracking: vi.fn(),
+    isUsageScreen: vi.fn((screen) => ["home", "setup", "add", "edit", "history", "admin", "logs"].includes(screen)),
+    recordUsageActivity: vi.fn(async () => ({ accepted: true, duplicate: false, sessionStarted: true })),
+  },
   sheets: {
     createSpreadsheet: vi.fn(),
     detectConfigSheet: vi.fn(),
     validateSpreadsheet: vi.fn(),
+    readExpensesSheetHeader: vi.fn(),
+    writeConfigSheetMapping: vi.fn(),
     findColumnIndex: vi.fn(),
     renameColumnInSheet: vi.fn(),
     isCustomColumnEmpty: vi.fn(),
@@ -62,6 +84,7 @@ vi.mock("../../app-server/google-sheets.js", async (importOriginal) => ({
   ...(await importOriginal()),
   ...mocks.sheets,
 }));
+vi.mock("../../app-server/usage.js", () => mocks.usage);
 vi.mock("../../app-server/logger.js", async (importOriginal) => ({
   ...(await importOriginal()),
   ...mocks.logs,
@@ -105,6 +128,15 @@ beforeEach(() => {
   mocks.session.destroy = vi.fn((cb) => cb());
   mocks.store.getUserRecord.mockImplementation(async (email) => USERS[email] ?? null);
   mocks.sharing.getShareForGuest.mockResolvedValue(null);
+  mocks.store.reserveConnectionChange.mockResolvedValue(1);
+  mocks.store.saveValidatedConnection.mockImplementation(async (_id, _spreadsheetId, _spreadsheetUrl, origin) => ({ origin, stale: false }));
+  mocks.usage.getOrCreateBrowserId.mockReturnValue("123e4567-e89b-42d3-a456-426614174000");
+  mocks.usage.createUsageEnvelope.mockReturnValue("signed-envelope");
+  mocks.usage.verifyUsageEnvelope.mockReturnValue(true);
+  mocks.usage.hasUsageEventReceipt.mockResolvedValue(false);
+  mocks.usage.recordUsageActivity.mockResolvedValue({ accepted: true, duplicate: false, sessionStarted: true });
+  mocks.usage.getAdminUsageMetrics.mockResolvedValue({ users: { total: 0 } });
+  mocks.usage.isUsageScreen.mockImplementation((screen) => ["home", "setup", "add", "edit", "history", "admin", "logs"].includes(screen));
   mocks.store.getSetupDefaults.mockResolvedValue({ version: "2", values: { "Spent For": "Family" } });
   mocks.store.withSetupDefaultsLock.mockImplementation(async (_owner, _sheet, action) => action({}, { version: "2", values: { "Spent For": "Family" } }));
   mocks.store.writeSetupDefaults.mockImplementation(async (_client, _owner, values) => ({ version: "3", values }));
@@ -691,6 +723,87 @@ describe("POST /api/sharing/guest/reset", () => {
   });
 });
 
+describe("admin metrics and usage activity", () => {
+  it("allows an admin to load metrics with identity-only auth and no shared-setup lookup", async () => {
+    signInAs(ADMIN);
+    mocks.sharing.getShareForGuest.mockResolvedValue({ ownerEmail: "missing-owner@test.com", accessLevel: "view" });
+    mocks.usage.getAdminUsageMetrics.mockResolvedValue({ users: { total: 0 } });
+
+    const res = await request("GET", "/api/admin/metrics");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ users: { total: 0 } });
+    expect(mocks.sharing.getShareForGuest).not.toHaveBeenCalled();
+    expect(mocks.usage.getAdminUsageMetrics).toHaveBeenCalledOnce();
+  });
+
+  it("denies non-admin access to usage metrics before reading them", async () => {
+    signInAs(OWNER);
+    const res = await request("GET", "/api/admin/metrics");
+    expect(res.status).toBe(403);
+    expect(mocks.usage.getAdminUsageMetrics).not.toHaveBeenCalled();
+  });
+
+  it("issues short-lived activity envelopes only for signed-in users and approved screens", async () => {
+    signInAs(OWNER);
+    const res = await request("GET", "/api/activity/envelope?eventId=123e4567-e89b-42d3-a456-426614174000&screen=history");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ envelope: "signed-envelope" });
+    expect(mocks.usage.createUsageEnvelope).toHaveBeenCalledWith(expect.objectContaining({ userId: OWNER.id, browserId: expect.any(String), eventId: expect.any(String), screen: "history" }));
+  });
+
+  it("records a verified activity event and rejects invalid or expired envelopes", async () => {
+    signInAs(OWNER);
+    const event = { eventId: "123e4567-e89b-42d3-a456-426614174000", screen: "history", envelope: "signed-envelope" };
+    const res = await request("POST", "/api/activity", { body: event });
+    expect(res.status).toBe(200);
+    expect(mocks.usage.recordUsageActivity).toHaveBeenCalledWith(expect.objectContaining({ userId: OWNER.id, eventId: event.eventId }));
+
+    mocks.usage.verifyUsageEnvelope.mockReturnValue(false);
+    const expired = await request("POST", "/api/activity", { body: { ...event, eventId: "123e4567-e89b-42d3-a456-426614174001" } });
+    expect(expired.status).toBe(400);
+  });
+
+  it("does not accept activity events without authentication or for unapproved screens", async () => {
+    const unauthenticated = await request("POST", "/api/activity", { body: { eventId: "123e4567-e89b-42d3-a456-426614174000", screen: "home" } });
+    expect(unauthenticated.status).toBe(401);
+    signInAs(OWNER);
+    const invalid = await request("POST", "/api/activity", { body: { eventId: "123e4567-e89b-42d3-a456-426614174000", screen: "not-a-screen" } });
+    expect(invalid.status).toBe(400);
+    expect(mocks.usage.recordUsageActivity).not.toHaveBeenCalled();
+  });
+});
+
+describe("candidate spreadsheet mapping", () => {
+  beforeEach(() => {
+    mocks.store.getUserRecord.mockImplementation(async (email) => email === OWNER.email
+      ? { ...OWNER, accessToken: "access-token", accessTokenExpiresAt: Date.now() + 3_600_000 }
+      : USERS[email] ?? null);
+    mocks.sheets.detectConfigSheet.mockResolvedValue({ mode: "config-driven", mapping: { Date: "When" } });
+    mocks.sheets.readExpensesSheetHeader.mockResolvedValue(["When", "Amount"]);
+  });
+
+  it("reads a supplied candidate without activating it", async () => {
+    signInAs(OWNER);
+    const result = await request("GET", "/api/config/mapping?spreadsheetId=candidate-sheet");
+    expect(result.status).toBe(200);
+    expect(mocks.sheets.readExpensesSheetHeader).toHaveBeenCalledWith("access-token", "candidate-sheet");
+    expect(mocks.store.saveValidatedConnection).not.toHaveBeenCalled();
+  });
+
+  it("requires confirmed consent and writes only to the explicit owner candidate", async () => {
+    signInAs(OWNER);
+    const unconfirmed = await request("POST", "/api/config/mapping", { body: { spreadsheetId: "candidate-sheet", mapping: { Date: "When" }, confirmed: false } });
+    expect(unconfirmed.status).toBe(400);
+    expect(mocks.sheets.writeConfigSheetMapping).not.toHaveBeenCalled();
+
+    const confirmed = await request("POST", "/api/config/mapping", { body: { spreadsheetId: "candidate-sheet", mapping: { Date: "When" }, confirmed: true } });
+    expect(confirmed.status).toBe(200);
+    expect(mocks.sheets.writeConfigSheetMapping).toHaveBeenCalledWith("access-token", "candidate-sheet", { Date: "When" });
+    expect(mocks.store.saveValidatedConnection).not.toHaveBeenCalled();
+  });
+});
+
 describe("admin logs", () => {
   it("should return 403 for a non-admin user", async () => {
     signInAs(OWNER);
@@ -708,6 +821,21 @@ describe("admin logs", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ files: ["app-2026-09-29.log"] });
+  });
+
+  it("serves the existing log viewer to an admin without resolving shared setup", async () => {
+    signInAs(ADMIN);
+    mocks.sharing.getShareForGuest.mockResolvedValue({ ownerEmail: "missing-owner@test.com", accessLevel: "view" });
+    const res = await fetch(`${baseUrl}/logs`);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("Admin Log Viewer");
+    expect(mocks.sharing.getShareForGuest).not.toHaveBeenCalled();
+  });
+
+  it("does not serve the log viewer directly to non-admin users", async () => {
+    signInAs(OWNER);
+    const res = await fetch(`${baseUrl}/logs`);
+    expect(res.status).toBe(403);
   });
 
   it("should return 400 for an unknown log file", async () => {

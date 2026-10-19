@@ -189,6 +189,8 @@ export interface AuthSession {
   guestAccessLevel: 'view' | 'edit' | null;
   ownerEmail: string | null;
   configStatus: 'ok' | 'shared_config_invalid';
+  /** Server-derived allow-list result; never trusted from client input. */
+  isAppAdmin?: boolean;
 }
 
 export interface AuthSessionMeta {
@@ -207,4 +209,42 @@ export interface ShareEntry {
 export interface AddShareRequest {
   guestEmail: string;
   accessLevel: 'view' | 'edit';
+}
+
+
+export interface MetricCount {
+  count: number;
+  percent: number;
+}
+
+export interface MetricChange {
+  kind: "increase" | "decrease" | "no-change" | "no-previous-activity" | "unavailable";
+  absolute?: number;
+  percent?: number | null;
+}
+
+export interface AdminUsageMetrics {
+  snapshotAt: string;
+  timezone: "UTC";
+  trackingStartedAt: string;
+  periods: {
+    current: { start: string; end: string; endExclusive: string };
+    previous: { start: string; end: string; endExclusive: string };
+  };
+  coverage: { current: "complete" | "insufficient"; previous: "complete" | "insufficient" };
+  users: {
+    total: number;
+    connected: MetricCount;
+    setup: Record<"created" | "existing" | "shared" | "unknown" | "none", MetricCount>;
+    active: { current: number | null; previous: number | null; change: MetricChange };
+    new: { current: number | null; previous: number | null; change: MetricChange };
+  };
+  sessions: {
+    lifetime: number;
+    current: number | null;
+    previous: number | null;
+    averagePerDay: { current: number | null; previous: number | null };
+    change: MetricChange;
+    averageChange: MetricChange;
+  };
 }

@@ -12,17 +12,21 @@ import { HistoryPage } from "./pages/HistoryPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { SetupPage } from "./pages/SetupPage";
+import { AdminPage } from "./pages/AdminPage";
+import { AppActivityTracker } from "./components/AppActivityTracker";
 
 import type { JSX } from "react";
 
 function AppRoutes(): JSX.Element {
   const { session } = useAuth();
 
-  if (session?.configStatus === "shared_config_invalid") {
+  if (session?.configStatus === "shared_config_invalid" && !session.isAppAdmin) {
     return <SharedConfigInvalidModal />;
   }
 
   return (
+    <>
+    <AppActivityTracker />
     <Routes>
       <Route path="/" element={<LoginPage />} />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
@@ -67,6 +71,14 @@ function AppRoutes(): JSX.Element {
         element={<Navigate to="/home" replace />}
       />
       <Route
+        path="/admin"
+        element={
+          <ProtectedRoute requireAdmin>
+            <AdminPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/history"
         element={
           <ProtectedRoute>
@@ -76,6 +88,7 @@ function AppRoutes(): JSX.Element {
       />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   );
 }
 

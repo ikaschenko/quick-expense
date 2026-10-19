@@ -17,6 +17,7 @@ export const authApi = {
       guestAccessLevel: response.session.guestAccessLevel ?? null,
       ownerEmail: response.session.ownerEmail ?? null,
       configStatus: response.session.configStatus ?? "ok",
+      isAppAdmin: response.session.isAppAdmin ?? false,
     };
   },
 

@@ -89,7 +89,7 @@ describe("logs entry rendering", () => {
     await import("../../app-server/views/logs.js");
 
     await vi.waitFor(() => expect(document.getElementById("status").textContent).toBe("Files unavailable"));
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls.filter(([url]) => String(url).includes("/api/admin/logs/files"))).toHaveLength(1);
     expect(document.getElementById("entries").innerHTML).toBe("");
   });
 

@@ -3,6 +3,7 @@ import {
   checkDatabaseHealth,
   createGracefulShutdown,
   createRequireAuthenticatedUser,
+  createRequireIdentityAuthenticatedUser,
   createShutdownGuard,
   destroySession,
   requireAppAdmin,
@@ -441,5 +442,38 @@ describe("createGracefulShutdown", () => {
       "db.close",
       "Graceful shutdown complete.",
     ]);
+  });
+});
+
+describe("identity-only authentication and normalized admin checks", () => {
+  it("authenticates a user without resolving a shared setup", async () => {
+    const userRecord = { id: 11, email: "admin@test.com", spreadsheetId: null };
+    const middleware = createRequireIdentityAuthenticatedUser({
+      getUserSession: () => ({ email: userRecord.email }),
+      getUserRecord: async () => userRecord,
+    });
+    const req = { session: {} };
+    const res = { statusCode: null, body: null, status(code) { this.statusCode = code; return this; }, json(value) { this.body = value; return this; } };
+    const next = vi.fn();
+    await middleware(req, res, next);
+    expect(req.userRecord).toEqual(userRecord);
+    expect(req.configRecord).toBeUndefined();
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it("matches ALERT_EMAIL_TO case-insensitively and denies access with no configured allow-list", () => {
+    process.env.ADMIN_EMAIL = "";
+    process.env.ALERT_EMAIL_TO = "Ops@Test.com;other@test.com";
+    const next = vi.fn();
+    const req = { userRecord: { email: " OPS@test.com " } };
+    const res = { statusCode: null, body: null, status(code) { this.statusCode = code; return this; }, json(value) { this.body = value; return this; } };
+    requireAppAdmin(req, res, next);
+    expect(req.isAppAdmin).toBe(true);
+    expect(next).toHaveBeenCalledOnce();
+
+    process.env.ALERT_EMAIL_TO = "";
+    const denied = { statusCode: null, body: null, status(code) { this.statusCode = code; return this; }, json(value) { this.body = value; return this; } };
+    requireAppAdmin({ userRecord: { email: "ops@test.com" } }, denied, vi.fn());
+    expect(denied.statusCode).toBe(403);
   });
 });

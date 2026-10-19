@@ -9,6 +9,8 @@ import { REQUIRED_QE_FIELDS } from "../constants/expenses";
 interface Props {
   /** Actual column names found in the user's sheet. */
   detectedColumns: string[];
+  /** Explicit candidate sheet; not made active until setup validation succeeds. */
+  spreadsheetId?: string;
   /** Pre-populate with an existing saved mapping. Only overrides (QE field ≠ user col) are stored. */
   initialMapping?: ColumnMapping;
   /** Called when the mapping has been saved successfully. */
@@ -19,7 +21,7 @@ interface Props {
 
 type EditorPhase = "edit" | "confirm";
 
-export function ColumnMappingEditor({ detectedColumns, initialMapping, onSaved, onCancel }: Props): JSX.Element {
+export function ColumnMappingEditor({ detectedColumns, spreadsheetId, initialMapping, onSaved, onCancel }: Props): JSX.Element {
   const [mapping, setMapping] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
     for (const field of REQUIRED_QE_FIELDS) {
@@ -61,7 +63,7 @@ export function ColumnMappingEditor({ detectedColumns, initialMapping, onSaved, 
     setIsSaving(true);
     setSaveError(null);
     try {
-      await googleSheetsService.saveColumnMapping(effectiveMapping);
+      await googleSheetsService.saveColumnMapping(effectiveMapping, spreadsheetId);
       onSaved();
     } catch (err) {
       setSaveError((err as Error).message);

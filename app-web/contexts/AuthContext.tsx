@@ -58,16 +58,12 @@ export function AuthProvider({ children }: PropsWithChildren): JSX.Element {
   };
 
   const signOut = (): void => {
-    if (session?.email) {
-      metricsCache.clear(session.email);
-    }
-    void authApi.logout().finally(() => {
-      setSession(null);
-      setStatus("signed_out");
-      setError(null);
-      resetUser();
-      trackEvent("sign_out");
-    });
+    if (session?.email) metricsCache.clear(session.email);
+    setSession(null);
+    setStatus("signed_out");
+    setError(null);
+    resetUser();
+    void authApi.logout().finally(() => trackEvent("sign_out"));
   };
 
   const touchSession = (): void => {

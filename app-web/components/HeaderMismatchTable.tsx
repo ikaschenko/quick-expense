@@ -13,6 +13,7 @@ const STATUS_BADGES: Record<string, string> = {
 
 interface HeaderMismatchTableProps {
   headerDetails: HeaderDetails;
+  spreadsheetId?: string;
   showMappingEditor: boolean;
   onShowMappingEditor: () => void;
   onMappingSaved: () => void;
@@ -21,6 +22,7 @@ interface HeaderMismatchTableProps {
 
 export function HeaderMismatchTable({
   headerDetails,
+  spreadsheetId,
   showMappingEditor,
   onShowMappingEditor,
   onMappingSaved,
@@ -69,6 +71,7 @@ export function HeaderMismatchTable({
         <div style={{ marginTop: "var(--space-4)" }}>
           <ColumnMappingEditor
             detectedColumns={headerDetails.detectedColumns}
+            spreadsheetId={spreadsheetId}
             onSaved={onMappingSaved}
             onCancel={onMappingCancel}
           />

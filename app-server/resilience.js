@@ -33,37 +33,47 @@ export async function safelyDestroySession(sessionState, context, logger = winst
   }
 }
 
-export function createRequireAuthenticatedUser({
-  getUserSession,
-  getUserRecord,
-  getShareForGuest,
-  destroySessionState = safelyDestroySession,
-  logger = winstonLogger,
-}) {
-  return async function requireAuthenticatedUser(req, res, next) {
-    const sessionUser = getUserSession(req);
-    if (!sessionUser) {
-      res.status(401).json({ message: "Please sign in to continue." });
-      return;
+async function resolveAuthenticatedIdentity(req, res, { getUserSession, getUserRecord, destroySessionState, logger }) {
+  const sessionUser = getUserSession(req);
+  if (!sessionUser) {
+    res.status(401).json({ message: "Please sign in to continue." });
+    return false;
+  }
+
+  try {
+    const userRecord = await getUserRecord(sessionUser.email);
+    if (!userRecord) {
+      await destroySessionState(req.session, "Failed to clear stale authenticated session.", logger);
+      res.status(401).json({ message: "Stored session is no longer available. Please sign in again." });
+      return false;
     }
+    req.userRecord = userRecord;
+    getContext().userId = userRecord.id;
+    return true;
+  } catch (error) {
+    logInfrastructureError("Failed to verify authenticated session", error, logger);
+    res.status(500).json({ message: "Unable to verify your session right now. Please try again." });
+    return false;
+  }
+}
 
+export function createRequireIdentityAuthenticatedUser(options) {
+  const dependencies = { destroySessionState: safelyDestroySession, logger: winstonLogger, ...options };
+  return async function requireIdentityAuthenticatedUser(req, res, next) {
+    if (await resolveAuthenticatedIdentity(req, res, dependencies)) next();
+  };
+}
+
+export function createRequireAuthenticatedUser(options) {
+  const dependencies = { destroySessionState: safelyDestroySession, logger: winstonLogger, ...options };
+  return async function requireAuthenticatedUser(req, res, next) {
+    if (!(await resolveAuthenticatedIdentity(req, res, dependencies))) return;
     try {
-      const userRecord = await getUserRecord(sessionUser.email);
-      if (!userRecord) {
-        await destroySessionState(req.session, "Failed to clear stale authenticated session.", logger);
-        res.status(401).json({ message: "Stored session is no longer available. Please sign in again." });
-        return;
-      }
-
-      req.userRecord = userRecord;
-      getContext().userId = userRecord.id;
-
-      // Resolve shared setup: check if this user is a guest.
-      const share = await getShareForGuest(sessionUser.email);
+      const sessionUser = options.getUserSession(req);
+      const share = await options.getShareForGuest(sessionUser.email);
       if (share) {
-        const ownerRecord = await getUserRecord(share.ownerEmail);
+        const ownerRecord = await options.getUserRecord(share.ownerEmail);
         if (!ownerRecord || !ownerRecord.spreadsheetId) {
-          // Owner config is invalid — signal frontend to show the recovery modal.
           res.status(403).json({ message: "The configuration shared with you is no longer valid.", code: "SHARED_CONFIG_INVALID" });
           return;
         }
@@ -72,14 +82,13 @@ export function createRequireAuthenticatedUser({
         req.accessLevel = share.accessLevel;
         req.isGuest = true;
       } else {
-        req.configRecord = userRecord;
+        req.configRecord = req.userRecord;
         req.accessLevel = "edit";
         req.isGuest = false;
       }
-
       next();
     } catch (error) {
-      logInfrastructureError("Failed to verify authenticated session", error, logger);
+      logInfrastructureError("Failed to verify authenticated session", error, dependencies.logger);
       res.status(500).json({ message: "Unable to verify your session right now. Please try again." });
     }
   };
@@ -112,17 +121,23 @@ export function requireEditAccess(req, res, next) {
   next();
 }
 
-/** Blocks access unless the authenticated user's email is listed in ADMIN_EMAIL or ALERT_EMAIL_TO. Use on app-admin-only routes. */
-export function requireAppAdmin(req, res, next) {
+/** Centralized normalized allow-list check for admin-only functionality. */
+export function isAppAdminEmail(email) {
   const allowedEmails = [process.env.ADMIN_EMAIL, process.env.ALERT_EMAIL_TO]
     .flatMap((value) => (value || "").split(/[,;]/))
-    .map((email) => email.trim().toLowerCase())
+    .map((entry) => entry.trim().toLowerCase())
     .filter(Boolean);
-  const userEmail = req.userRecord?.email?.trim().toLowerCase();
-  if (!userEmail || !allowedEmails.includes(userEmail)) {
+  const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+  return !!normalizedEmail && allowedEmails.includes(normalizedEmail);
+}
+
+/** Blocks access unless the authenticated user's email is on the admin allow-list. */
+export function requireAppAdmin(req, res, next) {
+  if (!isAppAdminEmail(req.userRecord?.email)) {
     res.status(403).json({ message: "Admin access required." });
     return;
   }
+  req.isAppAdmin = true;
   next();
 }
 

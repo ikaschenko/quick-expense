@@ -14,7 +14,7 @@ interface SetupExistingPanelProps {
 }
 
 export function SetupExistingPanel({ setup, onBack }: SetupExistingPanelProps): JSX.Element {
-  const { error, success, setupReport, headerDetails, busy, isSaving, isPicking, showMappingEditor } = setup;
+  const { error, success, setupReport, headerDetails, candidateSpreadsheetId, busy, isSaving, isPicking, showMappingEditor } = setup;
 
   return (
     <>
@@ -56,6 +56,7 @@ export function SetupExistingPanel({ setup, onBack }: SetupExistingPanelProps): 
       {headerDetails ? (
         <HeaderMismatchTable
           headerDetails={headerDetails}
+          spreadsheetId={candidateSpreadsheetId ?? undefined}
           showMappingEditor={showMappingEditor}
           onShowMappingEditor={() => setup.setShowMappingEditor(true)}
           onMappingSaved={() => {
