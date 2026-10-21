@@ -59,6 +59,9 @@ function rowToUserRecord(row) {
     spreadsheetId: row.spreadsheet_id,
     lastAuthenticatedAt: Number(row.last_authenticated_at),
     lastActivityAt: Number(row.last_activity_at),
+    firstSignedInAt: row.first_signed_in_at,
+    connectionValidatedAt: row.connection_validated_at,
+    connectionOrigin: row.connection_origin,
   };
 }
 
@@ -72,21 +75,26 @@ export async function updateUserRecord(email, updater) {
   const current = await getUserRecord(normalizedEmail);
   const base = current ?? { email: normalizedEmail };
   const next = updater(base);
+  next.firstSignedInAt = current?.firstSignedInAt ?? next.firstSignedInAt ?? new Date();
+  next.connectionValidatedAt = current?.connectionValidatedAt ?? next.connectionValidatedAt ?? null;
+  next.connectionOrigin = current?.connectionOrigin ?? next.connectionOrigin ?? null;
 
   const { rows } = await pool.query(
     `INSERT INTO users (email, access_token, access_token_expires_at, refresh_token,
-                        spreadsheet_url, spreadsheet_id, last_authenticated_at, last_activity_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+                        spreadsheet_url, spreadsheet_id, last_authenticated_at, last_activity_at,
+                        first_signed_in_at, connection_validated_at, connection_origin, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
      ON CONFLICT (email) DO UPDATE SET
        access_token = EXCLUDED.access_token,
        access_token_expires_at = EXCLUDED.access_token_expires_at,
        refresh_token = EXCLUDED.refresh_token,
-       spreadsheet_url = EXCLUDED.spreadsheet_url,
-       spreadsheet_id = EXCLUDED.spreadsheet_id,
+       spreadsheet_url = CASE WHEN $12 THEN EXCLUDED.spreadsheet_url ELSE users.spreadsheet_url END,
+       spreadsheet_id = CASE WHEN $12 THEN EXCLUDED.spreadsheet_id ELSE users.spreadsheet_id END,
        last_authenticated_at = EXCLUDED.last_authenticated_at,
        last_activity_at = EXCLUDED.last_activity_at,
        updated_at = now()
      RETURNING id`,
+
     [
       normalizedEmail,
       next.accessToken,
@@ -96,10 +104,76 @@ export async function updateUserRecord(email, updater) {
       next.spreadsheetId ?? null,
       next.lastAuthenticatedAt,
       next.lastActivityAt,
+      next.firstSignedInAt,
+      next.connectionValidatedAt,
+      next.connectionOrigin,
+      !!current && (next.spreadsheetId !== current.spreadsheetId || next.spreadsheetUrl !== current.spreadsheetUrl),
     ],
   );
 
   return { ...next, id: Number(rows[0].id) };
+}
+
+export async function reserveConnectionChange(userId) {
+  const { rows } = await pool.query(
+    "UPDATE users SET connection_revision = connection_revision + 1 WHERE id = $1 RETURNING connection_revision",
+    [userId],
+  );
+  if (!rows[0]) throw new Error("Account is no longer available.");
+  return Number(rows[0].connection_revision);
+}
+
+export async function saveValidatedConnection(userId, spreadsheetId, spreadsheetUrl, requestedOrigin, expectedRevision = null, expectedCurrentSpreadsheetId = undefined) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows: [user] } = await client.query("SELECT id, spreadsheet_id, connection_revision FROM users WHERE id = $1 FOR UPDATE", [userId]);
+    if (!user) throw new Error("Account is no longer available.");
+    if (expectedRevision !== null && Number(user.connection_revision) !== expectedRevision) {
+      await client.query("ROLLBACK");
+      return { stale: true };
+    }
+    if (expectedCurrentSpreadsheetId !== undefined && user.spreadsheet_id !== expectedCurrentSpreadsheetId) {
+      await client.query("ROLLBACK");
+      return { stale: true };
+    }
+
+    const { rows: prior } = await client.query(
+      "SELECT origin FROM setup_connection_provenance WHERE user_id = $1 AND spreadsheet_id = $2",
+      [userId, spreadsheetId],
+    );
+    const origin = prior[0]?.origin ?? (
+      user.spreadsheet_id === spreadsheetId && requestedOrigin !== "created" ? "unknown" : requestedOrigin
+    );
+    await client.query(
+      `INSERT INTO setup_connection_provenance (user_id, spreadsheet_id, origin)
+       VALUES ($1, $2, $3) ON CONFLICT (user_id, spreadsheet_id) DO NOTHING`,
+      [userId, spreadsheetId, origin],
+    );
+    await client.query(
+      `UPDATE users SET spreadsheet_id = $2, spreadsheet_url = $3,
+         connection_validated_at = now(), connection_origin = $4, updated_at = now()
+       WHERE id = $1`,
+      [userId, spreadsheetId, spreadsheetUrl, origin],
+    );
+    await client.query("COMMIT");
+    return { origin, stale: false };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function disconnectValidatedConnection(userId) {
+  await pool.query(
+    `UPDATE users SET spreadsheet_id = NULL, spreadsheet_url = NULL,
+       connection_validated_at = NULL, connection_origin = NULL,
+       connection_revision = connection_revision + 1, updated_at = now()
+     WHERE id = $1`,
+    [userId],
+  );
 }
 
 // ─── FX Rate Backups ──────────────────────────────────────────────────────────

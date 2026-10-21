@@ -13,6 +13,9 @@ vi.mock("pg", () => ({
 
 let getUserRecord;
 let updateUserRecord;
+let saveValidatedConnection;
+let reserveConnectionChange;
+let disconnectValidatedConnection;
 let saveFxRateBackup;
 let getLatestFxRateBackup;
 let getHiddenColumns;
@@ -26,6 +29,9 @@ beforeAll(async () => {
   ({
     getUserRecord,
     updateUserRecord,
+    saveValidatedConnection,
+    reserveConnectionChange,
+    disconnectValidatedConnection,
     saveFxRateBackup,
     getLatestFxRateBackup,
     getHiddenColumns,
@@ -363,3 +369,46 @@ describe("renameVisibilityEntry", () => {
   });
 });
 
+
+
+describe("validated connection provenance", () => {
+  it("preserves a known origin when the same sheet is revalidated", async () => {
+    mockQuery.mockResolvedValue({ rows: [] });
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    mockQuery.mockResolvedValueOnce({ rows: [{ id: "7", spreadsheet_id: "old", connection_revision: "4" }] });
+    mockQuery.mockResolvedValueOnce({ rows: [{ origin: "created" }] });
+    const result = await saveValidatedConnection(7, "sheet-id", "https://sheet", "existing", 4);
+    expect(result).toEqual({ origin: "created", stale: false });
+    expect(mockQuery.mock.calls[3][1]).toEqual([7, "sheet-id", "created"]);
+    expect(mockQuery.mock.calls[4][1]).toEqual([7, "sheet-id", "https://sheet", "created"]);
+    expect(mockQuery.mock.calls.at(-1)[0]).toBe("COMMIT");
+  });
+
+  it("refuses a stale candidate without changing the active connection", async () => {
+    mockQuery.mockResolvedValue({ rows: [] });
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    mockQuery.mockResolvedValueOnce({ rows: [{ id: "7", spreadsheet_id: "newer-sheet", connection_revision: "8" }] });
+    await expect(saveValidatedConnection(7, "candidate", "https://candidate", "existing", 7)).resolves.toEqual({ stale: true });
+    expect(mockQuery.mock.calls.some(([sql]) => sql.includes("INSERT INTO setup_connection_provenance"))).toBe(false);
+    expect(mockQuery.mock.calls.at(-1)[0]).toBe("ROLLBACK");
+  });
+
+  it("increments connection revisions atomically and invalidates pending changes on disconnect", async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [{ connection_revision: "5" }] });
+    await expect(reserveConnectionChange(7)).resolves.toBe(5);
+    expect(mockQuery.mock.calls[0][0]).toContain("connection_revision = connection_revision + 1");
+    await disconnectValidatedConnection(7);
+    expect(mockQuery.mock.calls[1][0]).toContain("connection_revision = connection_revision + 1");
+    expect(mockQuery.mock.calls[1][0]).toContain("connection_validated_at = NULL");
+  });
+});
+
+
+describe("legacy connection provenance", () => {
+  it.each([["legacy-sheet", "unknown"], ["different-sheet", "existing"]])("revalidating %s records %s when no provenance exists", async (target, origin) => {
+    mockQuery.mockResolvedValue({ rows: [] });
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    mockQuery.mockResolvedValueOnce({ rows: [{ id: "7", spreadsheet_id: "legacy-sheet", connection_revision: "4" }] });
+    await expect(saveValidatedConnection(7, target, "https://sheet", "existing", 4)).resolves.toEqual({ origin, stale: false });
+  });
+});

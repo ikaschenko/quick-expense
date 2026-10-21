@@ -58,9 +58,11 @@ import {
   checkDatabaseHealth,
   createGracefulShutdown,
   createRequireAuthenticatedUser,
+  createRequireIdentityAuthenticatedUser,
   createShutdownGuard,
   destroySession,
   requireAppAdmin,
+  isAppAdminEmail,
   requireEditAccess,
   requireGuest,
   requireOwner,
@@ -69,6 +71,9 @@ import {
 import {
   getUserRecord,
   updateUserRecord,
+  saveValidatedConnection,
+  reserveConnectionChange,
+  disconnectValidatedConnection,
   saveFxRateBackup,
   getLatestFxRateBackup,
   getHiddenColumns,
@@ -92,6 +97,19 @@ import logger, { startWarningDigestScheduler, listLogFiles, readLogEntries, logR
 import pool from "./db.js";
 import { injectPosthogKey, serializeError } from "./utils.js";
 import { getContext, runWithContext } from "./request-context.js";
+import {
+  cleanupUsageTracking,
+  endUsageSession,
+  getAdminUsageMetrics,
+  getOrCreateBrowserId,
+  createUsageEnvelope,
+  verifyUsageEnvelope,
+  hasUsageEventReceipt,
+  heartbeatUsageTracking,
+  initializeUsageTracking,
+  isUsageScreen,
+  recordUsageActivity,
+} from "./usage.js";
 
 const EMULATE_FAILURES = false;  // use 'true' if need to emulate some random errors in backend logic
 const FAILURE_PROBABILITY = 0.1; // % of requests will fail with a 500 error when EMULATE_FAILURES is true.
@@ -246,11 +264,15 @@ function getUserSession(req) {
     : null;
 }
 
-const requireAuthenticatedUser = createRequireAuthenticatedUser({
+const identityAuthOptions = {
   getUserSession,
   getUserRecord,
-  getShareForGuest,
   destroySessionState: safelyDestroySession,
+};
+const requireIdentityAuthenticatedUser = createRequireIdentityAuthenticatedUser(identityAuthOptions);
+const requireAuthenticatedUser = createRequireAuthenticatedUser({
+  ...identityAuthOptions,
+  getShareForGuest,
 });
 
 async function getAuthorizedAccessToken(userRecord) {
@@ -289,6 +311,14 @@ const apiLimiter = rateLimit({
   message: { message: "Too many requests. Please slow down." },
 });
 
+const activityLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 20,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { message: "Too many activity events. Please retry shortly." },
+});
+
 const adminLogsLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 30,
@@ -301,6 +331,10 @@ app.use(createShutdownGuard({ isShuttingDown: () => isShuttingDown, excludedPath
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/callback", authLimiter);
 app.use("/api/admin/logs", adminLogsLimiter);
+app.use("/api/admin/metrics", adminLogsLimiter);
+app.use("/api/activity", activityLimiter);
+app.use("/api/admin", (_req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
+app.use(["/logs", "/logs.js"], (_req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
 app.use("/api/", (req, res, next) => {
   if (req.path === "/health") {
     next();
@@ -424,6 +458,7 @@ app.get("/api/auth/session", async (req, res) => {
         guestAccessLevel,
         ownerEmail,
         configStatus,
+        isAppAdmin: isAppAdminEmail(userRecord.email),
       },
     });
   } catch (error) {
@@ -433,6 +468,17 @@ app.get("/api/auth/session", async (req, res) => {
 });
 
 app.post("/api/auth/logout", async (req, res) => {
+  try {
+    if (req.session.userEmail) {
+      const userRecord = await getUserRecord(req.session.userEmail);
+      if (userRecord) {
+        const browserId = getOrCreateBrowserId(req, res);
+        await endUsageSession(userRecord.id, browserId, req.sessionID);
+      }
+    }
+  } catch (error) {
+    logRouteError(req, "auth_logout_tracking_failed", error);
+  }
   try {
     await destroySession(req.session);
     res.status(204).end();
@@ -455,6 +501,13 @@ app.get("/api/config", requireAuthenticatedUser, async (req, res) => {
       await detectConfigSheet(accessToken, configRecord.spreadsheetId);
 
     const report = await validateSpreadsheet(accessToken, configRecord.spreadsheetId, mapping);
+    if (!configRecord.connectionValidatedAt && !req.isGuest) {
+      const validation = await saveValidatedConnection(req.userRecord.id, configRecord.spreadsheetId, configRecord.spreadsheetUrl, "unknown", null, configRecord.spreadsheetId);
+      if (validation.stale) {
+        res.status(409).json({ message: "Your spreadsheet changed during validation. Reload the page." });
+        return;
+      }
+    }
 
     let hiddenColumns = [];
     try {
@@ -589,21 +642,22 @@ app.post("/api/config", requireAuthenticatedUser, requireOwner, async (req, res)
       return;
     }
 
+    const connectionRevision = await reserveConnectionChange(req.userRecord.id);
     const accessToken = await getAuthorizedAccessToken(req.configRecord);
 
-    // Persist the spreadsheetId before validation so that POST /api/config/mapping
-    // can work even when validation fails due to column mismatches.
-    const updatedUser = await updateUserRecord(req.userRecord.email, (current) => ({
-      ...current,
-      spreadsheetUrl,
-      spreadsheetId,
-    }));
-
+    // Validate the candidate before replacing the user's established connection.
+    // Mapping repair receives the candidate explicitly and never activates it.
     // Detect any existing Config sheet and validate using its mapping so config-driven sheets pass.
     const { mode: configMode, mapping = null, reason: configModeReason, predefinedCategories = [] } =
       await detectConfigSheet(accessToken, spreadsheetId);
 
     const setupReport = await validateSpreadsheet(accessToken, spreadsheetId, mapping);
+    const savedConnection = await saveValidatedConnection(req.userRecord.id, spreadsheetId, spreadsheetUrl, "existing", connectionRevision);
+    if (savedConnection.stale) {
+      res.status(409).json({ message: "A newer setup change was completed. Reload setup before trying again." });
+      return;
+    }
+    const updatedUser = { ...req.userRecord, spreadsheetId, spreadsheetUrl, connectionOrigin: savedConnection.origin, connectionValidatedAt: new Date() };
     const hiddenColumns = await getHiddenColumns(updatedUser.id, spreadsheetId);
 
     res.json({
@@ -640,16 +694,18 @@ app.post("/api/config/create-spreadsheet", requireAuthenticatedUser, requireOwne
     const rawName = String(req.body?.name ?? "").trim();
     const name = rawName.slice(0, 100) || "Quick Expense — My Expenses";
 
+    const connectionRevision = await reserveConnectionChange(req.userRecord.id);
     const accessToken = await getAuthorizedAccessToken(req.configRecord);
     const { spreadsheetId, spreadsheetUrl } = await createSpreadsheet(accessToken, name);
 
     const setupReport = await validateSpreadsheet(accessToken, spreadsheetId);
 
-    const updatedUser = await updateUserRecord(req.userRecord.email, (current) => ({
-      ...current,
-      spreadsheetUrl,
-      spreadsheetId,
-    }));
+    const savedConnection = await saveValidatedConnection(req.userRecord.id, spreadsheetId, spreadsheetUrl, "created", connectionRevision);
+    if (savedConnection.stale) {
+      res.status(409).json({ message: "A newer setup change was completed. Reload setup before trying again." });
+      return;
+    }
+    const updatedUser = { ...req.userRecord, spreadsheetId, spreadsheetUrl, connectionOrigin: savedConnection.origin, connectionValidatedAt: new Date() };
 
     res.json({
       config: {
@@ -710,17 +766,28 @@ app.get("/api/sheet/modifiedtime", requireAuthenticatedUser, async (req, res) =>
 });
 
 app.get("/api/config/mapping", requireAuthenticatedUser, async (req, res) => {
-  if (!req.configRecord.spreadsheetId) {
+  const candidateId = typeof req.query.spreadsheetId === "string" ? req.query.spreadsheetId : null;
+  if (candidateId && req.isGuest) {
+    res.status(403).json({ message: "Only the setup owner can inspect a candidate spreadsheet." });
+    return;
+  }
+  const spreadsheetId = candidateId ?? req.configRecord.spreadsheetId;
+  if (candidateId && !/^[A-Za-z0-9_-]{10,200}$/.test(candidateId)) {
+    res.status(400).json({ message: "Provide a valid spreadsheet ID." });
+    return;
+  }
+  if (!spreadsheetId) {
     res.status(400).json({ message: "Spreadsheet is not configured." });
     return;
   }
   try {
-    const accessToken = await getAuthorizedAccessToken(req.configRecord);
+    const accessToken = await getAuthorizedAccessToken(req.isGuest ? req.configRecord : req.userRecord);
     const [configResult, detectedColumns] = await Promise.all([
-      detectConfigSheet(accessToken, req.configRecord.spreadsheetId),
-      readExpensesSheetHeader(accessToken, req.configRecord.spreadsheetId),
+      detectConfigSheet(accessToken, spreadsheetId),
+      readExpensesSheetHeader(accessToken, spreadsheetId),
     ]);
     res.json({
+      spreadsheetId,
       mapping: configResult.mode === "config-driven" ? configResult.mapping : null,
       mode: configResult.mode,
       detectedColumns,
@@ -733,12 +800,17 @@ app.get("/api/config/mapping", requireAuthenticatedUser, async (req, res) => {
 
 app.post("/api/config/mapping", requireAuthenticatedUser, requireOwner, async (req, res) => {
   emulateFailure(req.path);
-  if (!req.configRecord.spreadsheetId) {
-    res.status(400).json({
-      message:
-        "Spreadsheet is not configured. Submit a valid spreadsheet URL in Setup first — " +
-        "the URL must be saved successfully before a column mapping can be applied.",
-    });
+  const spreadsheetId = req.body?.spreadsheetId;
+  if (!spreadsheetId) {
+    res.status(400).json({ message: "Provide a spreadsheet candidate before saving a mapping." });
+    return;
+  }
+  if (req.body?.confirmed !== true) {
+    res.status(400).json({ message: "Explicit confirmation is required before writing a spreadsheet mapping." });
+    return;
+  }
+  if (typeof spreadsheetId !== "string" || !/^[A-Za-z0-9_-]{10,200}$/.test(spreadsheetId)) {
+    res.status(400).json({ message: "Provide a valid spreadsheet ID." });
     return;
   }
   const validation = validateMappingRequestBody(req.body);
@@ -746,11 +818,15 @@ app.post("/api/config/mapping", requireAuthenticatedUser, requireOwner, async (r
     res.status(400).json({ message: validation.message });
     return;
   }
+  if (req.body.candidate !== true && spreadsheetId !== req.userRecord.spreadsheetId) {
+    res.status(409).json({ message: "Your spreadsheet changed. Reload the mapping editor." });
+    return;
+  }
   const mapping = req.body.mapping;
   try {
-    const accessToken = await getAuthorizedAccessToken(req.configRecord);
-    await writeConfigSheetMapping(accessToken, req.configRecord.spreadsheetId, mapping);
-    invalidateSheetStructureCache(req.configRecord.spreadsheetId);
+    const accessToken = await getAuthorizedAccessToken(req.userRecord);
+    await writeConfigSheetMapping(accessToken, spreadsheetId, mapping);
+    invalidateSheetStructureCache(spreadsheetId);
     const mode = "config-driven";
     res.json({ mapping, mode });
   } catch (error) {
@@ -771,11 +847,7 @@ app.get("/api/auth/picker-config", requireAuthenticatedUser, async (req, res) =>
 });
 
 app.delete("/api/config", requireAuthenticatedUser, requireOwner, async (req, res) => {
-  await updateUserRecord(req.userRecord.email, (current) => ({
-    ...current,
-    spreadsheetUrl: null,
-    spreadsheetId: null,
-  }));
+  await disconnectValidatedConnection(req.userRecord.id);
   res.status(204).end();
 });
 
@@ -1376,11 +1448,63 @@ app.post("/api/sharing/guest/reset", requireAuthenticatedUser, requireGuest, asy
   }
 });
 
-app.get("/api/admin/logs/files", requireAuthenticatedUser, requireAppAdmin, (_req, res) => {
+app.get("/api/admin/metrics", requireIdentityAuthenticatedUser, requireAppAdmin, async (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    res.json(await getAdminUsageMetrics());
+  } catch (error) {
+    logRouteError(_req, "admin_metrics_failed", error);
+    res.status(503).json({ message: "Usage metrics are temporarily unavailable." });
+  }
+});
+
+app.get("/api/activity/envelope", requireIdentityAuthenticatedUser, (req, res) => {
+  const { eventId, screen } = req.query;
+  if (typeof eventId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(eventId) || !isUsageScreen(screen)) {
+    res.status(400).json({ message: "Invalid activity request." });
+    return;
+  }
+  const browserId = getOrCreateBrowserId(req, res);
+  const envelope = createUsageEnvelope({ userId: req.userRecord.id, browserId, authSessionId: req.sessionID, eventId, screen });
+  res.set("Cache-Control", "no-store").json({ envelope });
+});
+
+app.post("/api/activity", requireIdentityAuthenticatedUser, async (req, res) => {
+  const { eventId, screen, envelope } = req.body ?? {};
+  if (typeof eventId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(eventId) || !isUsageScreen(screen)) {
+    res.status(400).json({ message: "Invalid activity event." });
+    return;
+  }
+  try {
+    const browserId = getOrCreateBrowserId(req, res);
+    const event = { userId: req.userRecord.id, browserId, eventId };
+    const duplicate = await hasUsageEventReceipt(event);
+    if (!duplicate && !verifyUsageEnvelope(envelope, { ...event, authSessionId: req.sessionID, screen })) {
+      res.status(400).json({ message: "Activity event expired or invalid. Reload the screen and try again." });
+      return;
+    }
+    const expiresAt = duplicate ? undefined : JSON.parse(Buffer.from(envelope.split(".")[0], "base64url").toString("utf8")).expiresAt;
+    const result = await recordUsageActivity({ ...event, authSessionId: req.sessionID, expiresAt });
+    if (result.expired) {
+      res.status(400).json({ message: "Activity event expired while waiting to be recorded." });
+      return;
+    }
+    if (result.rejected) {
+      res.status(401).json({ message: "This sign-in session has ended." });
+      return;
+    }
+    res.set("Cache-Control", "no-store").json({ accepted: true, ...result });
+  } catch (error) {
+    logRouteError(req, "activity_record_failed", error);
+    res.status(503).json({ message: "Activity could not be recorded." });
+  }
+});
+
+app.get("/api/admin/logs/files", requireIdentityAuthenticatedUser, requireAppAdmin, (_req, res) => {
   res.json({ files: listLogFiles() });
 });
 
-app.get("/api/admin/logs/tail", requireAuthenticatedUser, requireAppAdmin, (req, res) => {
+app.get("/api/admin/logs/tail", requireIdentityAuthenticatedUser, requireAppAdmin, (req, res) => {
   const file = String(req.query.file ?? "");
   const level = req.query.level ? String(req.query.level) : undefined;
   const q = req.query.q ? String(req.query.q) : undefined;
@@ -1395,11 +1519,11 @@ app.get("/api/admin/logs/tail", requireAuthenticatedUser, requireAppAdmin, (req,
   res.json({ entries });
 });
 
-app.get("/logs", requireAuthenticatedUser, requireAppAdmin, (_req, res) => {
+app.get("/logs", requireIdentityAuthenticatedUser, requireAppAdmin, (_req, res) => {
   res.sendFile(path.resolve(process.cwd(), "app-server/views/logs.html"));
 });
 
-app.get("/logs.js", requireAuthenticatedUser, requireAppAdmin, (_req, res) => {
+app.get("/logs.js", requireIdentityAuthenticatedUser, requireAppAdmin, (_req, res) => {
   res.sendFile(path.resolve(process.cwd(), "app-server/views/logs.js"));
 });
 
@@ -1473,6 +1597,11 @@ export function startServer() {
   });
   registerSignalHandlers();
   startWarningDigestScheduler();
+  void initializeUsageTracking().catch((error) => logger.error("usage_tracking_init_failed", { error: error.message }));
+  const heartbeat = setInterval(() => { void heartbeatUsageTracking().catch((error) => logger.warn("usage_tracking_heartbeat_failed", { error: error.message })); }, 60_000);
+  const cleanup = setInterval(() => { void cleanupUsageTracking().catch((error) => logger.warn("usage_tracking_cleanup_failed", { error: error.message })); }, 15 * 60_000);
+  heartbeat.unref?.();
+  cleanup.unref?.();
   return server;
 }
 

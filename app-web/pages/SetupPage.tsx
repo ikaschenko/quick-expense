@@ -1,3 +1,4 @@
+import { AppActivityTracker } from "../components/AppActivityTracker";
 import { Layout } from "../components/Layout";
 import { SetupPathChooser } from "../components/SetupPathChooser";
 import { SetupFreshPanel } from "../components/SetupFreshPanel";
@@ -29,6 +30,7 @@ export function SetupPage(): JSX.Element {
 
   return (
     <Layout title={PAGE_TITLES[setupPath]}>
+      <AppActivityTracker />
       {setupPath === "choose" ? (
         <SetupPathChooser isConfigLoading={isConfigLoading} configError={configError} onChoose={setSetupPath} />
       ) : null}

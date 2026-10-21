@@ -71,3 +71,13 @@ export async function removeShare(ownerUserId, guestEmail) {
 export async function removeShareAsGuest(guestEmail) {
   await pool.query("DELETE FROM setup_shares WHERE guest_email = $1", [guestEmail.toLowerCase()]);
 }
+
+/** Resolve validated shared connections within the caller's reporting snapshot. */
+export async function getConnectedGuestEmails(client) {
+  const { rows } = await client.query(
+    `SELECT DISTINCT s.guest_email FROM setup_shares s
+     JOIN users owner ON owner.id = s.owner_user_id
+     WHERE owner.connection_validated_at IS NOT NULL AND owner.spreadsheet_id IS NOT NULL`,
+  );
+  return rows.map((row) => row.guest_email);
+}

@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { SharedConfigInvalidModal } from "./components/SharedConfigInvalidModal";
@@ -12,17 +12,19 @@ import { HistoryPage } from "./pages/HistoryPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { SetupPage } from "./pages/SetupPage";
+import { AdminPage } from "./pages/AdminPage";
 
 import type { JSX } from "react";
 
 function AppRoutes(): JSX.Element {
   const { session } = useAuth();
 
-  if (session?.configStatus === "shared_config_invalid") {
+  if (session?.configStatus === "shared_config_invalid" && !session.isAppAdmin) {
     return <SharedConfigInvalidModal />;
   }
 
   return (
+    <>
     <Routes>
       <Route path="/" element={<LoginPage />} />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
@@ -67,6 +69,14 @@ function AppRoutes(): JSX.Element {
         element={<Navigate to="/home" replace />}
       />
       <Route
+        path="/admin"
+        element={
+          <ProtectedRoute requireAdmin>
+            <AdminPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/history"
         element={
           <ProtectedRoute>
@@ -76,14 +86,16 @@ function AppRoutes(): JSX.Element {
       />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   );
 }
 
 export default function App(): JSX.Element {
+  const { pathname } = useLocation();
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <ConfigProvider>
+        <ConfigProvider loadingEnabled={pathname !== "/admin"}>
           <DatasetProvider>
             <AppRoutes />
           </DatasetProvider>

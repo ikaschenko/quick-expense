@@ -1,3 +1,4 @@
+import { AppActivityTracker } from "../components/AppActivityTracker";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type JSX } from "react";
 import { Navigate, useNavigate, useParams, useLocation } from "react-router-dom";
 import { Check, Calendar, RotateCcw, House } from "lucide-react";
@@ -743,6 +744,7 @@ export function AddExpensePage(): JSX.Element {
 
   return (
     <Layout title={isEditMode ? "Edit Expense" : "Add Expense"} onBack={isEditMode ? handleEditBack : (!prefillDate ? undefined : handleAddBack)}>
+      <AppActivityTracker />
       {isInsertingHistorical ? (
         <div className="add-insert-overlay" role="status" aria-live="polite">
           <LoadingBlock label="Recording an entry with an earlier date. This may take a moment while the history is being updated…" />

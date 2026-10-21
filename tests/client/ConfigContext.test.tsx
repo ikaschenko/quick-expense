@@ -172,3 +172,18 @@ describe("ConfigContext — config fetch effect", () => {
     expect(screen.getByTestId("default-value").textContent).toBe("New");
   });
 });
+
+
+describe("administration provider suppression", () => {
+  it("does not load spreadsheet providers until leaving administration", async () => {
+    vi.mocked(useAuth).mockReturnValue({ session: makeSession() } as ReturnType<typeof useAuth>);
+    vi.mocked(googleSheetsService.getConfig).mockResolvedValue({ config: makeConfig() });
+    const { rerender } = render(<ConfigProvider loadingEnabled={false}><Probe /></ConfigProvider>);
+    expect(googleSheetsService.getConfig).not.toHaveBeenCalled();
+    expect(googleSheetsService.getSpreadsheetFileName).not.toHaveBeenCalled();
+    expect(screen.getByTestId("loading").textContent).toBe("false");
+    rerender(<ConfigProvider loadingEnabled><Probe /></ConfigProvider>);
+    await waitFor(() => expect(screen.getByTestId("spreadsheetId").textContent).toBe("abc123"));
+    expect(googleSheetsService.getConfig).toHaveBeenCalledOnce();
+  });
+});

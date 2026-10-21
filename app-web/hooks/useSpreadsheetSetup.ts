@@ -4,12 +4,14 @@ import { googleSheetsService } from "../services/googleSheets";
 import { openSpreadsheetPicker } from "../services/googlePicker";
 import { trackEvent } from "../services/analytics";
 import { AppError, HeaderDetails, SetupReport } from "../types/expense";
+import { parseSpreadsheetUrl } from "../utils/spreadsheet";
 
 export interface SpreadsheetSetup {
   error: string | null;
   success: string | null;
   setupReport: SetupReport | null;
   headerDetails: HeaderDetails | null;
+  candidateSpreadsheetId: string | null;
   templateCopyUrl: string | null;
   showMappingEditor: boolean;
   setShowMappingEditor: (open: boolean) => void;
@@ -29,6 +31,7 @@ export interface SpreadsheetSetup {
 export function useSpreadsheetSetup(): SpreadsheetSetup {
   const { saveConfig } = useConfig();
   const [spreadsheetUrl, setSpreadsheetUrl] = useState("");
+  const [candidateSpreadsheetId, setCandidateSpreadsheetId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [setupReport, setSetupReport] = useState<SetupReport | null>(null);
@@ -49,6 +52,7 @@ export function useSpreadsheetSetup(): SpreadsheetSetup {
   };
 
   const saveSpreadsheet = async (url: string): Promise<void> => {
+    setCandidateSpreadsheetId(parseSpreadsheetUrl(url));
     setError(null);
     setHeaderDetails(null);
     setSuccess(null);
@@ -120,6 +124,7 @@ export function useSpreadsheetSetup(): SpreadsheetSetup {
     success,
     setupReport,
     headerDetails,
+    candidateSpreadsheetId,
     templateCopyUrl,
     showMappingEditor,
     setShowMappingEditor,
