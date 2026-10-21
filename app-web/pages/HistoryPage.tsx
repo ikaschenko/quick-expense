@@ -1,3 +1,4 @@
+import { AppActivityTracker } from "../components/AppActivityTracker";
 import { useCallback, useEffect, useMemo, useState, type JSX } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { ChartLine, RefreshCw, Search as SearchIcon, SearchX, X, FilterX, ChevronDown, ChevronUp } from "lucide-react";
@@ -288,6 +289,7 @@ export function HistoryPage(): JSX.Element {
 
   return (
     <Layout title="History">
+      <AppActivityTracker eligible={!isConfigLoading && (!!config || !!configError)} />
       {/* Header bar */}
       <div className="history-header">
         <span className="history-count">

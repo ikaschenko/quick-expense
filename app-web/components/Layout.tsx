@@ -136,6 +136,19 @@ export function Layout({ children, title, onBack }: LayoutProps): JSX.Element {
                     <LogOut size={14} aria-hidden />
                     Sign out
                   </button>
+                  {auth.session?.isAppAdmin ? (
+                    <>
+                      <div className="admin-menu-separator" role="separator" />
+                      <Link
+                        to="/admin"
+                        className="topbar-admin-link"
+                        onClick={() => setAvatarMenuOpen(false)}
+                      >
+                        <Shield size={14} aria-hidden />
+                        Admin view
+                      </Link>
+                    </>
+                  ) : null}
                 </div>
               ) : null}
             </>

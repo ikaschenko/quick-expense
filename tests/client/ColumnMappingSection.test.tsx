@@ -3,7 +3,7 @@ import { ColumnMappingSection } from "../../app-web/components/ColumnMappingSect
 import { ColumnMappingState } from "../../app-web/hooks/useColumnMapping";
 
 vi.mock("../../app-web/components/ColumnMappingEditor", () => ({
-  ColumnMappingEditor: () => <div data-testid="mapping-editor" />,
+  ColumnMappingEditor: ({ spreadsheetId }: { spreadsheetId?: string }) => <div data-testid="mapping-editor" data-target={spreadsheetId} />,
 }));
 
 function makeMapping(overrides: Partial<ColumnMappingState> = {}): ColumnMappingState {
@@ -66,10 +66,10 @@ describe("ColumnMappingSection", () => {
     const mapping = makeMapping({
       editorOpen: true,
       success: "Mapping updated.",
-      mappingData: { mapping: null, mode: "config-driven", detectedColumns: [] },
+      mappingData: { spreadsheetId: "original-sheet", mapping: null, mode: "config-driven", detectedColumns: [] },
     });
     render(<ColumnMappingSection mapping={mapping} />);
-    expect(screen.getByTestId("mapping-editor")).toBeTruthy();
+    expect(screen.getByTestId("mapping-editor").getAttribute("data-target")).toBe("original-sheet");
     expect(screen.getByText("Mapping updated.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Edit mapping" })).toBeNull();
   });

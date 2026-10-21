@@ -61,6 +61,7 @@ function MappingBody({ mapping }: ColumnMappingSectionProps): JSX.Element {
       {mapping.success ? <StatusBanner variant="success" message={mapping.success} /> : null}
       {mapping.editorOpen ? (
         <ColumnMappingEditor
+          spreadsheetId={mappingData.spreadsheetId}
           detectedColumns={mappingData.detectedColumns}
           initialMapping={mappingData.mapping ?? undefined}
           onSaved={mapping.onEditorSaved}

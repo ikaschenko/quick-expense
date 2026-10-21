@@ -2,7 +2,11 @@ import { Navigate } from "react-router-dom";
 import { PropsWithChildren, type JSX } from "react";
 import { useAuth } from "../contexts/AuthContext";
 
-export function ProtectedRoute({ children }: PropsWithChildren): JSX.Element {
+interface ProtectedRouteProps extends PropsWithChildren {
+  requireAdmin?: boolean;
+}
+
+export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRouteProps): JSX.Element {
   const auth = useAuth();
 
   if (auth.status === "initializing") {
@@ -11,6 +15,10 @@ export function ProtectedRoute({ children }: PropsWithChildren): JSX.Element {
 
   if (!auth.session) {
     return <Navigate to="/" replace />;
+  }
+
+  if (requireAdmin && !auth.session.isAppAdmin) {
+    return <Navigate to="/home" replace />;
   }
 
   return <>{children}</>;

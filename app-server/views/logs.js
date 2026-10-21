@@ -68,3 +68,32 @@ void (async function init() {
     statusEl.textContent = err.message;
   }
 })();
+
+
+// This separately served page shares the app's first-party, HttpOnly browser ID.
+if (document.visibilityState === "visible" && typeof crypto.randomUUID === "function") {
+  const key = "qe-log-viewer-arrival";
+  let eventId;
+  try {
+    const saved = sessionStorage.getItem(key);
+    const pending = saved ? JSON.parse(saved) : null;
+    eventId = pending && Date.now() - pending.createdAt <= 120_000 ? pending.id : crypto.randomUUID();
+    sessionStorage.setItem(key, JSON.stringify({ id: eventId, createdAt: Date.now() }));
+  } catch {
+    eventId = crypto.randomUUID();
+  }
+  const recordArrival = async () => {
+    const envelopeResponse = await fetch(`/api/activity/envelope?eventId=${encodeURIComponent(eventId)}&screen=logs`, { credentials: "same-origin", headers: { "X-Requested-With": "fetch" } });
+    if (!envelopeResponse.ok) return;
+    const { envelope } = await envelopeResponse.json();
+    const response = await fetch("/api/activity", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "X-Requested-With": "fetch", "Content-Type": "application/json" },
+      body: JSON.stringify({ eventId, screen: "logs", envelope }),
+    });
+    if (response.ok) { try { sessionStorage.removeItem(key); } catch { /* optional */ } }
+  };
+  if (navigator.locks) void navigator.locks.request("quickexpense-activity-bootstrap", recordArrival).catch(() => {});
+  else void recordArrival().catch(() => {});
+}
