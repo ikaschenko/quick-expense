@@ -147,6 +147,10 @@ Rotated log files can be browsed at `/logs` (served by the backend, guarded by `
 2. Run `npm run dev` and sign in at `http://localhost:5173`.
 3. Open `http://localhost:5173/logs` — the dev server proxies it to the backend.
 
+### Admin usage metrics
+
+The usage and setup-adoption panel is available at `/admin` to signed-in accounts allow-listed by `ADMIN_EMAIL` or `ALERT_EMAIL_TO` (the same app-admin allow-list used by the log viewer). It does not require the administrator to have a spreadsheet setup. Before deploying a server version that collects usage metrics, apply migrations 013 and 014 in order; see [`app-server/db/database.md`](app-server/db/database.md). Tracking history starts when instrumentation is activated and is not backfilled, so initial 30-day periods can be partial or unavailable. Collection gaps are shown in the panel.
+
 ### Integration tests env setup
 
 Keep integration test variables in `.env` (gitignored):

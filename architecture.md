@@ -303,12 +303,15 @@ All API routes are defined in `app-server/index.js`.
 | PATCH | `/api/sharing/:guestEmail` | Yes (owner) | Update access level for a shared user |
 | DELETE | `/api/sharing/:guestEmail` | Yes (owner) | Remove a user from the share list |
 | POST | `/api/sharing/guest/reset` | Yes (guest) | Guest-initiated reset: detach from shared setup and clear to re-run Setup |
+| GET | `/api/admin/metrics` | Yes (app admin) | Return a consistent usage-metrics snapshot (no-store) |
+| GET | `/api/activity/envelope` | Yes (signed-in identity) | Issue a short-lived signed envelope for usage activity tracking; does not require spreadsheet setup |
+| POST | `/api/activity` | Yes (signed-in identity) | Record deduplicated daily activity and session starts; does not require spreadsheet setup |
 | GET | `/api/admin/logs/files` | Yes (app admin) | List rotated log files (name/size/mtime) from `LOG_DIR` |
 | GET | `/api/admin/logs/tail` | Yes (app admin) | Tail/filter a whitelisted log file. Query params: `file` (must be a name returned by `/files`), `level`, `q` (substring search), `lines` (default 200, max 1000) |
 | GET | `/logs` | Yes (app admin) | Serves the admin log viewer HTML page (`app-server/views/logs.html`) |
 | GET | `/logs.js` | Yes (app admin) | Serves the admin log viewer's client script (`app-server/views/logs.js`) |
 
-"Auth = Yes" means the `requireAuthenticatedUser` middleware is applied: it verifies the session cookie has a `userEmail`, retrieves the user record, resolves any shared setup reference (populating `req.configRecord`, `req.isGuest`, `req.accessLevel`), and attaches them to the request. "owner" routes additionally require `requireOwner` (403 for guests). Write expense routes additionally require `requireEditAccess` (403 for view-level guests). "app admin" routes additionally require `requireAppAdmin` (403 unless the signed-in user's email is listed in the `ADMIN_EMAIL` or `ALERT_EMAIL_TO` env var, comma/semicolon-separated) — a separate, app-wide admin gate distinct from spreadsheet ownership.
+"Auth = Yes" means the `requireAuthenticatedUser` middleware is applied: it verifies the session cookie has a `userEmail`, retrieves the user record, resolves any shared setup reference (populating `req.configRecord`, `req.isGuest`, `req.accessLevel`), and attaches them to the request. "owner" routes additionally require `requireOwner` (403 for guests). Write expense routes additionally require `requireEditAccess` (403 for view-level guests). "app admin" routes additionally require `requireAppAdmin` (403 unless the signed-in user's email is listed in the `ADMIN_EMAIL` or `ALERT_EMAIL_TO` env var, comma/semicolon-separated) — a separate, app-wide admin gate distinct from spreadsheet ownership. Admin/activity identity authentication resolves the signed-in user without resolving shared setup, so the `/admin` route and activity endpoints do not require a configured spreadsheet. The metrics endpoint additionally requires `requireAppAdmin` (the signed-in email allow-list) and returns a read-only repeatable-read snapshot.
 
 ---
 
@@ -333,6 +336,10 @@ Stores authenticated user records: OAuth tokens, spreadsheet configuration, and 
 | `spreadsheet_id` | TEXT | |
 | `last_authenticated_at` | BIGINT | NOT NULL |
 | `last_activity_at` | BIGINT | NOT NULL |
+| `first_signed_in_at` | TIMESTAMPTZ | NOT NULL |
+| `connection_validated_at` | TIMESTAMPTZ | |
+| `connection_origin` | TEXT | Nullable; CHECK IN (`created`, `existing`, `unknown`) |
+| `connection_revision` | BIGINT | NOT NULL, DEFAULT 0 |
 | `created_at` | TIMESTAMPTZ | DEFAULT now() |
 | `updated_at` | TIMESTAMPTZ | DEFAULT now() |
 
@@ -437,6 +444,25 @@ Stores sharing relationships between an owner user and their invited guests.
 - Index on `(guest_email)` for efficient per-request guest resolution.
 - Access levels: `edit` — full read/write; `view` — read-only (History allowed; Add/Edit/Delete blocked at API and UI level).
 
+#### h) Admin Usage and Connection Provenance
+
+Migration 014 adds setup-validation fields to `users` and these operational tables in PostgreSQL:
+
+| Table | Purpose |
+|---|---|
+| `setup_connection_provenance` | Per-user and spreadsheet-ID record of the first validated connection origin (`created`, `existing`, or `unknown`) and validation time. |
+| `user_activity_days` | One row per user and UTC date with authenticated app activity. |
+| `usage_session_days` | Aggregate session-start counts per UTC date; this is the durable source for lifetime and period session totals. |
+| `browser_usage_sessions` | Current/recent browser session timestamps and a hash of the server-side auth-session ID. Browser identity is a random UUID in an HttpOnly, SameSite=Lax cookie; its raw authentication session ID is not stored here. |
+| `usage_event_receipts` / `usage_ended_auth_sessions` | Short-lived event-deduplication receipts and logout tombstones, keyed to internal user/browser IDs and auth-session hashes. |
+| `usage_tracking_coverage` / `usage_tracking_gaps` | Tracking start/heartbeat state and recorded intervals when collection was interrupted or unavailable. |
+
+`users.first_signed_in_at` is backfilled from `created_at` because that is the only reliable historical sign-in evidence. Existing spreadsheet candidates are deliberately not promoted to validated connections: previous setup flows could persist a candidate before Google validation. A successful current validation records connection time and origin in `users` and the provenance table; `created`/`existing` reflect the setup choice, while unverifiable legacy origin is `unknown`. A shared guest is classified as shared setup when its owner has a validated connection. A saved connection is not proof of current Google access.
+
+The Admin panel reports total and connected accounts, validated setup-origin categories, new sign-ins, distinct active users, and session starts (lifetime and by current/previous 30-day UTC period, with averages and comparisons). Connection adoption uses current saved records; new-sign-in counts use `first_signed_in_at` (historical values use `created_at` as an approximation). Activity/session tracking begins only when instrumentation runs: existing activity and session history is not backfilled. Active-user/session metrics are unavailable before tracking is observed and show observed counts for partial periods; comparisons and averages require complete coverage, with collection gaps exposed. Session starts are counted when activity begins a session, with activity less than 30 minutes apart continuing the same session.
+
+These are operational usage/adoption records, not expense rows or event-by-event screen histories. Activity rows link to internal user IDs; browser/session identifiers are pseudonymous operational identifiers. The migration enables row-level security and revokes access from `PUBLIC`, `anon`, and `authenticated`; application access is through the server. Daily per-user activity is retained for 90 days, event receipts and logout tombstones for 24 hours, and inactive browser-session rows for 31 minutes. Aggregate session-day totals, connection provenance, coverage state, and recorded coverage gaps have no cleanup job and are retained indefinitely.
+
 ### 7.2 Expense Data — Google Spreadsheet
 
 **Expense data is NOT stored in the backend.** It lives entirely in a Google Spreadsheet controlled by the user.
@@ -498,6 +524,8 @@ Current migrations:
 | `010_rls_setup_shares.sql` | RLS policy for `setup_shares` |
 | `011_reset_hidden_comment.sql` | Remove hidden Comment entries |
 | `012_numeric_user_ids.sql` | Re-key users and ownership foreign keys to numeric IDs |
+| `013_setup_field_defaults.sql` | Add per-owner setup-field defaults, seeded from existing users and synchronized when the spreadsheet connection changes |
+| `014_admin_usage_tracking.sql` | Add validated-connection provenance, usage/activity/session tracking, and tracking-coverage records |
 
 ---
 
@@ -623,7 +651,7 @@ In development, Vite proxies all `/api` requests to `http://localhost:3001` (con
 | `EXPENSE_RECENT_MONTHS` | *(Optional)* Number of months of recent expense data loaded in Phase 1. Default: `24`. Older records are fetched in the background after the UI is ready. |
 | `RESEND_API_KEY` | *(Optional)* Resend API key for transactional email. If absent, email notifications are silently skipped (app runs normally). |
 | `EMAIL_FROM` | *(Optional)* Sender address for email notifications (e.g. `noreply@send.q-expense.com`). Required when `RESEND_API_KEY` is set. |
-| `ADMIN_EMAIL` | *(Optional)* Email(s) allowed to access `/logs` and the `/api/admin/logs/*` routes (`requireAppAdmin`). Comma/semicolon-separated; combined with `ALERT_EMAIL_TO` into a single allow-list. Admin routes 403 when the signed-in user's email is in neither. |
+| `ADMIN_EMAIL` | *(Optional)* Email(s) allowed to access `/admin`, `/logs`, and the `/api/admin/*` routes (`requireAppAdmin`). Comma/semicolon-separated; combined with `ALERT_EMAIL_TO` into a single allow-list. Admin routes 403 when the signed-in user's email is in neither. |
 | `ALERT_EMAIL_TO` | *(Optional)* Comma/semicolon-separated recipient list for error-alert and warning-digest emails. Alert emails are skipped when unset. |
 | `LOG_DIR` | *(Optional)* Directory for rotated log files. Defaults to a repo-relative `logs/` folder; set to `/data/logs` in production (mounted volume). |
 | `LOG_RETENTION_DAYS` | *(Optional)* Days to retain rotated log files. Default: `15`. |
@@ -661,6 +689,12 @@ Every Winston log entry receives `requestId` from the request context, plus nume
 - `/logs`, `/logs.js`, and both API routes require `requireAuthenticatedUser` + `requireAppAdmin` (email must be listed in `ADMIN_EMAIL` or `ALERT_EMAIL_TO`); the API routes additionally have a dedicated `express-rate-limit` limiter as defense in depth.
 - The tail route validates the requested `file` against the list returned by the files route (whitelist check) to block path traversal — no arbitrary filesystem reads are possible.
 
+### Admin Usage Panel
+
+- `/admin` is a protected React route; `/api/admin/metrics` requires signed-in identity plus `requireAppAdmin`. The identity guard does not resolve a spreadsheet setup, so allow-listed administrators can use the panel before setting up a sheet.
+- The endpoint returns one PostgreSQL read-only `REPEATABLE READ` snapshot and disables HTTP caching. It reports account/setup adoption, sign-ins, daily active users, sessions and collection coverage; it does not expose expense rows.
+- Activity collection uses a random browser UUID cookie and records user/day activity and aggregate session starts. Per-user daily activity is kept for 90 days; event receipts and logout tombstones for 24 hours; aggregate session totals remain indefinitely. Tracking history starts with instrumentation activation, and gaps or incomplete periods are shown rather than presented as complete.
+
 ### Landing Page (`q-expense-landing`)
 
 - **Dockerfile:** Copies `index.html`, `lang/`, and images into nginx default content directory, and `nginx/default.conf.template` into `/etc/nginx/templates/` (rendered by the nginx image's `envsubst` step at startup).
@@ -670,7 +704,7 @@ Every Winston log entry receives `requestId` from the request context, plus nume
 
 ## 12. Key Design Decisions & Constraints (v1)
 
-1. **PostgreSQL via Supabase Free** — user records, FX rate backups, and sessions are stored in a managed PostgreSQL database. The app container is otherwise stateless, with one narrow exception: a 1GB Fly.io volume mounted at `/data/logs` holds rotated application log files (see §11).
+1. **PostgreSQL via Supabase Free** — user records, FX rate backups, sessions, setup-validation provenance, and operational usage/activity aggregates are stored in a managed PostgreSQL database. These records are distinct from expense rows, which remain in Google Sheets only (see decision 2). The app container is otherwise stateless, with one narrow exception: a 1GB Fly.io volume mounted at `/data/logs` holds rotated application log files (see §11).
 2. **Expense data in Google Sheets only** — the app is a thin client over Google Sheets API. No expense data is cached or stored server-side.
 3. **Client-side search** — the full dataset is loaded into the browser. Capped at 10 MB JSON payload.
 4. **Edit of existing records** — supported via `PUT /api/expenses/:rowNumber`. Returns `{ record, moveMode }`. When the date change keeps the row in chronological order, an in-place cell update is performed (`moveMode: false`). When the date change would break order, `moveExpenseRow` calls the existing `addExpenseRow` (insert/append decision fully reused), then deletes the original row (`moveMode: true`). The client performs a full dataset reload on `moveMode: true`, identical to the add insert-mode flow. Delete is scoped to the **last row only**, available from Tail view. Protected by a row-count conflict check: the client passes the expected row count; the backend rejects with HTTP 409 if the sheet was updated concurrently.
