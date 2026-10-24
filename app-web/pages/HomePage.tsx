@@ -1,10 +1,9 @@
 import { AppActivityTracker } from "../components/AppActivityTracker";
-import { useEffect, useMemo, useRef, useState, type JSX } from "react";
+import { useEffect, useMemo, useRef, useState, type JSX, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, FileSpreadsheet, Info, Loader2, Receipt } from "lucide-react";
-import { FormattedAmount } from "../components/FormattedAmount";
+import { FileSpreadsheet, Receipt } from "lucide-react";
+import { HomeDashboard } from "../components/HomeDashboard";
 import { Layout } from "../components/Layout";
-import { MtdSpendChart } from "../components/MtdSpendChart";
 import { MonthDetailsPanel } from "../components/MonthDetailsPanel";
 import { YearDetailsPanel } from "../components/YearDetailsPanel";
 import { StatusBanner } from "../components/StatusBanner";
@@ -23,9 +22,11 @@ import {
   getYearStats,
   getRolling12mStats,
   getMtdDailyAmounts,
-  formatPctChange,
   shiftMonth,
+  type IsoNormalizer,
+  type PeriodStats,
 } from "../utils/dashboardStats";
+import type { ExpenseRecord } from "../types/expense";
 import { metricsCache, type MetricsCacheEntry } from "../services/metricsCache";
 import { googleSheetsService } from "../services/googleSheets";
 
@@ -71,75 +72,118 @@ function formatShortDate(isoDate: string): string {
   return new Date(year, month - 1, day).toLocaleString("en", { month: "short", day: "numeric" });
 }
 
-// Shown in place of cached values that a date rollover has invalidated, while the refresh runs.
-function MetricRefreshing(): JSX.Element {
-  return (
-    <p className="home-metric-refreshing" role="status">
-      <Loader2 size={14} className="icon-spin" aria-hidden />
-      Updating…
-    </p>
-  );
+type HomeView = "config-loading" | "no-sheet" | "no-data" | "dataset-loading" | "error" | "dashboard" | "blank";
+
+function getHomeView(
+  isConfigLoading: boolean,
+  hasConfig: boolean,
+  status: ReturnType<typeof useDataset>["status"],
+  hasCache: boolean,
+  recordCount: number,
+): HomeView {
+  if (isConfigLoading) return "config-loading";
+  if (!hasConfig) return "no-sheet";
+  if (!hasCache && status === "ready" && recordCount === 0) return "no-data";
+  if (!hasCache && (status === "idle" || status === "loading")) return "dataset-loading";
+  if (status === "error") return "error";
+  if (hasCache || (status === "ready" && recordCount > 0)) return "dashboard";
+  return "blank";
 }
 
-interface DeviationProps {
-  deviation: { up: boolean; pctChange: number; absChange: number; priorLabel: string; priorTotal: number };
+function HomeContent({ view, onRetry, children }: {
+  view: HomeView;
+  onRetry: () => void;
+  children: ReactNode;
+}): JSX.Element | null {
+  switch (view) {
+    case "config-loading":
+      return <div className="skeleton-list"><MetricCardSkeleton /><MetricCardSkeleton /><MetricCardSkeleton /></div>;
+    case "no-sheet":
+      return <HomeEmptyState variant="no-sheet" />;
+    case "no-data":
+      return <HomeEmptyState variant="no-data" />;
+    case "dataset-loading":
+      return (
+        <div className="skeleton-list">
+          <MetricCardSkeleton />
+          <MetricCardSkeleton />
+          <div className="home-metric-row"><MetricCardSkeleton /><MetricCardSkeleton /></div>
+          <p className="home-loading-hint">Loading expenses from Google Sheet…</p>
+        </div>
+      );
+    case "error":
+      return (
+        <div className="home-dataset-error">
+          <p>Failed to load expense data.</p>
+          <button type="button" className="btn btn-secondary" onClick={onRetry}>Retry</button>
+        </div>
+      );
+    case "dashboard":
+      return <>{children}</>;
+    default:
+      return null;
+  }
 }
 
-function DeviationLine({ deviation }: DeviationProps): JSX.Element {
-  const [showTooltip, setShowTooltip] = useState(false);
-  const isGrowing = deviation.up && deviation.absChange > 0;
-  const sign = deviation.up ? "+" : "-";
-  const arrow = deviation.up ? "▲" : "▼";
-  return (
-    <p className="home-metric-yoy">
-      <span className={isGrowing ? "yoy-up" : "yoy-down"}>
-        {arrow} {sign}{formatPctChange(deviation.pctChange)}% ({sign}${Math.round(deviation.absChange)})
-      </span>{" "}
-      <span className="prior-period-wrapper">
-        <button
-          type="button"
-          className="prior-period-label"
-          onClick={() => setShowTooltip((v) => !v)}
-          aria-label={`Show ${deviation.priorLabel} total`}
-        >
-          vs {deviation.priorLabel}
-        </button>
-        {showTooltip && (
-          <span className="prior-tooltip" role="tooltip">
-            <FormattedAmount prefix="$" value={deviation.priorTotal} />
-          </span>
-        )}
-      </span>
-    </p>
-  );
+function getEarliestLoadedMonth(records: ExpenseRecord[], toIso: IsoNormalizer): string | null {
+  return records.reduce<string | null>((earliest, record) => {
+    const iso = toIso(record.Date);
+    const recordMonth = iso?.slice(0, 7) ?? null;
+    return recordMonth && (!earliest || recordMonth < earliest) ? recordMonth : earliest;
+  }, null);
 }
 
-const TODAY_HELP_TEXT = "Total amount of expenses for today.";
-const MTD_HELP_TEXT =
-  "Total amount of expenses for the ongoing month, compared to the same date range for the previous month (shown only when comparable prior-month data exists).";
-const YTD_HELP_TEXT =
-  "Total amount of expenses for the ongoing year, compared to the same date range for the previous year (if enough data). The forecast projects your full-year total from your recent daily spending rate. Use the arrows to review a past year — it then shows that year's full total, and the forecast does not apply.";
-const ROLLING_12M_HELP_TEXT =
-  "Total amount of expenses over the trailing 12 months (up to yesterday), compared to the preceding 12-month period (shown when that data exists).";
-
-interface WidgetHelpButtonProps {
-  label: string;
-  open: boolean;
-  onToggle: () => void;
+function getYearLoadingState(
+  status: ReturnType<typeof useDataset>["status"],
+  isLoadingHistory: boolean,
+  earliestLoadedMonth: string | null,
+  selectedYear: number,
+  currentYear: number,
+) {
+  const earliestLoadedYear = earliestLoadedMonth ? Number(earliestLoadedMonth.slice(0, 4)) : null;
+  const isSelectedYearLoading =
+    (selectedYear !== currentYear && status !== "ready") ||
+    (isLoadingHistory && (earliestLoadedYear === null || selectedYear < earliestLoadedYear));
+  const isYearNavLocked = isSelectedYearLoading || isLoadingHistory;
+  const isPriorYearLoading =
+    isSelectedYearLoading ||
+    (isLoadingHistory && (earliestLoadedYear === null || selectedYear - 1 < earliestLoadedYear));
+  return {
+    isSelectedYearLoading,
+    isYearDetailsLoading: status !== "ready" || isPriorYearLoading,
+    previousDisabled: isYearNavLocked || (earliestLoadedYear !== null && selectedYear <= earliestLoadedYear),
+    nextDisabled: isYearNavLocked || selectedYear === currentYear,
+  };
 }
 
-function WidgetHelpButton({ label, open, onToggle }: WidgetHelpButtonProps): JSX.Element {
-  return (
-    <button
-      type="button"
-      className="section-help-btn"
-      aria-expanded={open}
-      aria-label={`${open ? "Hide" : "Show"} info about ${label}`}
-      onClick={onToggle}
-    >
-      <Info size={14} aria-hidden />
-    </button>
-  );
+type LiveMetrics = Pick<MetricsCacheEntry,
+  "todayStats" | "mtdStats" | "ytdStats" | "ytdForecast" | "rolling12mStats" | "mtdDailyAmounts">;
+
+function getDisplayedMetrics({ cache, live, monthStats, yearStats, dailyAmounts, isCurrentMonth, isCurrentYear, today }: {
+  cache: MetricsCacheEntry | null;
+  live: LiveMetrics;
+  monthStats: PeriodStats;
+  yearStats: PeriodStats;
+  dailyAmounts: (number | null)[];
+  isCurrentMonth: boolean;
+  isCurrentYear: boolean;
+  today: string;
+}) {
+  const displayMtdStats = cache?.mtdStats ?? live.mtdStats;
+  const displayYtdStats = cache?.ytdStats ?? live.ytdStats;
+  const isStaleDay = cache !== null && cache.cacheDate !== today;
+  return {
+    isStaleDay,
+    isStaleMonth: cache !== null && cache.cacheDate.slice(0, 7) !== today.slice(0, 7),
+    cacheDateLabel: isStaleDay ? formatShortDate(cache.cacheDate) : null,
+    displayTodayStats: cache?.todayStats ?? live.todayStats,
+    displayMtdStats,
+    displaySelectedMtdStats: isCurrentMonth ? displayMtdStats : monthStats,
+    displaySelectedYearStats: isCurrentYear ? displayYtdStats : yearStats,
+    displayYtdForecast: cache?.ytdForecast ?? live.ytdForecast,
+    displayRolling12mStats: cache?.rolling12mStats ?? live.rolling12mStats,
+    displayMtdDailyAmounts: isCurrentMonth ? (cache?.mtdDailyAmounts ?? live.mtdDailyAmounts) : dailyAmounts,
+  };
 }
 
 export function HomePage(): JSX.Element {
@@ -298,49 +342,21 @@ export function HomePage(): JSX.Element {
     mtdCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const isDatasetLoading = dataset.status === "idle" || dataset.status === "loading";
-  const isLoading = isConfigLoading || isDatasetLoading;
-  const showEmptySheet = !isConfigLoading && !config;
-  const showEmptyData = !cachedEntry && !isLoading && config && dataset.status === "ready" && records.length === 0;
-  const showDashboard = cachedEntry !== null || (!isLoading && config && dataset.status === "ready" && records.length > 0);
-  const showDashboardSkeleton = !cachedEntry && !isConfigLoading && config && isDatasetLoading;
-  const earliestLoadedMonth = records.reduce<string | null>((earliest, record) => {
-    const iso = toIso(record.Date);
-    const recordMonth = iso?.slice(0, 7) ?? null;
-    return recordMonth && (!earliest || recordMonth < earliest) ? recordMonth : earliest;
-  }, null);
+  const view = getHomeView(isConfigLoading, !!config, dataset.status, cachedEntry !== null, records.length);
+  const earliestLoadedMonth = getEarliestLoadedMonth(records, toIso);
   const isSelectedMonthLoading =
     (selectedMonth !== currentMonth && dataset.status !== "ready") ||
     (dataset.isLoadingHistory && (!earliestLoadedMonth || selectedMonth < earliestLoadedMonth));
-  const earliestLoadedYear = earliestLoadedMonth ? Number(earliestLoadedMonth.slice(0, 4)) : null;
-  const isSelectedYearLoading =
-    (selectedYear !== currentYear && dataset.status !== "ready") ||
-    (dataset.isLoadingHistory && (earliestLoadedYear === null || selectedYear < earliestLoadedYear));
-  // The earliest loaded year is only authoritative once the whole sheet is in memory.
-  const isYearNavLocked = isSelectedYearLoading || dataset.isLoadingHistory;
-  // Year Details' category breakdown also needs the prior year loaded — reuses the same spinner.
-  const isPriorYearLoading =
-    isSelectedYearLoading ||
-    (dataset.isLoadingHistory && (earliestLoadedYear === null || selectedYear - 1 < earliestLoadedYear));
-  // Unlike the metric cards above, YearDetailsPanel has no cache fallback — it always reads live
-  // records, so it must show a spinner until the dataset itself is ready, even for the current year.
-  const isYearDetailsLoading = dataset.status !== "ready" || isPriorYearLoading;
-
-  // A cached entry from an earlier day still carries valid YTD/rolling-12m totals, but its
-  // TODAY (and, across a month boundary, MTD) figures are definitively wrong.
-  const isStaleDay = cachedEntry !== null && cachedEntry.cacheDate !== today;
-  const isStaleMonth = cachedEntry !== null && cachedEntry.cacheDate.slice(0, 7) !== today.slice(0, 7);
-  const cacheDateLabel = isStaleDay ? formatShortDate(cachedEntry.cacheDate) : null;
-
-  // Prefer live computed values; fall back to cache when dataset is still idle.
-  const displayTodayStats = cachedEntry?.todayStats ?? todayStats;
-  const displayMtdStats = cachedEntry?.mtdStats ?? mtdStats;
-  const displaySelectedMtdStats = selectedMonth === currentMonth ? displayMtdStats : selectedMonthStats;
-  const displayYtdStats = cachedEntry?.ytdStats ?? ytdStats;
-  const displaySelectedYearStats = selectedYear === currentYear ? displayYtdStats : selectedYearStats;
-  const displayYtdForecast = cachedEntry?.ytdForecast ?? ytdForecast;
-  const displayRolling12mStats = cachedEntry?.rolling12mStats ?? rolling12mStats;
-  const displayMtdDailyAmounts = cachedEntry?.mtdDailyAmounts ?? currentMtdDailyAmounts;
+  const yearLoading = getYearLoadingState(dataset.status, dataset.isLoadingHistory, earliestLoadedMonth, selectedYear, currentYear);
+  const {
+    isStaleDay, isStaleMonth, cacheDateLabel, displayTodayStats, displayMtdStats,
+    displaySelectedMtdStats, displaySelectedYearStats, displayYtdForecast, displayRolling12mStats, displayMtdDailyAmounts,
+  } = getDisplayedMetrics({
+    cache: cachedEntry,
+    live: { todayStats, mtdStats, ytdStats, ytdForecast, rolling12mStats, mtdDailyAmounts: currentMtdDailyAmounts },
+    monthStats: selectedMonthStats, yearStats: selectedYearStats, dailyAmounts: selectedMtdDailyAmounts,
+    isCurrentMonth: selectedMonth === currentMonth, isCurrentYear: selectedYear === currentYear, today,
+  });
 
   return (
     <Layout title="Quick Expense">
@@ -349,262 +365,50 @@ export function HomePage(): JSX.Element {
         <StatusBanner variant="success" message="Expense saved successfully." />
       ) : null}
       <div className="home-wrapper">
-        {isConfigLoading ? (
-          <div className="skeleton-list">
-            <MetricCardSkeleton />
-            <MetricCardSkeleton />
-            <MetricCardSkeleton />
-          </div>
-        ) : showEmptySheet ? (
-          <HomeEmptyState variant="no-sheet" />
-        ) : showEmptyData ? (
-          <HomeEmptyState variant="no-data" />
-        ) : showDashboardSkeleton ? (
-          <div className="skeleton-list">
-            <MetricCardSkeleton />
-            <MetricCardSkeleton />
-            <div className="home-metric-row">
-              <MetricCardSkeleton />
-              <MetricCardSkeleton />
-            </div>
-            <p className="home-loading-hint">Loading expenses from Google Sheet…</p>
-          </div>
-        ) : dataset.status === "error" ? (
-          <div className="home-dataset-error">
-            <p>Failed to load expense data.</p>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => dataset.reloadDataset().catch(() => {})}
-            >
-              Retry
-            </button>
-          </div>
-        ) : showDashboard ? (
-          <div className={`home-dashboard${isStaleDay ? " home-dashboard--stale" : ""}`}>
-            {isStaleDay && (
-              <p className="home-stale-hint" role="status">
-                Updating… · as of {cacheDateLabel}
-              </p>
-            )}
-            {/* TODAY */}
-            <div className="home-metric-card">
-              <div className="home-metric-header">
-                <span className="home-metric-title">
-                  TODAY · {dayLabel}
-                  <WidgetHelpButton label="TODAY" open={todayHelpOpen} onToggle={() => setTodayHelpOpen((v) => !v)} />
-                </span>
-                {!isStaleDay && (
-                  <Link to="/history" className="home-metric-link">
-                    {displayTodayStats.count} {displayTodayStats.count === 1 ? "entry" : "entries"} →
-                  </Link>
-                )}
-              </div>
-              {todayHelpOpen && <p className="section-help-popover">{TODAY_HELP_TEXT}</p>}
-              {isStaleDay ? (
-                <MetricRefreshing />
-              ) : displayTodayStats.count === 0 ? (
-                <p className="home-metric-empty">No expense entries</p>
-              ) : (
-                <p className="home-metric-amount">
-                  {displayTodayStats.dualCurrency ? (
-                    <>
-                      <FormattedAmount prefix={`${displayTodayStats.dualCurrency.code} `} value={displayTodayStats.dualCurrency.amount} />
-                      {" / "}
-                      <FormattedAmount prefix="$" value={displayTodayStats.usdTotal} />
-                    </>
-                  ) : (
-                    <FormattedAmount prefix="$" value={displayTodayStats.usdTotal} />
-                  )}
-                </p>
-              )}
-            </div>
-
-            {/* MTD */}
-            <div className="home-metric-card" ref={mtdCardRef}>
-              <div className="home-metric-header">
-                <span className="home-metric-title">
-                  {mtdTitle}
-                  <WidgetHelpButton label={mtdTitle} open={mtdHelpOpen} onToggle={() => setMtdHelpOpen((v) => !v)} />
-                </span>
-                <span className="home-month-nav" aria-label="Month navigation">
-                  <button
-                    type="button"
-                    className="home-month-nav-button"
-                    aria-label="Previous month"
-                    title="Previous month"
-                    onClick={() => setSelectedMonth((value) => shiftMonth(value, -1))}
-                  >
-                    <ChevronLeft size={16} aria-hidden />
-                  </button>
-                  <button
-                    type="button"
-                    className="home-month-nav-button"
-                    aria-label="Next month"
-                    title="Next month"
-                    disabled={selectedMonth === currentMonth}
-                    onClick={() => setSelectedMonth((value) => shiftMonth(value, 1))}
-                  >
-                    <ChevronRight size={16} aria-hidden />
-                  </button>
-                </span>
-                {!isStaleMonth && selectedMonth === currentMonth && (
-                  <Link to="/history" className="home-metric-link">
-                    {displayMtdStats.count} {displayMtdStats.count === 1 ? "entry" : "entries"} →
-                  </Link>
-                )}
-              </div>
-              {mtdHelpOpen && <p className="section-help-popover">{MTD_HELP_TEXT}</p>}
-              {isStaleMonth || isSelectedMonthLoading || (dataset.status !== "ready" && !cachedEntry) ? (
-                <MetricRefreshing />
-              ) : displaySelectedMtdStats.count === 0 ? (
-                <p className="home-metric-empty">No expense entries</p>
-              ) : (
-                <>
-                  <p className="home-metric-amount"><FormattedAmount prefix="$" value={displaySelectedMtdStats.usdTotal} /></p>
-                  {displaySelectedMtdStats.deviation && <DeviationLine deviation={displaySelectedMtdStats.deviation} />}
-                  <MtdSpendChart
-                    dailyAmounts={selectedMonth === currentMonth ? displayMtdDailyAmounts : selectedMtdDailyAmounts}
-                    year={year}
-                    month={month}
-                  />
-                  <button
-                    type="button"
-                    className="month-details-toggle"
-                    aria-expanded={monthDetailsOpen}
-                    onClick={() => setMonthDetailsOpen((v) => !v)}
-                  >
-                    Month details {monthDetailsOpen ? <ChevronUp size={14} aria-hidden /> : <ChevronDown size={14} aria-hidden />}
-                  </button>
-                </>
-              )}
-              {monthDetailsOpen && (
-                <MonthDetailsPanel
-                  records={records}
-                  toIso={toIso}
-                  startDate={selectedMonthRange.startDate}
-                  endDate={selectedMonthRange.endDate}
-                  isLoading={dataset.status !== "ready" || isSelectedMonthLoading}
-                  dateDisplayFormat={dateDisplayFormat}
-                />
-              )}
-            </div>
-
-            {/* YEARLY VIEW (merged YTD + full-year forecast) */}
-            <div className="home-metric-card">
-              <div className="home-metric-header">
-                <span className="home-metric-title">
-                  YEARLY VIEW
-                  <WidgetHelpButton label="YEARLY VIEW" open={ytdHelpOpen} onToggle={() => setYtdHelpOpen((v) => !v)} />
-                </span>
-                <span className="home-month-nav" aria-label="Year navigation">
-                  <button
-                    type="button"
-                    className="home-month-nav-button"
-                    aria-label="Previous year"
-                    title="Previous year"
-                    disabled={isYearNavLocked || (earliestLoadedYear !== null && selectedYear <= earliestLoadedYear)}
-                    onClick={() => setSelectedYear((value) => value - 1)}
-                  >
-                    <ChevronLeft size={16} aria-hidden />
-                  </button>
-                  <button
-                    type="button"
-                    className="home-month-nav-button"
-                    aria-label="Next year"
-                    title="Next year"
-                    disabled={isYearNavLocked || selectedYear === currentYear}
-                    onClick={() => setSelectedYear((value) => value + 1)}
-                  >
-                    <ChevronRight size={16} aria-hidden />
-                  </button>
-                </span>
-              </div>
-              {ytdHelpOpen && <p className="section-help-popover">{YTD_HELP_TEXT}</p>}
-              <div className="home-yearly-columns">
-                <div className="home-yearly-col">
-                  <p className="home-yearly-label">
-                    {selectedYear} {selectedYear === currentYear ? "SO FAR" : "TOTAL"}
-                  </p>
-                  {isSelectedYearLoading ? (
-                    <MetricRefreshing />
-                  ) : displaySelectedYearStats.count === 0 ? (
-                    <p className="home-metric-empty">No expense entries</p>
-                  ) : (
-                    <>
-                      <p className="home-metric-amount"><FormattedAmount prefix="$" value={displaySelectedYearStats.usdTotal} /></p>
-                      {displaySelectedYearStats.deviation && <DeviationLine deviation={displaySelectedYearStats.deviation} />}
-                    </>
-                  )}
-                </div>
-                <div className="home-yearly-col">
-                  <p className="home-yearly-label">Full year FORECAST</p>
-                  {isSelectedYearLoading ? (
-                    <MetricRefreshing />
-                  ) : selectedYear !== currentYear ? (
-                    <p className="home-metric-forecast">Not applicable for past years</p>
-                  ) : displayYtdForecast.amountUsd === null ? (
-                    <p className="home-metric-empty">Not enough data</p>
-                  ) : (
-                    <>
-                      <p className="home-metric-amount">
-                        <FormattedAmount prefix="$" value={displayYtdForecast.amountUsd} />
-                      </p>
-                      {displayYtdForecast.deviation ? (
-                        <DeviationLine deviation={displayYtdForecast.deviation} />
-                      ) : (
-                        <p className="home-metric-forecast">No data</p>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-              {(isSelectedYearLoading || displaySelectedYearStats.count > 0) && (
-                <button
-                  type="button"
-                  className="month-details-toggle"
-                  aria-expanded={yearDetailsOpen}
-                  onClick={() => setYearDetailsOpen((v) => !v)}
-                >
-                  Year details {yearDetailsOpen ? <ChevronUp size={14} aria-hidden /> : <ChevronDown size={14} aria-hidden />}
-                </button>
-              )}
-              {yearDetailsOpen && (
-                <YearDetailsPanel
-                  records={records}
-                  toIso={toIso}
-                  year={selectedYear}
-                  today={today}
-                  isLoading={isYearDetailsLoading}
-                  onMonthClick={handleYearMonthClick}
-                />
-              )}
-            </div>
-
-            {/* ROLLING 12M */}
-            <div className="home-metric-card">
-              <div className="home-metric-header">
-                <span className="home-metric-title">
-                  ROLLING 12M EXPENSES
-                  <WidgetHelpButton
-                    label="ROLLING 12M EXPENSES"
-                    open={rolling12mHelpOpen}
-                    onToggle={() => setRolling12mHelpOpen((v) => !v)}
-                  />
-                </span>
-              </div>
-              {rolling12mHelpOpen && <p className="section-help-popover">{ROLLING_12M_HELP_TEXT}</p>}
-              {displayRolling12mStats.count === 0 ? (
-                <p className="home-metric-empty">No expense entries</p>
-              ) : (
-                <>
-                  <p className="home-metric-amount"><FormattedAmount prefix="$" value={displayRolling12mStats.usdTotal} /></p>
-                  {displayRolling12mStats.deviation && <DeviationLine deviation={displayRolling12mStats.deviation} />}
-                </>
-              )}
-            </div>
-          </div>
-        ) : null}
+        <HomeContent view={view} onRetry={() => { dataset.reloadDataset().catch(() => {}); }}>
+          <HomeDashboard
+            stale={isStaleDay}
+            cacheDateLabel={cacheDateLabel}
+            today={{
+              dayLabel, stats: displayTodayStats, stale: isStaleDay,
+              help: { label: "TODAY", open: todayHelpOpen, onToggle: () => setTodayHelpOpen((value) => !value) },
+            }}
+            month={{
+              title: mtdTitle, cardRef: mtdCardRef, isCurrent: selectedMonth === currentMonth,
+              stale: isStaleMonth,
+              refreshing: isStaleMonth || isSelectedMonthLoading || (dataset.status !== "ready" && !cachedEntry),
+              entryCount: displayMtdStats.count, stats: displaySelectedMtdStats,
+              dailyAmounts: displayMtdDailyAmounts,
+              year, month,
+              help: { label: mtdTitle, open: mtdHelpOpen, onToggle: () => setMtdHelpOpen((value) => !value) },
+              onPrevious: () => setSelectedMonth((value) => shiftMonth(value, -1)),
+              onNext: () => setSelectedMonth((value) => shiftMonth(value, 1)),
+              detailsOpen: monthDetailsOpen,
+              onToggleDetails: () => setMonthDetailsOpen((value) => !value),
+              details: monthDetailsOpen && <MonthDetailsPanel
+                records={records} toIso={toIso} startDate={selectedMonthRange.startDate}
+                endDate={selectedMonthRange.endDate} isLoading={dataset.status !== "ready" || isSelectedMonthLoading}
+                dateDisplayFormat={dateDisplayFormat} />,
+            }}
+            year={{
+              year: selectedYear, isCurrent: selectedYear === currentYear, refreshing: yearLoading.isSelectedYearLoading,
+              previousDisabled: yearLoading.previousDisabled,
+              nextDisabled: yearLoading.nextDisabled,
+              onPrevious: () => setSelectedYear((value) => value - 1),
+              onNext: () => setSelectedYear((value) => value + 1),
+              stats: displaySelectedYearStats, forecast: displayYtdForecast,
+              help: { label: "YEARLY VIEW", open: ytdHelpOpen, onToggle: () => setYtdHelpOpen((value) => !value) },
+              detailsOpen: yearDetailsOpen,
+              onToggleDetails: () => setYearDetailsOpen((value) => !value),
+              details: yearDetailsOpen && <YearDetailsPanel records={records} toIso={toIso}
+                year={selectedYear} today={today} isLoading={yearLoading.isYearDetailsLoading} onMonthClick={handleYearMonthClick} />,
+            }}
+            rolling={{
+              stats: displayRolling12mStats,
+              help: { label: "ROLLING 12M EXPENSES", open: rolling12mHelpOpen, onToggle: () => setRolling12mHelpOpen((value) => !value) },
+            }}
+          />
+        </HomeContent>
 
         <a
           href="https://buymeacoffee.com/qexpensesux"

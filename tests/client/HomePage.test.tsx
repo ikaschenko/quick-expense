@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { HomePage } from "../../app-web/pages/HomePage";
 import { useDataset } from "../../app-web/contexts/DatasetContext";
+import { useConfig } from "../../app-web/contexts/ConfigContext";
 import { ExpenseRecord } from "../../app-web/types/expense";
 import { formatLocalDate } from "../../app-web/utils/date";
 import { metricsCache } from "../../app-web/services/metricsCache";
@@ -24,7 +25,7 @@ vi.mock("../../app-web/contexts/AuthContext", () => ({
 }));
 
 vi.mock("../../app-web/contexts/ConfigContext", () => ({
-  useConfig: () => ({
+  useConfig: vi.fn(() => ({
     config: {
       email: "test@example.com",
       spreadsheetId: "abc123",
@@ -42,7 +43,7 @@ vi.mock("../../app-web/contexts/ConfigContext", () => ({
     isConfigLoading: false,
     error: null,
     clearError: vi.fn(),
-  }),
+  })),
 }));
 
 vi.mock("../../app-web/contexts/DatasetContext", () => ({
@@ -117,6 +118,67 @@ function LocationStateProbe(): JSX.Element {
   const location = useLocation();
   return <span data-testid="location-state">{JSON.stringify(location.state)}</span>;
 }
+
+describe("HomePage page states", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    mockDataset({});
+  });
+
+  it.each(["idle", "loading"] as const)("shows the dataset skeleton while %s without cache", (status) => {
+    localStorage.clear();
+    mockDataset({ status, snapshot: null, loadDataset: vi.fn().mockResolvedValue(undefined) });
+    renderHome();
+    expect(screen.getByText("Loading expenses from Google Sheet…")).toBeTruthy();
+  });
+
+  it("shows configuration skeletons before other content", () => {
+    vi.mocked(useConfig).mockReturnValueOnce({ ...useConfig(), config: null, isConfigLoading: true });
+    mockDataset({ status: "error", snapshot: null });
+    const { container } = renderHome();
+    expect(container.querySelectorAll(".skeleton-card")).toHaveLength(3);
+    expect(screen.queryByText("Failed to load expense data.")).toBeNull();
+  });
+
+  it("shows the connect-sheet state before a dataset error", () => {
+    vi.mocked(useConfig).mockReturnValueOnce({ ...useConfig(), config: null });
+    mockDataset({ status: "error", snapshot: null });
+    renderHome();
+    expect(screen.getByRole("link", { name: "Connect Sheet →" }).getAttribute("href")).toBe("/setup");
+    expect(screen.queryByText("Failed to load expense data.")).toBeNull();
+  });
+
+  it("shows the no-data state for a ready empty dataset", () => {
+    mockDataset({ snapshot: { ...useDataset().snapshot!, records: [] } });
+    renderHome();
+    expect(screen.getByText("No expenses yet")).toBeTruthy();
+  });
+
+  it("retries a dataset error and handles a rejected reload", async () => {
+    const reloadDataset = vi.fn().mockRejectedValue(new Error("Offline"));
+    mockDataset({ status: "error", snapshot: null, reloadDataset });
+    renderHome();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Retry" }));
+    expect(reloadDataset).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Failed to load expense data.")).toBeTruthy();
+  });
+
+  it.each([
+    [{}, "$25.00"],
+    [{ PLN: "100" }, "PLN 100.00 / $25.00"],
+  ])("renders today's amount for currencies %j", (currencyAmounts, expected) => {
+    mockDataset({
+      snapshot: {
+        ...useDataset().snapshot!,
+        records: [{ ...makeRecord(1, formatLocalDate(new Date()), "25"), currencyAmounts }],
+      },
+    });
+    const { container } = renderHome();
+    const todayCard = container.querySelector(".home-metric-card");
+    expect(todayCard?.querySelector(".home-metric-amount")?.textContent).toBe(expected);
+    expect(todayCard?.querySelector(".home-metric-link")?.textContent).toBe("1 entry →");
+  });
+});
 
 describe("HomePage — saved banner", () => {
   it("shows the banner once, then clears the history state so a reload won't re-show it", async () => {
@@ -820,6 +882,7 @@ describe("HomePage — stale cached metrics", () => {
     expect(container.querySelectorAll(".home-metric-refreshing")).toHaveLength(0);
     const amounts = Array.from(container.querySelectorAll(".home-metric-amount")).map((el) => el.textContent);
     expect(amounts).toContain("$25.00"); // live TODAY value
+    expect(metricsCache.load(EMAIL, "abc123")?.todayStats.usdTotal).toBe(25);
   });
 
   it("still validates a same-day cache against Drive and reloads when modifiedTime is unavailable (guest)", async () => {
@@ -844,6 +907,80 @@ describe("HomePage — stale cached metrics", () => {
 
     expect(screen.getByText("Loading expenses from Google Sheet…")).toBeTruthy();
     await waitFor(() => expect(loadDataset).toHaveBeenCalledTimes(1));
+  });
+
+  it.each([
+    ["unchanged", "2026-06-14T10:00:00.000Z", false],
+    ["newer", "2026-06-15T10:00:00.000Z", true],
+  ] as const)("handles %s Drive metadata for a same-day cache", async (_label, modifiedTime, shouldLoad) => {
+    saveEntry("2026-06-15");
+    const loadDataset = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(googleSheetsService.getSheetModifiedTime).mockResolvedValueOnce({ modifiedTime });
+    mockDataset({ status: "idle", snapshot: null, loadDataset });
+    const { container } = renderHome();
+    await waitFor(() => expect(googleSheetsService.getSheetModifiedTime).toHaveResolved());
+    expect(loadDataset).toHaveBeenCalledTimes(shouldLoad ? 1 : 0);
+    expect(container.querySelector(".home-dashboard")).not.toBeNull();
+  });
+
+  it("loads live data when Drive validation fails", async () => {
+    saveEntry("2026-06-15");
+    const loadDataset = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(googleSheetsService.getSheetModifiedTime).mockRejectedValueOnce(new Error("Offline"));
+    mockDataset({ status: "idle", snapshot: null, loadDataset });
+    renderHome();
+    await waitFor(() => expect(loadDataset).toHaveBeenCalledTimes(1));
+  });
+
+  it("shows errors instead of a previously rendered cached dashboard", async () => {
+    saveEntry("2026-06-15");
+    const loadDataset = vi.fn().mockResolvedValue(undefined);
+    mockDataset({ status: "idle", snapshot: null, loadDataset });
+    const { container, rerender } = renderHome();
+    await waitFor(() => expect(container.querySelector(".home-dashboard")).not.toBeNull());
+    mockDataset({ status: "error", snapshot: null, loadDataset });
+    rerender(<MemoryRouter initialEntries={["/home"]}><HomePage /></MemoryRouter>);
+    expect(screen.getByText("Failed to load expense data.")).toBeTruthy();
+    expect(container.querySelector(".home-dashboard")).toBeNull();
+  });
+
+  it("preserves help and month selection when the dashboard temporarily shows an error", async () => {
+    saveEntry("2026-06-15");
+    const loadDataset = vi.fn().mockResolvedValue(undefined);
+    mockDataset({ status: "idle", snapshot: null, loadDataset });
+    const { rerender } = renderHome();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Show info about TODAY" }));
+    await user.click(screen.getByRole("button", { name: "Previous month" }));
+    mockDataset({ status: "error", snapshot: null, loadDataset });
+    rerender(<MemoryRouter initialEntries={["/home"]}><HomePage /></MemoryRouter>);
+    expect(screen.getByText("Failed to load expense data.")).toBeTruthy();
+    mockDataset({ loadDataset });
+    rerender(<MemoryRouter initialEntries={["/home"]}><HomePage /></MemoryRouter>);
+    expect(screen.getByText("MAY TOTAL")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Hide info about TODAY" }).getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("toggles the prior-period total without changing its deviation", async () => {
+    saveEntry("2026-06-15");
+    const entry = metricsCache.load(EMAIL, "abc123")!;
+    metricsCache.save(EMAIL, {
+      ...entry,
+      mtdStats: {
+        ...entry.mtdStats,
+        deviation: { up: true, absChange: 100, pctChange: 100, priorLabel: "May '26", priorTotal: 100 },
+      },
+    });
+    mockDataset({ status: "idle", snapshot: null, loadDataset: vi.fn().mockResolvedValue(undefined) });
+    const { container } = renderHome();
+    const user = userEvent.setup();
+    const toggle = screen.getByRole("button", { name: "Show May '26 total" });
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    await user.click(toggle);
+    expect(screen.getByRole("tooltip").textContent).toBe("$100.00");
+    expect(container.querySelector(".yoy-up")?.textContent).toContain("+100%");
+    await user.click(toggle);
+    expect(screen.queryByRole("tooltip")).toBeNull();
   });
 });
 
