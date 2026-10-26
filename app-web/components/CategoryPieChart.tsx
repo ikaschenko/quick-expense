@@ -3,13 +3,14 @@ import * as echarts from "echarts/core";
 import { PieChart } from "echarts/charts";
 import { LegendComponent, TooltipComponent } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
+import { LabelLayout } from "echarts/features";
 import type { PieSeriesOption } from "echarts/charts";
 import type { LegendComponentOption, TooltipComponentOption } from "echarts/components";
 import type { ComposeOption } from "echarts/core";
 import { formatPctChange } from "../utils/dashboardStats";
 import { OTHER_LABEL, PieSlice } from "../utils/monthDetails";
 
-echarts.use([PieChart, LegendComponent, TooltipComponent, CanvasRenderer]);
+echarts.use([PieChart, LegendComponent, TooltipComponent, CanvasRenderer, LabelLayout]);
 
 type PieOption = ComposeOption<PieSeriesOption | LegendComponentOption | TooltipComponentOption>;
 
@@ -21,6 +22,50 @@ const MAX_LEGEND_LABEL_LENGTH = 30;
 const LEGEND_ITEM_HEIGHT = 10;
 const LEGEND_ITEM_GAP = 3;
 const MIN_CHART_HEIGHT = 260;
+
+export function buildCategoryPieLayout(slices: PieSlice[], width: number, labelWidths: number[], legendWidths: number[]) {
+  const padding = 12;
+  const gutter = Math.max(36, ...labelWidths.map((value) => value + 25));
+  const legendWidth = Math.min(200, Math.max(0, ...legendWidths) + 40);
+  const stacked = width - legendWidth - 16 < 2 * gutter + 140;
+  let legendRows = 1;
+  let rowWidth = 0;
+  for (const textWidth of legendWidths) {
+    const entryWidth = Math.min(width - padding * 2, textWidth + 40);
+    if (rowWidth > 0 && rowWidth + entryWidth > width - padding * 2) {
+      legendRows += 1;
+      rowWidth = 0;
+    }
+    rowWidth += entryWidth;
+  }
+  const top = stacked ? legendRows * 18 + 20 : 0;
+  const left = stacked ? 0 : legendWidth + 16;
+  const radius = Math.max(1, Math.min(110, (width - left) / 2 - gutter));
+  const total = slices.reduce((sum, slice) => sum + slice.amount, 0);
+  let angle = -Math.PI / 2;
+  const outsideCounts = [0, 0];
+  const inside = slices.map((slice, index) => {
+    const span = total > 0 ? slice.amount / total * Math.PI * 2 : 0;
+    const middle = angle + span / 2;
+    angle += span;
+    const distance = slices.length === 1 ? 0 : radius / 2 + 3;
+    const centerX = Math.cos(middle) * distance;
+    const centerY = Math.sin(middle) * distance;
+    const halfWidth = (labelWidths[index] ?? 30) / 2 + 4;
+    const fits = [-halfWidth, halfWidth].every((offsetX) => [-10, 10].every((offsetY) => {
+      const cornerX = centerX + offsetX;
+      const cornerY = centerY + offsetY;
+      const cornerAngle = Math.atan2(cornerY, cornerX) - middle;
+      const relativeAngle = Math.atan2(Math.sin(cornerAngle), Math.cos(cornerAngle));
+      return Math.hypot(cornerX, cornerY) <= radius - 4 && Math.abs(relativeAngle) <= span / 2;
+    }));
+    if (!fits) outsideCounts[Math.cos(middle) < 0 ? 0 : 1] += 1;
+    return fits;
+  });
+  const plotHeight = Math.max(MIN_CHART_HEIGHT, Math.max(...outsideCounts) * 20 + 32);
+  const legendHeight = slices.length * (LEGEND_ITEM_HEIGHT + LEGEND_ITEM_GAP) + padding * 2;
+  return { inside, left, top, radius, stacked, plotHeight, height: Math.max(top + plotHeight, stacked ? 0 : legendHeight) };
+}
 
 function truncateLegendLabel(label: string): string {
   return label.length > MAX_LEGEND_LABEL_LENGTH ? `${label.slice(0, MAX_LEGEND_LABEL_LENGTH - 3)}...` : label;
@@ -89,51 +134,87 @@ export function CategoryPieChart({ slices }: CategoryPieChartProps): JSX.Element
     const legend = buildCategoryPieLegend(slices, labelColors.name);
     const allSelected = legend.selected ?? {};
 
-    const option: PieOption = {
-      legend,
-      tooltip: {
-        trigger: "item",
-        triggerOn: "mousemove|click|mousewheel",
-        confine: true,
-        formatter: (params) => {
-          const p = params as { dataIndex: number };
-          const slice = slices[p.dataIndex];
-          return [
-            `Category: ${slice.label}`,
-            `Amount: $${slice.amount.toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-            `Share: ${formatPctChange(slice.pct)}%`,
-          ].join("<br/>");
-        },
-      },
-      series: [
-        {
-          type: "pie",
-          center: ["70%", "50%"],
-          radius: "58%",
-          data: slices.map((s) => ({
-            name: s.label,
-            value: s.amount,
-            itemStyle: { color: s.label === OTHER_LABEL ? otherColor : toSliceGradient(s.color) },
-          })),
-          itemStyle: {
-            shadowBlur: 8,
-            shadowColor: "rgba(0, 0, 0, 0.2)",
-            shadowOffsetY: 2,
-          },
-          label: {
-            formatter: (params) => `${formatPctChange(slices[params.dataIndex].pct)}%`,
-            color: labelColors.name,
-            fontSize: 11,
-          },
-          labelLine: { show: true, length: 8, length2: 8 },
-          // Never hide a callout for overlap — shift it vertically instead so the amount stays visible.
-          labelLayout: { hideOverlap: false, moveOverlap: "shiftY" },
-          emphasis: { focus: "self" },
-          animation: false,
-        },
-      ],
+    const context = document.createElement("canvas").getContext("2d");
+    const measure = (text: string, size: number): number => {
+      if (!context?.measureText) return text.length * size * 0.65;
+      context.font = `${size}px sans-serif`;
+      return Math.ceil(context.measureText(text).width);
     };
-    chart.setOption(option);
+    const labelWidths = slices.map((slice) => measure(`${formatPctChange(slice.pct)}%`, 11) + 2);
+    const legendWidths = slices.map((slice) => measure(truncateLegendLabel(slice.label), 9));
+    let previousWidth = -1;
+    const updateLayout = (): void => {
+      const width = container.clientWidth;
+      if (width <= 0) return;
+      if (width === previousWidth) return;
+      previousWidth = width;
+      const layout = buildCategoryPieLayout(slices, width, labelWidths, legendWidths);
+      container.style.height = `${layout.height}px`;
+      chart.resize();
+      const option: PieOption = {
+        legend: {
+          ...legend,
+          orient: layout.stacked ? "horizontal" : "vertical",
+          top: layout.stacked ? 0 : "middle",
+          width: layout.stacked ? "100%" : layout.left - 16,
+        },
+        tooltip: {
+          trigger: "item",
+          triggerOn: "mousemove|click|mousewheel",
+          confine: true,
+          formatter: (params) => {
+            const slice = slices[(params as { dataIndex: number }).dataIndex];
+            return [
+              `Category: ${slice.label}`,
+              `Amount: $${slice.amount.toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              `Share: ${formatPctChange(slice.pct)}%`,
+            ].join("<br/>");
+          },
+        },
+        series: [
+          {
+            type: "pie",
+            left: layout.left,
+            top: layout.top,
+            height: layout.plotHeight,
+            center: ["50%", "50%"],
+            radius: layout.radius,
+            data: slices.map((slice, index) => ({
+              name: slice.label,
+              value: slice.amount,
+              itemStyle: { color: slice.label === OTHER_LABEL ? otherColor : toSliceGradient(slice.color) },
+              label: {
+                position: layout.inside[index] ? (slices.length === 1 ? "center" : "inside") : "outside",
+                width: labelWidths[index],
+                color: labelColors.name,
+                textBorderColor: layout.inside[index] ? "#ffffff" : undefined,
+                textBorderWidth: layout.inside[index] ? 2 : 0,
+              },
+              labelLine: { show: !layout.inside[index] },
+            })),
+            itemStyle: {
+              shadowBlur: 8,
+              shadowColor: "rgba(0, 0, 0, 0.2)",
+              shadowOffsetY: 2,
+            },
+            label: {
+              formatter: (params) => `${formatPctChange(slices[params.dataIndex].pct)}%`,
+              color: labelColors.name,
+              fontSize: 11,
+              show: true,
+              alignTo: "edge",
+              edgeDistance: 12,
+            },
+            labelLine: { show: true, length: 8, length2: 8 },
+            labelLayout: { hideOverlap: false },
+            emphasis: { focus: "self" },
+            animation: false,
+          },
+        ],
+      };
+      chart.setOption(option);
+    };
+    updateLayout();
 
     // Tapping empty chart area dismisses a click-triggered tooltip.
     const zr = chart.getZr();
@@ -154,7 +235,7 @@ export function CategoryPieChart({ slices }: CategoryPieChartProps): JSX.Element
     };
     chart.on("legendselectchanged", highlightLegendSlice);
 
-    const resizeObserver = new ResizeObserver(() => chart.resize());
+    const resizeObserver = new ResizeObserver(updateLayout);
     resizeObserver.observe(container);
 
     return () => {

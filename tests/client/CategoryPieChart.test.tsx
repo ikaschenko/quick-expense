@@ -1,5 +1,5 @@
 import { render } from "@testing-library/react";
-import { buildCategoryPieLegend, CategoryPieChart } from "../../app-web/components/CategoryPieChart";
+import { buildCategoryPieLayout, buildCategoryPieLegend, CategoryPieChart } from "../../app-web/components/CategoryPieChart";
 import { OTHER_LABEL, PieSlice } from "../../app-web/utils/monthDetails";
 import { createFakeChart, disableChartRendering, enableChartRendering } from "./fakeEchart";
 
@@ -10,8 +10,13 @@ vi.mock("echarts/core", async (importOriginal) => ({
 
 type Formatter = (params: { dataIndex: number }) => string;
 interface PieOptionShape {
+  legend: { orient: string };
   tooltip: { formatter: Formatter };
-  series: [{ label: { formatter: Formatter }; data: { itemStyle: { color: unknown } }[] }];
+  series: [{
+    label: { formatter: Formatter; show: boolean };
+    labelLayout: { hideOverlap: boolean };
+    data: { itemStyle: { color: unknown }; label: { position: string; width: number }; labelLine: { show: boolean } }[];
+  }];
 }
 
 function makeSlice(label: string, amount: number, pct: number): PieSlice {
@@ -78,12 +83,18 @@ describe("CategoryPieChart", () => {
 describe("CategoryPieChart — rendering", () => {
   const slices = [makeSlice("Food", 1234.5, 61.7), makeSlice(OTHER_LABEL, 765.5, 38.3)];
 
-  beforeEach(enableChartRendering);
-  afterEach(disableChartRendering);
+  beforeEach(() => {
+    enableChartRendering();
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(600);
+  });
+  afterEach(() => {
+    disableChartRendering();
+    vi.restoreAllMocks();
+  });
 
-  function renderChart() {
+  function renderChart(chartSlices: PieSlice[] = slices) {
     const fake = createFakeChart();
-    const view = render(<CategoryPieChart slices={slices} />);
+    const view = render(<CategoryPieChart slices={chartSlices} />);
     const option = fake.chart.setOption.mock.calls[0][0] as PieOptionShape;
     return { ...fake, view, option };
   }
@@ -102,6 +113,73 @@ describe("CategoryPieChart — rendering", () => {
     const { option } = renderChart();
 
     expect(option.series[0].label.formatter({ dataIndex: 1 })).toMatch(/%$/);
+  });
+
+  it.each([[1.1, "1.1%"], [9.9, "9.9%"], [10, "10%"], [44.3, "44%"], [100, "100%"]])("preserves the full formatted percentage %s", (pct, text) => {
+    const { option } = renderChart([makeSlice("Food", 100, pct)]);
+    expect(option.series[0].label.formatter({ dataIndex: 0 })).toBe(text);
+    expect(option.series[0].label.show).toBe(true);
+    expect(option.series[0].labelLayout.hideOverlap).toBe(false);
+    expect(option.series[0].data[0].label.width).toBeGreaterThan(0);
+  });
+
+  it("uses outside leader lines only when the complete label cannot fit inside", () => {
+    const { option } = renderChart([makeSlice("Housing", 97, 97), makeSlice("Other", 3, 3)]);
+    expect(option.series[0].data.map((item) => item.label.position)).toEqual(["inside", "outside"]);
+    expect(option.series[0].data.map((item) => item.labelLine.show)).toEqual([false, true]);
+  });
+
+  it("centers the percentage of a single slice", () => {
+    const { option } = renderChart([makeSlice("Food", 100, 100)]);
+    expect(option.series[0].data[0].label.position).toBe("center");
+    expect(option.series[0].data[0].labelLine.show).toBe(false);
+  });
+
+  it("uses measured text widths when a canvas context is available", () => {
+    const measureText = vi.fn(() => ({ width: 37.4 }));
+    vi.mocked(HTMLCanvasElement.prototype.getContext).mockReturnValue({ measureText } as unknown as CanvasRenderingContext2D);
+    const { option } = renderChart();
+    expect(measureText).toHaveBeenCalledWith("62%");
+    expect(option.series[0].data[0].label.width).toBe(40);
+  });
+
+  it("recalculates on width changes but ignores height feedback and zero-width observations", () => {
+    let resize: () => void = () => {};
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(callback: () => void) { resize = callback; }
+      observe = vi.fn();
+      disconnect = vi.fn();
+    });
+    const width = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(600);
+    const { chart } = renderChart();
+    expect(chart.setOption).toHaveBeenCalledTimes(1);
+    width.mockReturnValue(288);
+    resize();
+    expect(chart.setOption).toHaveBeenCalledTimes(2);
+    expect((chart.setOption.mock.calls[1][0] as PieOptionShape).legend.orient).toBe("horizontal");
+    resize();
+    width.mockReturnValue(0);
+    resize();
+    expect(chart.setOption).toHaveBeenCalledTimes(2);
+    width.mockReturnValue(600);
+    resize();
+    expect((chart.setOption.mock.lastCall![0] as PieOptionShape).legend.orient).toBe("vertical");
+  });
+
+  it("waits until a hidden container has a measurable width", () => {
+    let resize: () => void = () => {};
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(callback: () => void) { resize = callback; }
+      observe = vi.fn();
+      disconnect = vi.fn();
+    });
+    const width = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(0);
+    const chart = createFakeChart().chart;
+    render(<CategoryPieChart slices={slices} />);
+    expect(chart.setOption).not.toHaveBeenCalled();
+    width.mockReturnValue(288);
+    resize();
+    expect(chart.setOption).toHaveBeenCalledTimes(1);
   });
 
   it("should use a gradient for regular slices and a flat color for Other", () => {
@@ -153,5 +231,61 @@ describe("CategoryPieChart — rendering", () => {
     expect(zr.off).toHaveBeenCalledWith("click", expect.any(Function));
     expect(chart.off).toHaveBeenCalledWith("legendselectchanged", expect.any(Function));
     expect(chart.dispose).toHaveBeenCalled();
+  });
+});
+
+describe("buildCategoryPieLayout", () => {
+  const slices = [makeSlice("Housing", 80, 80), makeSlice("Food", 17, 17), makeSlice("Other", 3, 3)];
+  const labelWidths = [24, 24, 30];
+  const legendWidths = [40, 25, 30];
+
+  it("places only fitting labels inside their slices", () => {
+    const layout = buildCategoryPieLayout(slices, 600, labelWidths, legendWidths);
+    expect(layout.inside).toEqual([true, true, false]);
+  });
+
+  it.each([240, 288, 320, 390, 600, 1440])("reserves complete callout gutters at width %s", (width) => {
+    const layout = buildCategoryPieLayout(slices, width, labelWidths, legendWidths);
+    expect((width - layout.left) / 2 - layout.radius).toBeGreaterThanOrEqual(55);
+    expect(layout.radius * 2 + 24).toBeLessThanOrEqual(layout.plotHeight);
+  });
+
+  it("stacks the legend above the pie only when needed", () => {
+    const narrow = buildCategoryPieLayout(slices, 288, labelWidths, legendWidths);
+    const wide = buildCategoryPieLayout(slices, 600, labelWidths, legendWidths);
+    expect(narrow.stacked).toBe(true);
+    expect(narrow.top).toBeGreaterThan(0);
+    expect(narrow.left).toBe(0);
+    expect(wide.stacked).toBe(false);
+    expect(wide.top).toBe(0);
+    expect(wide.left).toBeGreaterThan(0);
+  });
+
+  it("keeps a single 100% label inside", () => {
+    expect(buildCategoryPieLayout([makeSlice("Food", 100, 100)], 288, [32], [24]).inside).toEqual([true]);
+  });
+
+  it("falls back outside when the full text cannot fit", () => {
+    expect(buildCategoryPieLayout(slices, 600, [180, 180, 180], legendWidths).inside).toEqual([false, false, false]);
+  });
+
+  it("grows vertically for dense external callouts and legend entries", () => {
+    const many = Array.from({ length: 50 }, (_, index) => makeSlice(`Category ${index}`, 2, 2));
+    const layout = buildCategoryPieLayout(many, 288, many.map(() => 30), many.map(() => 140));
+    expect(layout.inside.every((value) => !value)).toBe(true);
+    expect(layout.plotHeight).toBeGreaterThan(260);
+    expect(layout.top).toBeGreaterThan(260);
+    expect(layout.height).toBe(layout.top + layout.plotHeight);
+  });
+
+  it("handles no slices", () => {
+    expect(buildCategoryPieLayout([], 320, [], []).inside).toEqual([]);
+  });
+
+  it("reserves vertical legend padding so entries cannot wrap into a second column", () => {
+    const many = Array.from({ length: 20 }, (_, index) => makeSlice(`Category ${index}`, 5, 5));
+    const layout = buildCategoryPieLayout(many, 600, many.map(() => 24), many.map(() => 140));
+    expect(layout.stacked).toBe(false);
+    expect(layout.height).toBeGreaterThanOrEqual(20 * 13 + 10);
   });
 });
