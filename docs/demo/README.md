@@ -89,6 +89,6 @@ npm test -- tests/server/generate-sample-data.test.js
 npm test
 ```
 
-CLI tests cover preservation of history, CSV quoting, date boundaries and leap day, monthly totals, FX, repeatability, overwrite protection, and malformed inputs. Windows tests use the built-in `powershell.exe`; other platforms require `pwsh`, and explicitly skip this suite when it is unavailable. V8 coverage does not measure the PowerShell subprocess.
+CLI tests cover preservation of history, CSV quoting, date boundaries and leap day, monthly totals, FX, repeatability, overwrite protection, and malformed inputs. Invalid dates produce a script-owned validation message, independent of PowerShell's exception formatting. Windows tests run against both `powershell.exe` and `pwsh` when installed; other platforms use `pwsh`. The suite is explicitly skipped only when no supported shell is available. V8 coverage does not measure the PowerShell subprocess.
 
 The original AI conversation/script has not been recovered; this is a replacement generator based on the supplied Expenses/Config exports and the confirmed demo requirements.

@@ -16,7 +16,11 @@ $headers = @('Date', 'GBP', 'EUR', 'USD', 'Category', 'Spent By', 'Spent For', '
 $family = @('Alex', 'Jamie', 'Sam', 'Taylor', 'Casey')
 
 function Convert-Date([string]$Value, [string]$Format) {
-    return [datetime]::ParseExact($Value, $Format, $culture)
+    try {
+        return [datetime]::ParseExact($Value, $Format, $culture)
+    } catch {
+        throw "Invalid date '$Value'; expected $Format."
+    }
 }
 
 function Convert-Amount([string]$Value) {

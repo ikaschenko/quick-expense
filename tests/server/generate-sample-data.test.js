@@ -1,11 +1,11 @@
 // @vitest-environment node
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-const shell = process.platform === 'win32' ? 'powershell.exe' : 'pwsh';
-const hasPowerShell = !spawnSync(shell, ['-NoProfile', '-Command', 'exit 0']).error;
+const candidates = process.platform === 'win32' ? ['powershell.exe', 'pwsh'] : ['pwsh'];
+const shells = candidates.filter((shell) => spawnSync(shell, ['-NoProfile', '-Command', 'exit 0']).status === 0);
 const generator = resolve('docs/demo/generate-sample-data.ps1');
 const categories = [
   'Housing', 'Education', 'Internet & Mobile', 'Housing - Utilities', 'Subscriptions',
@@ -18,7 +18,7 @@ const header = 'Date,GBP,EUR,USD,Category,Spent By,Spent For,Comment,Channel,The
 const source = `${header}\n7/14/2026,,,1000,Housing,,,mortgage,,\n7/15/2026,,,"$2,484.05",Home Goods,,,"TV, ""demo""\nsecond line",,\n`;
 const literal = (value) => `'${value.replaceAll("'", "''")}'`;
 
-describe.skipIf(!hasPowerShell)('generate-sample-data CLI (requires PowerShell)', () => {
+describe.skipIf(shells.length === 0).each(shells.length ? shells : candidates)('generate-sample-data CLI (%s)', (shell) => {
   let directory;
   let config;
   let expenses;
@@ -139,7 +139,9 @@ describe.skipIf(!hasPowerShell)('generate-sample-data CLI (requires PowerShell)'
 
   it.each([
     ['already current', source, ['-EndDate', '2026-07-15'], /nothing was written/],
-    ['invalid date', source.replace('7/15/2026', '2/30/2026'), [], /FormatException/],
+    ['invalid date', source.replace('7/15/2026', '2/30/2026'), [], /Invalid date '2\/30\/2026'; expected M\/d\/yyyy\./],
+    ['malformed date', source.replace('7/15/2026', 'not-a-date'), [], /Invalid date 'not-a-date'; expected M\/d\/yyyy\./],
+    ['invalid end date', source, ['-EndDate', '2026-02-30'], /Invalid date '2026-02-30'; expected yyyy-MM-dd\./],
     ['unsorted dates', source.replace('7/14/2026', '7/16/2026'), [], /ascending date order/],
     ['invalid amount', source.replace('1000,Housing', '-1,Housing'), [], /positive USD amount/],
     ['unknown category', source.replace('Home Goods', 'Secret Category'), [], /Unknown existing category/],
@@ -147,7 +149,9 @@ describe.skipIf(!hasPowerShell)('generate-sample-data CLI (requires PowerShell)'
     ['over budget', source.replace('$2,484.05', '$9,484.05'), [], /exceed.*budget/],
   ])('should reject %s without creating outputs', (name, contents, extra, message) => {
     const invalid = join(directory, `${name}.csv`);
+    const destination = join(directory, name);
     writeFileSync(invalid, contents);
-    expect(() => run(['-ExpensesCsv', invalid, ...extra], join(directory, name))).toThrow(message);
+    expect(() => run(['-ExpensesCsv', invalid, ...extra], destination)).toThrow(message);
+    expect(existsSync(destination)).toBe(false);
   }, 30000);
 });
