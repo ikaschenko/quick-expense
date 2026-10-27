@@ -1255,14 +1255,6 @@ button { cursor: pointer; }
 }
 
 /* ─── Config mode badges (SetupPage) ─── */
-.config-mode-badge-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: var(--space-1);
-}
-
 .config-mode-badge {
   display: inline-flex;
   align-items: center;
@@ -2155,8 +2147,8 @@ button { cursor: pointer; }
 
 .home-status-card {
   display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
+  flex-direction: column;
+  gap: var(--space-2);
   padding: var(--space-4);
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
@@ -2169,34 +2161,60 @@ button { cursor: pointer; }
   background: var(--color-success-light);
 }
 
-.home-status-icon {
-  flex-shrink: 0;
-  margin-top: 2px;
+.home-status-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
 }
 
-.home-status-content {
-  flex: 1;
-  min-width: 0;
+.home-status-icon {
+  flex-shrink: 0;
 }
 
 .home-status-label {
+  flex: 1;
+  min-width: 0;
   font-weight: 600;
   font-size: var(--font-size-base);
   color: var(--color-text-primary);
-  margin-bottom: var(--space-1);
-}
-
-.home-status-detail {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  margin-bottom: var(--space-2);
 }
 
 .home-status-actions {
   display: flex;
   gap: var(--space-2);
   flex-shrink: 0;
-  align-items: flex-start;
+}
+
+.home-status-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+.home-status-meta-row {
+  overflow-wrap: anywhere;
+}
+
+.home-status-meta-label {
+  font-weight: 700;
+}
+
+.home-status-meta .setup-connected-url-link,
+.home-status-meta .config-mode-fix-hint {
+  font-size: inherit;
+}
+
+@media (max-width: 480px) {
+  .home-status-header {
+    gap: var(--space-2);
+  }
+
+  .home-status-actions {
+    gap: var(--space-1);
+  }
 }
 
 .setup-divider {

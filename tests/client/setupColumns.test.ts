@@ -2,7 +2,7 @@ import {
   assertColumnInfoConsistency,
   classifyColumns,
   typeLabel,
-  configModeBadgeLabel,
+  configModeValueLabel,
   configModeTooltip,
 } from "../../app-web/utils/setupColumns";
 import { ColumnInfo } from "../../app-web/types/expense";
@@ -64,14 +64,14 @@ describe("typeLabel", () => {
   });
 });
 
-describe("configModeBadgeLabel", () => {
+describe("configModeValueLabel", () => {
   it.each([
-    ["config-driven", "Config detected"],
-    ["config-no-mapping", "Config detected"],
-    ["default", "Default rules"],
-    ["config-invalid", "Config invalid — using defaults"],
+    ["config-driven", "custom columns"],
+    ["config-no-mapping", "custom columns"],
+    ["default", "default"],
+    ["config-invalid", "default"],
   ] as const)("maps %s to %s", (mode, label) => {
-    expect(configModeBadgeLabel(mode)).toBe(label);
+    expect(configModeValueLabel(mode)).toBe(label);
   });
 });
 

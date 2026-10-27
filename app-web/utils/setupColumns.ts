@@ -45,12 +45,12 @@ export function typeLabel(type: ColumnType): string {
   }
 }
 
-export function configModeBadgeLabel(mode: ConfigMode): string {
+export function configModeValueLabel(mode: ConfigMode): string {
   switch (mode) {
-    case "config-driven": return "Config detected";
-    case "config-no-mapping": return "Config detected";
-    case "default": return "Default rules";
-    case "config-invalid": return "Config invalid \u2014 using defaults";
+    case "config-driven": return "custom columns";
+    case "config-no-mapping": return "custom columns";
+    case "default": return "default";
+    case "config-invalid": return "default";
   }
 }
 
