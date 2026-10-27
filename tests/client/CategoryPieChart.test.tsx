@@ -45,6 +45,15 @@ describe("CategoryPieChart", () => {
     expect(formattedLabel).toMatch(/\.\.\.$/);
   });
 
+  it("lists legend entries from the largest to the smallest share", () => {
+    const legend = buildCategoryPieLegend(
+      [makeSlice("Small", 10, 10), makeSlice("Big", 70, 70), makeSlice(OTHER_LABEL, 20, 20)],
+      "#111827",
+    );
+    expect(legend.data).toEqual(["Big", OTHER_LABEL, "Small"]);
+    expect(legend.orient).toBe("vertical");
+  });
+
   it("renders nothing when there are no slices", () => {
     const { container } = render(<CategoryPieChart slices={[]} />);
     expect(container.firstChild).toBeNull();
@@ -156,7 +165,7 @@ describe("CategoryPieChart — rendering", () => {
     width.mockReturnValue(288);
     resize();
     expect(chart.setOption).toHaveBeenCalledTimes(2);
-    expect((chart.setOption.mock.calls[1][0] as PieOptionShape).legend.orient).toBe("horizontal");
+    expect((chart.setOption.mock.calls[1][0] as PieOptionShape).legend.orient).toBe("vertical");
     resize();
     width.mockReturnValue(0);
     resize();
@@ -250,15 +259,12 @@ describe("buildCategoryPieLayout", () => {
     expect(layout.radius * 2 + 24).toBeLessThanOrEqual(layout.plotHeight);
   });
 
-  it("stacks the legend above the pie only when needed", () => {
-    const narrow = buildCategoryPieLayout(slices, 288, labelWidths, legendWidths);
-    const wide = buildCategoryPieLayout(slices, 600, labelWidths, legendWidths);
-    expect(narrow.stacked).toBe(true);
-    expect(narrow.top).toBeGreaterThan(0);
-    expect(narrow.left).toBe(0);
-    expect(wide.stacked).toBe(false);
-    expect(wide.top).toBe(0);
-    expect(wide.left).toBeGreaterThan(0);
+  it("keeps the legend on the left at every width", () => {
+    for (const width of [240, 288, 600]) {
+      const layout = buildCategoryPieLayout(slices, width, labelWidths, legendWidths);
+      expect(layout.left).toBeGreaterThan(0);
+      expect(layout.left - 16).toBeLessThanOrEqual(Math.max(80, width * 0.35));
+    }
   });
 
   it("keeps a single 100% label inside", () => {
@@ -274,8 +280,7 @@ describe("buildCategoryPieLayout", () => {
     const layout = buildCategoryPieLayout(many, 288, many.map(() => 30), many.map(() => 140));
     expect(layout.inside.every((value) => !value)).toBe(true);
     expect(layout.plotHeight).toBeGreaterThan(260);
-    expect(layout.top).toBeGreaterThan(260);
-    expect(layout.height).toBe(layout.top + layout.plotHeight);
+    expect(layout.height).toBeGreaterThanOrEqual(layout.plotHeight);
   });
 
   it("handles no slices", () => {
@@ -285,7 +290,6 @@ describe("buildCategoryPieLayout", () => {
   it("reserves vertical legend padding so entries cannot wrap into a second column", () => {
     const many = Array.from({ length: 20 }, (_, index) => makeSlice(`Category ${index}`, 5, 5));
     const layout = buildCategoryPieLayout(many, 600, many.map(() => 24), many.map(() => 140));
-    expect(layout.stacked).toBe(false);
     expect(layout.height).toBeGreaterThanOrEqual(20 * 13 + 10);
   });
 });

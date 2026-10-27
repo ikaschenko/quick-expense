@@ -22,24 +22,17 @@ const MAX_LEGEND_LABEL_LENGTH = 30;
 const LEGEND_ITEM_HEIGHT = 10;
 const LEGEND_ITEM_GAP = 3;
 const MIN_CHART_HEIGHT = 260;
+const MIN_LEGEND_WIDTH = 80;
+const MAX_LEGEND_SHARE = 0.35;
+// Legend symbol (25px) plus the gap before the text.
+const LEGEND_SYMBOL_WIDTH = 30;
 
 export function buildCategoryPieLayout(slices: PieSlice[], width: number, labelWidths: number[], legendWidths: number[]) {
   const padding = 12;
   const gutter = Math.max(36, ...labelWidths.map((value) => value + 25));
-  const legendWidth = Math.min(200, Math.max(0, ...legendWidths) + 40);
-  const stacked = width - legendWidth - 16 < 2 * gutter + 140;
-  let legendRows = 1;
-  let rowWidth = 0;
-  for (const textWidth of legendWidths) {
-    const entryWidth = Math.min(width - padding * 2, textWidth + 40);
-    if (rowWidth > 0 && rowWidth + entryWidth > width - padding * 2) {
-      legendRows += 1;
-      rowWidth = 0;
-    }
-    rowWidth += entryWidth;
-  }
-  const top = stacked ? legendRows * 18 + 20 : 0;
-  const left = stacked ? 0 : legendWidth + 16;
+  // The legend always stays on the left; on narrow containers it is capped and long names are truncated.
+  const legendWidth = Math.min(200, Math.max(MIN_LEGEND_WIDTH, width * MAX_LEGEND_SHARE), Math.max(0, ...legendWidths) + 40);
+  const left = legendWidth + 16;
   const radius = Math.max(1, Math.min(110, (width - left) / 2 - gutter));
   const total = slices.reduce((sum, slice) => sum + slice.amount, 0);
   let angle = -Math.PI / 2;
@@ -64,7 +57,7 @@ export function buildCategoryPieLayout(slices: PieSlice[], width: number, labelW
   });
   const plotHeight = Math.max(MIN_CHART_HEIGHT, Math.max(...outsideCounts) * 20 + 32);
   const legendHeight = slices.length * (LEGEND_ITEM_HEIGHT + LEGEND_ITEM_GAP) + padding * 2;
-  return { inside, left, top, radius, stacked, plotHeight, height: Math.max(top + plotHeight, stacked ? 0 : legendHeight) };
+  return { inside, left, radius, plotHeight, height: Math.max(plotHeight, legendHeight) };
 }
 
 function truncateLegendLabel(label: string): string {
@@ -97,7 +90,7 @@ export function buildCategoryPieLegend(slices: PieSlice[], textColor: string): L
     top: "middle",
     width: "40%",
     selectedMode: true,
-    data: slices.map((slice) => slice.label),
+    data: [...slices].sort((a, b) => b.pct - a.pct).map((slice) => slice.label),
     selected: Object.fromEntries(slices.map((slice) => [slice.label, true])),
     itemHeight: LEGEND_ITEM_HEIGHT,
     itemGap: LEGEND_ITEM_GAP,
@@ -154,9 +147,12 @@ export function CategoryPieChart({ slices }: CategoryPieChartProps): JSX.Element
       const option: PieOption = {
         legend: {
           ...legend,
-          orient: layout.stacked ? "horizontal" : "vertical",
-          top: layout.stacked ? 0 : "middle",
-          width: layout.stacked ? "100%" : layout.left - 16,
+          width: layout.left - 16,
+          textStyle: {
+            ...legend.textStyle,
+            width: layout.left - 16 - LEGEND_SYMBOL_WIDTH,
+            overflow: "truncate",
+          },
         },
         tooltip: {
           trigger: "item",
@@ -175,7 +171,7 @@ export function CategoryPieChart({ slices }: CategoryPieChartProps): JSX.Element
           {
             type: "pie",
             left: layout.left,
-            top: layout.top,
+            top: 0,
             height: layout.plotHeight,
             center: ["50%", "50%"],
             radius: layout.radius,
