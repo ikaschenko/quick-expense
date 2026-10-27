@@ -1,0 +1,31 @@
+
+If you track your personal expenses systematically, you're probably doing it in Excel or Google Sheets. It's great on a PC. But not always mobile-friendly. That's exactly why I built QuickExpense. It's mobile-first — log an expense from your phone in a free minute, waiting in line, or when you're just too lazy to open a laptop. And here's the key point: your data stays in a Google Sheet you own and control. QuickExpense just adds a cozy UI on top.
+
+Let's see how it looks.
+
+The Home screen summarizes today's expenses, monthly and yearly views. 
+The main currency all here is US dollar. Keep in mind you can add optional currencies in settings.
+
+Let's look at a current month spendings. 
+First of all, here's a current month total spendings with a comparison to a previous month for same number of days. A cumulative chart is showing expenses increment for each day. Month details expandable section allows you to see a break-down of expenses by your categories, including an ability to 'group' categories by a first word. For example, in my case, I have multiple sub-categories for Housing and Food, so it's useful to group under each of those. Then a similar breakdown, now in a table view, shows deviations per each category compared to a previous month, for the same number of days. This is to understand trends in each category on monthly horizon. Click a row here to easily drill down into specific transactions. 
+Zooming out... 
+If you'd like to review older months through the same perspective, just navigate over a timeline by means of left-and-right arrows here at the top. 
+
+Next, the yearly view. First, it shows a year-to-date total compared to a last year, up to the same date. Moreover, a projected full-year forecast gives you an estimated total spendings for the full current year. In a separate widget below, here is a rolling 12-month view, up to yesterday. It allows you to compare your expenses for last trailing couple years to see a trend. 
+The yearly view allows to dive into details. Use this expandable section for this. It shows all months of a current year by default. Current month has a gray background, because it is incomplete. Future months are shown as light gray placeholders here. Other information displayed here is very similar to Monthly details, just set for a scale of a year instead of a month. In a word, same break down of categories, with ability to group, and comparison per category of totals with a previous year. 
+
+Moving on to other screens... 
+To log a new expense, just click Add, fill in a few fields. Some of fields like the date, the amount, and the category are mandatory, others are optional. For some of the fields you may pin the default values. Don't forget to Save the data. Saving here takes a little bit - that's the Google API doing its thing in background — but it's a small price for data that stays fully in Your sheet, under Your control.
+
+Moving on...
+To search through your history, just click this screen. By default, you'll see your most recent expenses. Start typing in the search field, and the result appears instantly, through a full history. The application is searching for entered keywords in ALL fields of a same google sheet expense entry, through a logical "And". This is for a more convenient search experience. From this screen, you can also edit or delete any previously logged expense. There's also a 'Repeat expense' button. I've noticed for myself that for some recurring expenses it's easier to search and 'repeat' rather than filling the Add Expense fields from scratch. 
+
+Now let's mention briefly an initial setup, if you're hesitating how to start with this tool. In the Setup area here are two options. 
+First, you may pick your own Google Sheet, created earlier, with your own expense categories defined, with your historical data, and so on. As QuickExpense requires a bare minimum of required columns, you may add custom currencies and extra columns on top right here, in the spreadsheet configuration panel.
+Second option, you may pick a predefined template, an empty sheet provided by QuickExpense. It gets copied automatically straight into your Google Drive space. It includes built-in expense categories. It is the easiest way to start from scratch. You may adjust categories, custom columns, and optional currencies now or later. 
+Also you can share a configured setup to other users, for example your family members, using the "Share setup" function. With this, they have one-click access in QuickExpense application to all your history of expenses and analytics or trends demonstrated above.  
+
+That's it. Feel free to try it. Your feedback is very welcome. 
+Thank you. 
+
+
