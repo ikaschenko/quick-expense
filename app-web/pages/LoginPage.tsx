@@ -46,7 +46,7 @@ export function LoginPage(): JSX.Element {
         <div className="login-trust">
           <div className="login-trust-item">
             <Check size={16} className="login-trust-check" aria-hidden />
-            <span>Free forever</span>
+            <span>Free</span>
           </div>
           <div className="login-trust-item">
             <Check size={16} className="login-trust-check" aria-hidden />
