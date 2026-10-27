@@ -161,12 +161,32 @@
         }
 
         .hero-gallery {
-            flex: 0 1 560px;
+            flex: 0 1 600px;
             min-width: 0;
-            display: grid;
-            grid-template-columns: minmax(0, 1.6fr) repeat(2, minmax(0, 1fr));
+            display: flex;
             align-items: center;
             gap: 12px;
+        }
+
+        .hero-thumb {
+            flex: 1 1 0;
+            min-width: 0;
+            padding: 0;
+            border: 0;
+            background: none;
+            border-radius: var(--radius-lg);
+            cursor: pointer;
+            transition: flex-grow 0.3s ease, opacity 0.2s;
+        }
+        .hero-thumb[aria-pressed="true"] {
+            flex-grow: 5;
+            cursor: default;
+        }
+        .hero-thumb[aria-pressed="false"] { opacity: 0.8; }
+        .hero-thumb[aria-pressed="false"]:hover { opacity: 1; }
+        .hero-thumb:focus-visible {
+            outline: 2px solid var(--color-accent);
+            outline-offset: 3px;
         }
 
         .hero-screenshot {
@@ -177,11 +197,16 @@
             border-radius: var(--radius-md);
             background: var(--color-surface);
             box-shadow: var(--shadow-md);
+            transition: box-shadow 0.3s ease, border-radius 0.3s ease;
         }
 
-        .hero-screenshot-primary {
+        .hero-thumb[aria-pressed="true"] .hero-screenshot {
             border-radius: var(--radius-lg);
             box-shadow: var(--shadow-lg);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .hero-thumb, .hero-screenshot { transition: none; }
         }
 
         /* Demo Video */
@@ -460,15 +485,17 @@
 
         @media (max-width: 480px) {
             .hero-gallery {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
+                flex-wrap: wrap;
+                justify-content: center;
                 width: min(100%, 360px);
             }
 
-            .hero-screenshot-primary {
-                grid-column: 1 / -1;
-                width: min(100%, 200px);
-                margin: 0 auto;
+            .hero-thumb[aria-pressed="true"] {
+                order: -1;
+                flex: 0 0 260px;
             }
+
+            .hero-thumb[aria-pressed="false"] { flex: 0 0 130px; }
         }
 
         @media (max-width: 768px) {
@@ -536,9 +563,15 @@
                 <p class="hero-note" data-i18n="hero.note">Sign in with Google · No signup · Start in 2 min</p>
             </div>
             <div class="hero-gallery">
-                <img class="hero-screenshot hero-screenshot-primary" src="images/1%20-%20home%20screen.png" width="570" height="990" alt="Quick Expense home dashboard with expense summaries and charts" fetchpriority="high">
-                <img class="hero-screenshot" src="images/2%20-%20month%20details.png" width="570" height="990" alt="Quick Expense monthly spending details and category breakdown" loading="lazy" decoding="async">
-                <img class="hero-screenshot" src="images/3%20-%20year%20details.png" width="570" height="990" alt="Quick Expense yearly spending overview" loading="lazy" decoding="async">
+                <button type="button" class="hero-thumb" aria-pressed="true" data-ph-capture-attribute-screenshot="home">
+                    <img class="hero-screenshot" src="images/1%20-%20home%20screen.png" width="570" height="990" alt="Quick Expense home dashboard with expense summaries and charts" fetchpriority="high">
+                </button>
+                <button type="button" class="hero-thumb" aria-pressed="false" data-ph-capture-attribute-screenshot="month">
+                    <img class="hero-screenshot" src="images/2%20-%20month%20details.png" width="570" height="990" alt="Quick Expense monthly spending details and category breakdown" loading="lazy" decoding="async">
+                </button>
+                <button type="button" class="hero-thumb" aria-pressed="false" data-ph-capture-attribute-screenshot="year">
+                    <img class="hero-screenshot" src="images/3%20-%20year%20details.png" width="570" height="990" alt="Quick Expense yearly spending overview" loading="lazy" decoding="async">
+                </button>
             </div>
         </div>
     </section>
@@ -637,7 +670,17 @@
     <script src="lang/i18n.js"></script>
     <script>
     (function () {
-        var facade = document.getElementById('demoVideoFacade');
+        var thumbs = document.querySelectorAll('.hero-thumb');
+        thumbs.forEach(function (thumb) {
+            thumb.addEventListener('click', function () {
+                thumbs.forEach(function (t) { t.setAttribute('aria-pressed', t === thumb ? 'true' : 'false'); });
+            });
+        });
+    })();
+    </script>
+    <script>
+    (function () {
+        var facade =  document.getElementById('demoVideoFacade');
         if (!facade) return;
         facade.addEventListener('click', function () {
             var videoId = facade.dataset.videoId;
