@@ -11,6 +11,7 @@
   --color-surface-raised: #F5F5F5;
   --color-border: #E5E7EB;
   --color-border-strong: #D1D5DB;
+  --color-menu-hover: #E6ECF4;
 
   /* Text */
   --color-text-primary: #111827;
@@ -374,7 +375,8 @@ button { cursor: pointer; }
   min-width: 160px;
 }
 
-.topbar-avatar-menu button {
+.topbar-avatar-menu button,
+.topbar-avatar-menu a {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -386,8 +388,17 @@ button { cursor: pointer; }
   color: var(--color-text-primary);
   border-radius: var(--radius-sm);
   cursor: pointer;
+  text-decoration: none;
 }
-.topbar-avatar-menu button:hover { background: var(--color-surface-raised); }
+.topbar-avatar-menu button:hover,
+.topbar-avatar-menu a:hover,
+.topbar-avatar-menu button:active,
+.topbar-avatar-menu a:active,
+.topbar-avatar-menu button:focus-visible,
+.topbar-avatar-menu a:focus-visible {
+  background: var(--color-menu-hover);
+  outline: none;
+}
 
 /* ===== Bottom Navigation ===== */
 .bottom-nav {
@@ -3168,10 +3179,6 @@ button { cursor: pointer; }
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
   text-decoration: none;
-}
-.topbar-admin-link:hover, .topbar-admin-link:focus-visible {
-  background: var(--color-surface-raised);
-  outline: none;
 }
 .admin-page {
   width: min(100%, 1080px);

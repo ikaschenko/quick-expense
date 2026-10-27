@@ -108,21 +108,18 @@ export function Layout({ children, title, onBack }: LayoutProps): JSX.Element {
                     href={FEEDBACK_FORM_URL}
                     target="_blank"
                     rel="noreferrer"
-                    style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", width: "100%", padding: "var(--space-2) var(--space-3)", border: "none", background: "transparent", fontSize: "var(--font-size-sm)", color: "var(--color-text-primary)", borderRadius: "var(--radius-sm)", cursor: "pointer", textDecoration: "none" }}
                   >
                     <MessageSquareShare size={14} aria-hidden />
                     Feedback
                   </a>
                   <a
                     href="/privacy-policy.html"
-                    style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", width: "100%", padding: "var(--space-2) var(--space-3)", border: "none", background: "transparent", fontSize: "var(--font-size-sm)", color: "var(--color-text-primary)", borderRadius: "var(--radius-sm)", cursor: "pointer", textDecoration: "none" }}
                   >
                     <Shield size={14} aria-hidden />
                     Privacy Policy
                   </a>
                   <a
                     href="/terms-of-service.html"
-                    style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", width: "100%", padding: "var(--space-2) var(--space-3)", border: "none", background: "transparent", fontSize: "var(--font-size-sm)", color: "var(--color-text-primary)", borderRadius: "var(--radius-sm)", cursor: "pointer", textDecoration: "none" }}
                   >
                     <FileText size={14} aria-hidden />
                     Terms of Service
