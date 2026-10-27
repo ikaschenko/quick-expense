@@ -58,6 +58,7 @@ export function Layout({ children, title, onBack }: LayoutProps): JSX.Element {
           <Link
             to="/home"
             className="topbar-brand"
+            aria-label="Quick Expense"
             onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
           >
             <img

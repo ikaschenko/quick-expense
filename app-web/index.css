@@ -246,9 +246,9 @@ button { cursor: pointer; }
   right: 0;
   z-index: 100;
   height: 56px;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(40px, 1fr);
   align-items: center;
-  justify-content: space-between;
   padding: 0 var(--space-4);
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
@@ -257,7 +257,7 @@ button { cursor: pointer; }
 .topbar-left {
   display: flex;
   align-items: center;
-  flex: 1 1 auto;
+  grid-column: 1;
   min-width: 0;
   gap: var(--space-2);
 }
@@ -291,6 +291,7 @@ button { cursor: pointer; }
   display: flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 36px;
   width: 36px;
   height: 36px;
   border: none;
@@ -303,10 +304,10 @@ button { cursor: pointer; }
 .topbar-back:hover { background: var(--color-surface-raised); }
 
 .topbar-title {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: min(320px, 42vw);
+  grid-column: 2;
+  min-width: 0;
+  max-width: 320px;
+  margin: 0 var(--space-2);
   font-size: var(--font-size-lg);
   font-weight: 600;
   color: var(--color-text-primary);
@@ -319,7 +320,7 @@ button { cursor: pointer; }
 .topbar-right {
   display: flex;
   align-items: center;
-  flex: 0 0 40px;
+  grid-column: 3;
   justify-content: flex-end;
 }
 
@@ -329,7 +330,6 @@ button { cursor: pointer; }
   }
 
   .topbar-title {
-    max-width: calc(100% - 144px);
     font-size: var(--font-size-md);
   }
 }

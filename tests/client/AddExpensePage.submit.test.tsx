@@ -157,6 +157,21 @@ function fillMinimalForm() {
   fireEvent.change(categoryInput, { target: { value: "Food" } });
 }
 
+describe("AddExpensePage — header title", () => {
+  it("shows Add for a new expense", async () => {
+    const { container } = await renderAddPage();
+    expect(container.querySelector(".topbar-title")?.textContent).toBe("Add");
+  });
+
+  it("retains Edit Expense for an existing expense", () => {
+    const { container } = renderEditPage({
+      Date: "2025-01-01", USD: "12", Category: "Food", spentBy: "Me", spentFor: "Me",
+      Comment: "", currencyAmounts: {}, customFields: {}, rowNumber: 3,
+    });
+    expect(container.querySelector(".topbar-title")?.textContent).toBe("Edit");
+  });
+});
+
 describe("AddExpensePage — double-submit guard", () => {
   beforeEach(() => {
     vi.mocked(googleSheetsService.appendExpenseRow).mockReset();
@@ -306,7 +321,7 @@ describe("AddExpensePage — repeat mode pre-fill", () => {
 
     const today = getTodayLocalDate();
     // Layout renders the title in a span, not a heading.
-    expect(screen.getByText("Add Expense")).toBeTruthy();
+    expect(screen.getByText("Add", { selector: ".topbar-title" })).toBeTruthy();
     // The date input rendered by react-datepicker should show today's date (not Mar 15 2025).
     const dateInputs = document.querySelectorAll("input");
     const dateInput = Array.from(dateInputs).find((i) => i.value.includes(today.slice(5, 7)));
@@ -316,7 +331,7 @@ describe("AddExpensePage — repeat mode pre-fill", () => {
   it("treats the form as a fresh add — no rowNumber carried over (AC3)", async () => {
     await renderAddPageWithRepeat(repeatRecord);
     // Layout renders the title in a span (not a heading).
-    expect(screen.getByText("Add Expense")).toBeTruthy();
+    expect(screen.getByText("Add", { selector: ".topbar-title" })).toBeTruthy();
     // Title must NOT be "Edit Expense" — confirms we are in add mode, not edit mode
     expect(screen.queryByText("Edit Expense")).toBeNull();
   });

@@ -121,6 +121,12 @@ describe("HistoryPage — filtered total", () => {
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
   });
 
+  it("retains History as the page title", () => {
+    mockDataset({});
+    const { container } = renderHistory();
+    expect(container.querySelector(".topbar-title")?.textContent).toBe("History");
+  });
+
   it("shows the result count and USD total across all matching records", () => {
     const records = [makeRecord(1, "2026-06-09", "10.25"), makeRecord(2, "2026-06-10", "$1,200.50")];
     mockDataset({

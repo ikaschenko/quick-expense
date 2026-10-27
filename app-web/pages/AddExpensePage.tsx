@@ -743,7 +743,7 @@ export function AddExpensePage(): JSX.Element {
   };
 
   return (
-    <Layout title={isEditMode ? "Edit Expense" : "Add Expense"} onBack={isEditMode ? handleEditBack : (!prefillDate ? undefined : handleAddBack)}>
+    <Layout title={isEditMode ? "Edit" : "Add"} onBack={isEditMode ? handleEditBack : (!prefillDate ? undefined : handleAddBack)}>
       <AppActivityTracker />
       {isInsertingHistorical ? (
         <div className="add-insert-overlay" role="status" aria-live="polite">

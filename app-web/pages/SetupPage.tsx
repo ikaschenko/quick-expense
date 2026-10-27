@@ -15,7 +15,7 @@ const PAGE_TITLES: Record<SetupPath, string> = {
   choose: "Set up Quick Expense",
   fresh: "Create your spreadsheet",
   existing: "Connect existing sheet",
-  configured: "Spreadsheet settings",
+  configured: "Setup",
 };
 
 export function SetupPage(): JSX.Element {

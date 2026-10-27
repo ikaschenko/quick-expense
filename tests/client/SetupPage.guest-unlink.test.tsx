@@ -111,6 +111,11 @@ beforeEach(() => {
 });
 
 describe("SetupPage — guest unlink", () => {
+  it("shows Setup as the configured page title", () => {
+    const { container } = renderSetupPage();
+    expect(container.querySelector(".topbar-title")?.textContent).toBe("Setup");
+  });
+
   it("shows Edit guests a management hint for hidden defaults without mutation actions", async () => {
     renderSetupPage();
     expect(screen.getByText("Vacation")).toBeTruthy();
