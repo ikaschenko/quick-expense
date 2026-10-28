@@ -16,6 +16,18 @@ async function hashEmail(email: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// Landing and app share one PostHog project; prefixing $pathname with the host keeps their paths apart in Paths.
+export function prefixPathWithHost<T extends { event: string; properties?: Record<string, unknown> }>(
+  event: T | null,
+): T | null {
+  const props = event?.properties;
+  if (event && props && (event.event === "$pageview" || event.event === "$pageleave")) {
+    const { $host: host, $pathname: path } = props;
+    if (typeof host === "string" && typeof path === "string") props.$pathname = `${host}${path}`;
+  }
+  return event;
+}
+
 export function initAnalytics(): void {
   const key = resolveKey();
   if (!key) return;
@@ -25,6 +37,8 @@ export function initAnalytics(): void {
     autocapture: false,
     capture_pageview: "history_change",
     capture_pageleave: true,
+    cross_subdomain_cookie: true,
+    before_send: prefixPathWithHost,
   });
   enabled = true;
 }

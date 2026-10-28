@@ -42,6 +42,18 @@ describe("initAnalytics", () => {
     );
   });
 
+  it("should share the anonymous ID across subdomains and prefix pageview paths via before_send", async () => {
+    setMetaKey("phc_meta");
+    const { initAnalytics, prefixPathWithHost } = await loadAnalytics();
+
+    initAnalytics();
+
+    expect(posthogMock.init).toHaveBeenCalledWith(
+      "phc_meta",
+      expect.objectContaining({ cross_subdomain_cookie: true, before_send: prefixPathWithHost }),
+    );
+  });
+
   it("should prefer the env key over the meta key", async () => {
     vi.stubEnv("VITE_POSTHOG_KEY", "phc_env");
     setMetaKey("phc_meta");
@@ -59,6 +71,33 @@ describe("initAnalytics", () => {
     initAnalytics();
 
     expect(posthogMock.init).not.toHaveBeenCalled();
+  });
+});
+
+describe("prefixPathWithHost", () => {
+  it.each(["$pageview", "$pageleave"])("should prefix $pathname with $host on %s", async (name) => {
+    const { prefixPathWithHost } = await loadAnalytics();
+
+    const result = prefixPathWithHost({ event: name, properties: { $host: "app.q-expense.com", $pathname: "/home" } });
+
+    expect(result?.properties?.$pathname).toBe("app.q-expense.com/home");
+  });
+
+  it("should leave custom events untouched", async () => {
+    const { prefixPathWithHost } = await loadAnalytics();
+
+    const result = prefixPathWithHost({ event: "expense_added", properties: { $host: "h", $pathname: "/add" } });
+
+    expect(result?.properties?.$pathname).toBe("/add");
+  });
+
+  it("should leave pageviews without host or pathname untouched and pass through null", async () => {
+    const { prefixPathWithHost } = await loadAnalytics();
+
+    const noHost = prefixPathWithHost({ event: "$pageview", properties: { $pathname: "/home" } });
+
+    expect(noHost?.properties?.$pathname).toBe("/home");
+    expect(prefixPathWithHost(null)).toBeNull();
   });
 });
 

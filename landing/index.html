@@ -526,7 +526,15 @@
                 capture_pageview: true,
                 capture_pageleave: true,
                 cross_subdomain_cookie: true,
-                autocapture: { dom_event_allowlist: ['click'], element_allowlist: ['a', 'button'] }
+                autocapture: { dom_event_allowlist: ['click'], element_allowlist: ['a', 'button'] },
+                // Keeps landing paths apart from app paths in PostHog Paths (same project, same pathnames).
+                before_send: function (event) {
+                    var p = event && event.properties;
+                    if (p && (event.event === '$pageview' || event.event === '$pageleave') && p.$host && p.$pathname) {
+                        p.$pathname = p.$host + p.$pathname;
+                    }
+                    return event;
+                }
             });
         };
         document.head.appendChild(s);
