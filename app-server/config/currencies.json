@@ -22,6 +22,7 @@
     { "code": "NZD", "name": "New Zealand Dollar" },
     { "code": "PLN", "name": "Polish Zloty" },
     { "code": "RON", "name": "Romanian Leu" },
+    { "code": "RUB", "name": "Russian Ruble" },
     { "code": "SEK", "name": "Swedish Krona" },
     { "code": "SGD", "name": "Singapore Dollar" },
     { "code": "THB", "name": "Thai Baht" },

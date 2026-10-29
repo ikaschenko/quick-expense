@@ -112,7 +112,7 @@ b) Sum (group of fields), filling at least 1 of those fields is mandatory with a
 
 \- USD (always present)
 
-\- Up to 3 additional non-USD currencies, configurable per user from a dictionary of 25 supported currencies (e.g. PLN, BYN, EUR, GBP, etc.)
+\- Up to 3 additional non-USD currencies, configurable per user from a dictionary of 26 supported currencies (e.g. PLN, BYN, EUR, GBP, etc.)
 
 Users configure their active currencies via the Setup page. Currency selection is stored in the database (`user_currencies` table) and reflected as columns in the spreadsheet header. Archived currencies (previously active, now removed) keep their columns in the sheet for historical data.
 

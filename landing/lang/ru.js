@@ -55,5 +55,5 @@ window.__i18n.ru = {
   "footer.privacy": "Политика конфиденциальности",
   "footer.terms": "Условия использования",
   "footer.contact": "Контакты",
-  "footer.copyright": "\u00a9 2026 Quick Expense. Сделано с заботой для тех, кто ценит простоту."
+  "footer.copyright": "\u00a9 2026 Quick Expense. Для тех, кто ценит простоту."
 };
