@@ -22,6 +22,8 @@ In case of a change for a product logo - don't forget to update in the following
 - tinylaunch
 - ReadMe.md
 - product landing page 
+- https://buymeacoffee.com/qexpensesux
+
 
 
 
