@@ -14,7 +14,7 @@ window.__i18n.en = {
   "hero.alt3": "Quick Expense yearly spending overview",
 
   "demo.title": "See It in Action",
-  "demo.duration": "2:27",
+  "demo.duration": "4:57",
   "demo.playAriaLabel": "Play demo video",
 
   "features.title": "Why Quick Expense?",

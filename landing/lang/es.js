@@ -14,7 +14,7 @@ window.__i18n.es = {
   "hero.alt3": "Resumen anual de gastos en Quick Expense",
 
   "demo.title": "M\u00edralo en Acci\u00f3n",
-  "demo.duration": "2:27",
+  "demo.duration": "4:57",
   "demo.playAriaLabel": "Reproducir video de demostraci\u00f3n",
 
   "features.title": "\u00bfPor qu\u00e9 Quick Expense?",
