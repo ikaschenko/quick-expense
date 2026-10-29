@@ -6,9 +6,12 @@ window.__i18n.es = {
   "meta.keywords": "registro de gastos, gesti\u00f3n de gastos, Google Sheets, finanzas personales, presupuesto familiar, app de gastos gratis",
 
   "hero.title": "Registra Gastos Sobre la Marcha",
-  "hero.subtitle": "Registra en segundos, ve tendencias al instante. Dashboard, historial, b\\u00fasqueda \u2014 gratis y privado en tu Google Sheets.",
+  "hero.subtitle": "Registra en segundos, ve tendencias al instante. Dashboard, historial, b\u00fasqueda \u2014 gratis y privado en tu Google Sheets.",
   "hero.cta": "Comienza - Es Gratis",
   "hero.note": "Inicia sesi\u00f3n con Google \u2022 Empieza en 2 minutos",
+  "hero.alt1": "Panel de inicio de Quick Expense con res\u00famenes de gastos y gr\u00e1ficos",
+  "hero.alt2": "Detalle mensual de gastos y desglose por categor\u00eda en Quick Expense",
+  "hero.alt3": "Resumen anual de gastos en Quick Expense",
 
   "demo.title": "M\u00edralo en Acci\u00f3n",
   "demo.duration": "2:27",
@@ -45,6 +48,9 @@ window.__i18n.es = {
   "cta.title": "\u00bfListo para Simplificar el Registro de Tus Gastos?",
   "cta.desc": "\u00danete a los usuarios que ya dejaron las apps de gastos complicadas por algo mejor.",
   "cta.button": "Comienza Ahora - Y \u00dasalo Gratis",
+  "cta.support": "Apoya el proyecto",
+
+  "lang.label": "Idioma",
 
   "footer.privacy": "Pol\u00edtica de Privacidad",
   "footer.terms": "T\u00e9rminos de Servicio",

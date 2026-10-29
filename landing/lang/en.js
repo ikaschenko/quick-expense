@@ -9,6 +9,9 @@ window.__i18n.en = {
   "hero.subtitle": "Log in seconds, see trends instantly. Dashboard, history, search — free and private in your Google Sheets.",
   "hero.cta": "Get Started - It's Free",
   "hero.note": "Sign in with Google \u2022 Start in 2 minutes",
+  "hero.alt1": "Quick Expense home dashboard with expense summaries and charts",
+  "hero.alt2": "Quick Expense monthly spending details and category breakdown",
+  "hero.alt3": "Quick Expense yearly spending overview",
 
   "demo.title": "See It in Action",
   "demo.duration": "2:27",
@@ -45,6 +48,9 @@ window.__i18n.en = {
   "cta.title": "Ready to Simplify Your Expense Tracking?",
   "cta.desc": "Join users who\u2019ve already ditched complicated expense apps for something better.",
   "cta.button": "Start Now - And Use For Free",
+  "cta.support": "Support the project",
+
+  "lang.label": "Language",
 
   "footer.privacy": "Privacy Policy",
   "footer.terms": "Terms of Service",

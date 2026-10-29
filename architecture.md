@@ -616,7 +616,7 @@ Frontend services in `app-web/services/` are thin wrappers around `fetch`:
 The `landing/` directory is a **completely independent static site** — no build step, no shared dependencies with the main app.
 
 - **Technology:** Single `index.html` with embedded CSS and inline JavaScript.
-- **i18n:** Vanilla JS runtime (`lang/i18n.js`) loads language bundles (`lang/en.js`, `lang/es.js`) preloaded via `<script>` tags. Language detection: saved preference → browser language → English default.
+- **i18n:** Vanilla JS runtime (`lang/i18n.js`) uses language bundles (`lang/en.js`, `lang/es.js`, `lang/ru.js`) preloaded via `<script>` tags; keys missing from a bundle fall back to English. Language resolution on every load: manual choice (`localStorage` `qe-lang-manual`) → first supported base language in `navigator.languages` (e.g. `ru-RU` → `ru`; no geolocation/IP) → English. The detected result is re-computed and stored under `qe-lang-auto` on each load, so newly added languages are picked up; the legacy `qe-lang` key is ignored. The switcher is an accessible dropdown (`role="listbox"`) showing only the active language flag + native name. Storage failures degrade to in-memory switching. Tests: `tests/client/landing-i18n.test.ts`.
 - **Deployment:** Served by `nginx:alpine` Docker image. Deployed to Fly.io as `q-expense-landing` (Frankfurt region), separate from the main app.
 - **Purpose:** Marketing/informational page describing the product. Contains CTA links that point to the main application URL for sign-in.
 

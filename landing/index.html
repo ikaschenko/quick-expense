@@ -434,34 +434,82 @@
             top: 64px;
             right: 16px;
             z-index: 1000;
+        }
+
+        .lang-trigger {
             display: flex;
-            gap: 0;
+            align-items: center;
+            gap: 6px;
+            max-width: calc(100vw - 32px);
+            padding: 6px 10px 6px 12px;
             background: var(--color-surface);
+            color: var(--color-text-primary);
             border: 1px solid var(--color-border);
             border-radius: var(--radius-full);
-            overflow: hidden;
             box-shadow: var(--shadow-md);
-        }
-
-        .lang-switcher button {
-            background: transparent;
-            color: var(--color-text-secondary);
-            border: none;
-            padding: 6px 12px;
-            font-size: 12px;
+            font-family: var(--font-family);
+            font-size: 13px;
             font-weight: 600;
             cursor: pointer;
-            transition: background 0.15s, color 0.15s;
-            font-family: var(--font-family);
+            transition: background 0.15s;
         }
 
-        .lang-switcher button:hover {
+        .lang-trigger:hover {
             background: var(--color-surface-raised);
         }
 
-        .lang-switcher button.active {
-            background: var(--color-accent);
-            color: var(--color-text-inverse);
+        .lang-trigger:focus-visible,
+        .lang-option:focus-visible {
+            outline: 2px solid var(--color-accent);
+            outline-offset: 2px;
+        }
+
+        .lang-arrow {
+            flex: none;
+            color: var(--color-text-secondary);
+            transition: transform 0.15s;
+        }
+
+        .lang-trigger[aria-expanded="true"] .lang-arrow {
+            transform: rotate(180deg);
+        }
+
+        .lang-name {
+            white-space: nowrap;
+        }
+
+        .lang-menu {
+            position: absolute;
+            top: calc(100% + 6px);
+            right: 0;
+            min-width: 100%;
+            list-style: none;
+            padding: 4px;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .lang-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+
+        .lang-option:hover {
+            background: var(--color-surface-raised);
+        }
+
+        .lang-option[aria-selected="true"] {
+            background: var(--color-accent-light);
+            color: var(--color-accent);
+            font-weight: 700;
         }
 
         /* Responsive */
@@ -542,8 +590,8 @@
     </script>
 </head>
 <body>
-    <!-- Language Switcher -->
-    <div class="lang-switcher" aria-label="Language selector"></div>
+    <!-- Language Switcher (dropdown built by lang/i18n.js) -->
+    <div class="lang-switcher"></div>
 
     <!-- Header -->
     <header class="header">
@@ -572,13 +620,13 @@
             </div>
             <div class="hero-gallery">
                 <button type="button" class="hero-thumb" aria-pressed="true" data-ph-capture-attribute-screenshot="home">
-                    <img class="hero-screenshot" src="images/1%20-%20home%20screen.png" width="570" height="990" alt="Quick Expense home dashboard with expense summaries and charts" fetchpriority="high">
+                    <img class="hero-screenshot" src="images/1%20-%20home%20screen.png" width="570" height="990" alt="Quick Expense home dashboard with expense summaries and charts" data-i18n-attr="alt:hero.alt1" fetchpriority="high">
                 </button>
                 <button type="button" class="hero-thumb" aria-pressed="false" data-ph-capture-attribute-screenshot="month">
-                    <img class="hero-screenshot" src="images/2%20-%20month%20details.png" width="570" height="990" alt="Quick Expense monthly spending details and category breakdown" loading="lazy" decoding="async">
+                    <img class="hero-screenshot" src="images/2%20-%20month%20details.png" width="570" height="990" alt="Quick Expense monthly spending details and category breakdown" data-i18n-attr="alt:hero.alt2" loading="lazy" decoding="async">
                 </button>
                 <button type="button" class="hero-thumb" aria-pressed="false" data-ph-capture-attribute-screenshot="year">
-                    <img class="hero-screenshot" src="images/3%20-%20year%20details.png" width="570" height="990" alt="Quick Expense yearly spending overview" loading="lazy" decoding="async">
+                    <img class="hero-screenshot" src="images/3%20-%20year%20details.png" width="570" height="990" alt="Quick Expense yearly spending overview" data-i18n-attr="alt:hero.alt3" loading="lazy" decoding="async">
                 </button>
             </div>
         </div>
@@ -675,6 +723,7 @@
     </footer>
     <script src="lang/en.js"></script>
     <script src="lang/es.js"></script>
+    <script src="lang/ru.js"></script>
     <script src="lang/i18n.js"></script>
     <script>
     (function () {
