@@ -12,6 +12,9 @@ The app is optimized for quick entry from a phone or desktop browser and support
 
 [![Watch the video demo](https://youtube.com)](https://youtu.be/vN44GMipeAg)
 
+Product landing page: [Link](https://q-expense.com?utm_source=github)
+Production application: [Link](https://app.q-expense.com?utm_source=github)
+
 ## Tech stack
 
 - React 18 + TypeScript + Vite
