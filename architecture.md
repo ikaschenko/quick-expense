@@ -649,6 +649,7 @@ In development, Vite proxies all `/api` requests to `http://localhost:3001` (con
 | `FRONTEND_BASE_URL` | Base URL where the SPA is served (e.g. `http://localhost:5173`) |
 | `SESSION_SECRET` | Secret for express-session cookie signing |
 | `DATABASE_URL` | PostgreSQL connection string (e.g. `postgresql://user:pass@host:5432/db`) |
+| `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | PEM private key for the service account in `app-server/config/service-account.json`, used to copy the template sheet. Validated at startup (`getServiceAccountPrivateKey`): literal `\n`, wrapping quotes, and collapsed newlines are normalized; an unparseable key logs `startup_invalid_service_account_key` (alert email) and exits. |
 | `EXPENSE_RECENT_MONTHS` | *(Optional)* Number of months of recent expense data loaded in Phase 1. Default: `24`. Older records are fetched in the background after the UI is ready. |
 | `RESEND_API_KEY` | *(Optional)* Resend API key for transactional email. If absent, email notifications are silently skipped (app runs normally). |
 | `EMAIL_FROM` | *(Optional)* Sender address for email notifications (e.g. `noreply@send.q-expense.com`). Required when `RESEND_API_KEY` is set. |

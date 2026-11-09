@@ -10,11 +10,31 @@ const _saKeyData = JSON.parse(readFileSync(SA_KEY_FILE, "utf-8"));
 
 export const SERVICE_ACCOUNT_EMAIL = _saKeyData.client_email;
 
+// Rebuilds a PEM mangled by secret stores: wrapping quotes, literal "\n", collapsed newlines, CRLF.
+export function normalizePrivateKey(raw) {
+  const match = /-----BEGIN ([A-Z ]+)-----([\s\S]*?)-----END \1-----/.exec(raw);
+  if (!match) return raw.trim();
+  const body = match[2].replaceAll(/\\[nr]|\s|["']/g, "");
+  const lines = body.match(/.{1,64}/g) ?? [];
+  return `-----BEGIN ${match[1]}-----\n${lines.join("\n")}\n-----END ${match[1]}-----\n`;
+}
+
+// Throws without echoing key material when the env var is missing or not a parseable private key.
+export function getServiceAccountPrivateKey() {
+  const pem = normalizePrivateKey(requireEnv("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY"));
+  try {
+    crypto.createPrivateKey(pem);
+  } catch (cause) {
+    throw new Error("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY is not a valid PEM private key.", { cause });
+  }
+  return pem;
+}
+
 let _saAuth = null;
 export async function getServiceAccountAccessToken() {
   if (!_saAuth) {
     // service-account.json ships with a placeholder private_key; the real PEM lives in the env var.
-    _saKeyData.private_key = requireEnv("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY");
+    _saKeyData.private_key = getServiceAccountPrivateKey();
     _saAuth = new GoogleAuth({
       credentials: _saKeyData,
       scopes: ["https://www.googleapis.com/auth/spreadsheets"],

@@ -69,6 +69,7 @@ Notes:
 - `GOOGLE_REDIRECT_URI` must match the redirect URI configured in Google Cloud.
 - `FRONTEND_BASE_URL` should point to the frontend URL you use locally.
 - The backend validates required environment variables at startup and exits early if any are missing.
+- `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` is also required at startup and must parse as a PEM private key; otherwise the backend logs an error (triggering the alert email) and exits. Real newlines, a single line with literal `\n`, or wrapping quotes are all accepted. To set it on Fly from Windows `cmd`: `fly secrets set GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="<single-line key with \n escapes>" -a q-expense-app`.
 - `API_JSON_BODY_LIMIT` controls JSON body size accepted by `/api/*` routes. Default is `10mb` to align with the dataset payload ceiling in requirements.
 - Do not commit real secrets to a public repository.
 

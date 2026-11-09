@@ -1,4 +1,10 @@
 // @vitest-environment node
+import crypto from "node:crypto";
+
+const SERVICE_ACCOUNT_KEY = crypto
+  .generateKeyPairSync("rsa", { modulusLength: 2048 })
+  .privateKey.export({ type: "pkcs8", format: "pem" });
+
 const mocks = vi.hoisted(() => ({
   session: {},
   pool: { query: vi.fn(), end: vi.fn() },
@@ -107,6 +113,7 @@ beforeAll(async () => {
   vi.stubEnv("FRONTEND_BASE_URL", "http://localhost:5173");
   vi.stubEnv("SESSION_SECRET", "test-secret");
   vi.stubEnv("DATABASE_URL", "postgres://localhost/test");
+  vi.stubEnv("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY", SERVICE_ACCOUNT_KEY);
   vi.stubEnv("ADMIN_EMAIL", ADMIN.email);
   vi.stubEnv("ALERT_EMAIL_TO", "");
 
@@ -970,5 +977,30 @@ describe("mapping target validation", () => {
     const result = await request("POST", "/api/config/mapping", { body: { spreadsheetId: "previous-sheet", mapping: {}, confirmed: true } });
     expect(result.status).toBe(409);
     expect(mocks.sheets.writeConfigSheetMapping).not.toHaveBeenCalled();
+  });
+});
+
+describe("startup service account key validation", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.stubEnv("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY", SERVICE_ACCOUNT_KEY);
+  });
+
+  it("logs an alertable error and refuses to start when the key is not a valid PEM", async () => {
+    vi.stubEnv("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY", "-----BEGIN PRIVATE KEY-----\nnot-base64\n-----END PRIVATE KEY-----");
+    vi.resetModules();
+    const { default: logger } = await import("../../app-server/logger.js");
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => logger);
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+
+    const startup = import("../../app-server/index.js");
+    const rejection = expect(startup).rejects.toThrow("is not a valid PEM private key");
+    await vi.advanceTimersByTimeAsync(3000);
+    await rejection;
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      "startup_invalid_service_account_key",
+      expect.objectContaining({ event: "startup_invalid_service_account_key" }),
+    );
   });
 });

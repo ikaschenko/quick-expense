@@ -15,6 +15,7 @@ import {
   fetchGoogleUserInfo,
   getFrontendBaseUrl,
   getGoogleClientId,
+  getServiceAccountPrivateKey,
   createPkcePair,
   refreshAccessToken,
 } from "./google-client.js";
@@ -175,6 +176,20 @@ function validateStartupEnv() {
 }
 
 validateStartupEnv();
+
+// Logged (not just thrown) so the alert email goes out; the delay lets that fire-and-forget send finish before exit.
+async function validateServiceAccountKey() {
+  try {
+    getServiceAccountPrivateKey();
+  } catch (error) {
+    const { message, stack } = serializeError(error);
+    logger.error("startup_invalid_service_account_key", { event: "startup_invalid_service_account_key", error: message, stack });
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    throw error;
+  }
+}
+
+await validateServiceAccountKey();
 
 // Number of months of recent expense data loaded in Phase 1 (blocking).
 // Older data is fetched in the background after the UI is ready (Phase 2).
