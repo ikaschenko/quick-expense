@@ -3,6 +3,7 @@ import enSrc from "../../landing/lang/en.js?raw";
 import esSrc from "../../landing/lang/es.js?raw";
 import ruSrc from "../../landing/lang/ru.js?raw";
 import i18nSrc from "../../landing/lang/i18n.js?raw";
+import indexHtml from "../../landing/index.html?raw";
 
 type Bundle = Record<string, string>;
 type I18nWindow = Window & { __i18n?: Record<string, Bundle> };
@@ -270,5 +271,42 @@ describe("landing language dropdown", () => {
     expect(menu().hidden).toBe(true);
     expect(document.documentElement.lang).toBe("en");
     expect(localStorage.getItem(MANUAL_KEY)).toBeNull();
+  });
+});
+
+describe("landing HTML fallback text", () => {
+  const parseEn = (): Bundle => {
+    loadPage();
+    return bundles().en;
+  };
+  const page = () => new DOMParser().parseFromString(indexHtml, "text/html");
+
+  it("should match en.js for every data-i18n element", () => {
+    const en = parseEn();
+    const els = [...page().querySelectorAll<HTMLElement>("[data-i18n]")];
+    expect(els.length).toBeGreaterThan(0);
+    for (const el of els) {
+      const key = el.dataset.i18n!;
+      expect(en[key], `missing en.js key ${key}`).toBeDefined();
+      expect(el.textContent!.trim(), key).toBe(en[key]);
+    }
+  });
+
+  it("should match en.js for every data-i18n-attr attribute", () => {
+    const en = parseEn();
+    const els = [...page().querySelectorAll<HTMLElement>("[data-i18n-attr]")];
+    expect(els.length).toBeGreaterThan(0);
+    for (const el of els) {
+      for (const pair of el.dataset.i18nAttr!.split(";")) {
+        const [attr, key] = pair.split(":");
+        expect(en[key], `missing en.js key ${key}`).toBeDefined();
+        expect(el.getAttribute(attr), `${attr} <- ${key}`).toBe(en[key]);
+      }
+    }
+  });
+
+  it("should match en.js for the contact link written by document.write", () => {
+    const match = /data-i18n="footer\.contact">([^<]*)<\/a>/.exec(indexHtml);
+    expect(match?.[1]).toBe(parseEn()["footer.contact"]);
   });
 });
