@@ -50,7 +50,7 @@ export function LoginPage(): JSX.Element {
           </div>
           <div className="login-trust-item">
             <Check size={16} className="login-trust-check" aria-hidden />
-            <span>Your data stays in your Google Sheets</span>
+            <span>Your data stays in your Google Sheets, no lock-in</span>
           </div>
           <div className="login-trust-item">
             <Check size={16} className="login-trust-check" aria-hidden />
