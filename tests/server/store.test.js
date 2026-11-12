@@ -132,7 +132,7 @@ describe("getUserRecord", () => {
 describe("updateUserRecord", () => {
   it("upserts a new user when none exists", async () => {
     mockQuery.mockResolvedValueOnce({ rows: [] }); // getUserRecord SELECT
-    mockQuery.mockResolvedValueOnce({ rows: [{ id: "9" }] }); // INSERT ... ON CONFLICT
+    mockQuery.mockResolvedValueOnce({ rows: [{ id: "9", inserted: true }] }); // INSERT ... ON CONFLICT
 
     const updater = (current) => ({
       ...current,
@@ -146,9 +146,20 @@ describe("updateUserRecord", () => {
 
     expect(result.accessToken).toBe("new-token");
     expect(result.id).toBe(9);
+    expect(result.isNewUser).toBe(true);
     expect(mockQuery).toHaveBeenCalledTimes(2);
     expect(mockQuery.mock.calls[1][0]).toContain("INSERT INTO users");
     expect(mockQuery.mock.calls[1][0]).toContain("ON CONFLICT");
+    expect(mockQuery.mock.calls[1][0]).toContain("(xmax = 0) AS inserted");
+  });
+
+  it("does not report a signup when a concurrent insert wins after the lookup", async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    mockQuery.mockResolvedValueOnce({ rows: [{ id: "9", inserted: false }] });
+
+    const result = await updateUserRecord("new@test.com", (current) => ({ ...current }));
+
+    expect(result.isNewUser).toBe(false);
   });
 
   it("updates an existing user", async () => {
@@ -177,6 +188,7 @@ describe("updateUserRecord", () => {
     expect(result.accessToken).toBe("refreshed-token");
     expect(result.id).toBe(8);
     expect(result.refreshToken).toBe("rt-1");
+    expect(result.isNewUser).toBe(false);
   });
 
   it("persists spreadsheet fields when updated after create", async () => {

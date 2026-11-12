@@ -66,7 +66,9 @@ export function useSpreadsheetSetup(): SpreadsheetSetup {
       setShowMappingEditor(false);
       setSuccess("Spreadsheet is configured and validated.");
       trackEvent("setup_saved");
+      trackEvent("setup_completed", { method: "existing_sheet" });
     } catch (saveError) {
+      trackEvent("setup_failed", { method: "existing_sheet", stage: "connect", error_kind: saveError instanceof AppError ? saveError.kind : "unexpected" });
       setError((saveError as Error).message);
       if (saveError instanceof AppError && saveError.headerDetails) {
         setHeaderDetails(saveError.headerDetails);
@@ -89,6 +91,7 @@ export function useSpreadsheetSetup(): SpreadsheetSetup {
       setSpreadsheetUrl(result.spreadsheetUrl);
       await saveSpreadsheet(result.spreadsheetUrl);
     } catch (pickError) {
+      trackEvent("setup_failed", { method: "existing_sheet", stage: "picker", error_kind: pickError instanceof AppError ? pickError.kind : "unexpected" });
       setError((pickError as Error).message);
     } finally {
       setIsPicking(false);
@@ -108,7 +111,9 @@ export function useSpreadsheetSetup(): SpreadsheetSetup {
       setSetupReport(report);
       setSuccess("Your spreadsheet has been created and is ready to use.");
       trackEvent("setup_created");
+      trackEvent("setup_completed", { method: "new_sheet" });
     } catch (createError) {
+      trackEvent("setup_failed", { method: "new_sheet", stage: "create", error_kind: createError instanceof AppError ? createError.kind : "unexpected" });
       const err = createError as AppError;
       setError(err.message);
       if (err.templateCopyFailed && err.templateUrl) {

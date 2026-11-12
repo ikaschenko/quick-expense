@@ -422,6 +422,12 @@ app.get("/api/auth/callback", async (req, res) => {
       req.session.userGivenName = userInfo.given_name ?? null;
       req.session.userFullName  = userInfo.name ?? null;
       req.session.userPicture = userInfo.picture ?? null;
+      req.session.authentication = {
+        id: crypto.randomUUID(),
+        isNewUser: updatedUser.isNewUser === true,
+        signupId: updatedUser.isNewUser === true ? crypto.randomUUID() : null,
+        timestamp: now,
+      };
       res.redirect(`${getFrontendBaseUrl()}/home`);
     });
   } catch (callbackError) {
@@ -474,6 +480,7 @@ app.get("/api/auth/session", async (req, res) => {
         ownerEmail,
         configStatus,
         isAppAdmin: isAppAdminEmail(userRecord.email),
+        authentication: req.session.authentication ?? null,
       },
     });
   } catch (error) {

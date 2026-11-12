@@ -1,6 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { SetupPage } from "../../app-web/pages/SetupPage";
+import userEvent from "@testing-library/user-event";
+import { trackEvent } from "../../app-web/services/analytics";
+
+const setupState = vi.hoisted(() => ({ hasConfig: true, isLoading: false }));
 
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router-dom")>();
@@ -22,7 +26,7 @@ vi.mock("../../app-web/contexts/AuthContext", () => ({
 
 vi.mock("../../app-web/contexts/ConfigContext", () => ({
   useConfig: () => ({
-    config: {
+    config: setupState.hasConfig ? {
       spreadsheetId: "sheet123",
       spreadsheetUrl: "https://docs.google.com/spreadsheets/d/sheet123",
       currencies: [],
@@ -31,8 +35,8 @@ vi.mock("../../app-web/contexts/ConfigContext", () => ({
       isGuest: false,
       ownerEmail: "owner@example.com",
       configMode: "default",
-    },
-    isConfigLoading: false,
+    } : null,
+    isConfigLoading: setupState.isLoading,
     error: null,
     clearError: vi.fn(),
     saveConfig: vi.fn(),
@@ -86,9 +90,37 @@ function renderSetupPage() {
 }
 
 describe("SetupPage — Comment column is non-hideable", () => {
+  beforeEach(() => {
+    setupState.hasConfig = true;
+    setupState.isLoading = false;
+    vi.mocked(trackEvent).mockClear();
+  });
+
   it("does not render an Eye or EyeOff button for the Comment row", () => {
     renderSetupPage();
     expect(screen.queryByRole("button", { name: /hide comment from add form/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /show comment on add form/i })).toBeNull();
+    expect(trackEvent).not.toHaveBeenCalled();
+  });
+
+  it("records explicit choices, including switching paths, but not back navigation", async () => {
+    setupState.hasConfig = false;
+    renderSetupPage();
+    expect(trackEvent).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Create my spreadsheet" }));
+    expect(trackEvent).toHaveBeenLastCalledWith("setup_path_selected", { method: "new_sheet" });
+    await userEvent.click(screen.getByRole("button", { name: /Back to options/ }));
+    expect(trackEvent).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByRole("button", { name: "Connect a spreadsheet" }));
+    expect(trackEvent).toHaveBeenLastCalledWith("setup_path_selected", { method: "existing_sheet" });
+    expect(trackEvent).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not record a selection while config is loading", async () => {
+    setupState.hasConfig = false;
+    setupState.isLoading = true;
+    renderSetupPage();
+    await userEvent.click(screen.getByRole("button", { name: "Create my spreadsheet" }));
+    expect(trackEvent).not.toHaveBeenCalled();
   });
 });

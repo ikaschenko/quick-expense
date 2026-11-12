@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type JSX,
 } from "react";
@@ -31,17 +32,22 @@ export function AuthProvider({ children }: PropsWithChildren): JSX.Element {
   const [status, setStatus] = useState<AuthStatus>("initializing");
   const [session, setSession] = useState<AuthSession | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const refreshVersion = useRef(0);
 
   const refreshSession = async (): Promise<void> => {
+    const version = ++refreshVersion.current;
     try {
       const nextSession = await authApi.getSession();
+      if (version !== refreshVersion.current) return;
+      if (nextSession) {
+        await identifyUser(nextSession.email, nextSession).catch(() => undefined);
+      }
+      if (version !== refreshVersion.current) return;
       setSession(nextSession);
       setStatus(nextSession ? "signed_in" : "signed_out");
       setError(null);
-      if (nextSession) {
-        identifyUser(nextSession.email);
-      }
     } catch (sessionError) {
+      if (version !== refreshVersion.current) return;
       setSession(null);
       setStatus("signed_out");
       setError((sessionError as Error).message);
@@ -50,6 +56,7 @@ export function AuthProvider({ children }: PropsWithChildren): JSX.Element {
 
   useEffect(() => {
     void refreshSession();
+    return () => { refreshVersion.current++; };
   }, []);
 
   const signIn = (): void => {
@@ -58,6 +65,7 @@ export function AuthProvider({ children }: PropsWithChildren): JSX.Element {
   };
 
   const signOut = (): void => {
+    refreshVersion.current++;
     if (session?.email) metricsCache.clear(session.email);
     setSession(null);
     setStatus("signed_out");

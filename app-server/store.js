@@ -93,7 +93,7 @@ export async function updateUserRecord(email, updater) {
        last_authenticated_at = EXCLUDED.last_authenticated_at,
        last_activity_at = EXCLUDED.last_activity_at,
        updated_at = now()
-     RETURNING id`,
+      RETURNING id, (xmax = 0) AS inserted`,
 
     [
       normalizedEmail,
@@ -111,7 +111,7 @@ export async function updateUserRecord(email, updater) {
     ],
   );
 
-  return { ...next, id: Number(rows[0].id) };
+  return { ...next, id: Number(rows[0].id), isNewUser: rows[0].inserted === true };
 }
 
 export async function reserveConnectionChange(userId) {

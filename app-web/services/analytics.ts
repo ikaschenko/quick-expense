@@ -1,6 +1,10 @@
 import posthog from "posthog-js";
+import type { AuthSession } from "../types/expense";
 
 let enabled = false;
+let identityVersion = 0;
+let authenticationReceipt: string | null = null;
+const AUTH_RECEIPT_KEY = "qe_analytics_auth";
 
 // Production key is injected at runtime by the server as a <meta> tag; the env var is a local-dev fallback.
 function resolveKey(): string | undefined {
@@ -32,28 +36,68 @@ export function initAnalytics(): void {
   const key = resolveKey();
   if (!key) return;
 
-  posthog.init(key, {
-    api_host: "https://us.i.posthog.com",
-    autocapture: false,
-    capture_pageview: "history_change",
-    capture_pageleave: true,
-    cross_subdomain_cookie: true,
-    before_send: prefixPathWithHost,
-  });
-  enabled = true;
+  try {
+    posthog.init(key, {
+      api_host: "https://us.i.posthog.com",
+      autocapture: false,
+      capture_pageview: "history_change",
+      capture_pageleave: true,
+      cross_subdomain_cookie: true,
+      cookieWinsOnConflict: true,
+      before_send: prefixPathWithHost,
+    });
+    enabled = true;
+  } catch {
+    enabled = false;
+  }
 }
 
-export function identifyUser(email: string): void {
+export async function identifyUser(email: string, session?: AuthSession): Promise<void> {
   if (!enabled) return;
-  void hashEmail(email).then((id) => posthog.identify(id));
+  const version = ++identityVersion;
+  try {
+    const id = await hashEmail(email);
+    if (version !== identityVersion) return;
+    if (!session) {
+      posthog.identify(id);
+      return;
+    }
+    const properties = {
+      account_type: session.isGuest ? "guest" : "owner",
+      access_level: session.guestAccessLevel ?? "edit",
+    };
+    posthog.identify(id, properties);
+    posthog.register(properties);
+    const authentication = session.authentication;
+    if (!authentication) return;
+    const receipt = `${id}:${authentication.id}`;
+    if (authenticationReceipt === receipt) return;
+    try {
+      if (localStorage.getItem(AUTH_RECEIPT_KEY) === receipt) return;
+    } catch {}
+    const timestamp = new Date(authentication.timestamp);
+    if (!posthog.capture("sign_in_completed", properties, { uuid: authentication.id, timestamp })) return;
+    if (authentication.isNewUser && authentication.signupId) {
+      if (!posthog.capture("user_signed_up", properties, { uuid: authentication.signupId, timestamp })) return;
+    }
+    authenticationReceipt = receipt;
+    try {
+      localStorage.setItem(AUTH_RECEIPT_KEY, receipt);
+    } catch {}
+  } catch {}
 }
 
 export function resetUser(): void {
+  identityVersion++;
   if (!enabled) return;
-  posthog.reset();
+  try {
+    posthog.reset();
+  } catch {}
 }
 
 export function trackEvent(name: string, props?: Record<string, unknown>): void {
   if (!enabled) return;
-  posthog.capture(name, props);
+  try {
+    posthog.capture(name, props);
+  } catch {}
 }

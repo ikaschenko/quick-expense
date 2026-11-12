@@ -191,6 +191,7 @@ export interface AuthSession {
   configStatus: 'ok' | 'shared_config_invalid';
   /** Server-derived allow-list result; never trusted from client input. */
   isAppAdmin?: boolean;
+  authentication?: { id: string; isNewUser: boolean; signupId: string | null; timestamp: number } | null;
 }
 
 export interface AuthSessionMeta {

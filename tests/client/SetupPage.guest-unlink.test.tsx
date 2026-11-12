@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { SetupPage } from "../../app-web/pages/SetupPage";
+import { trackEvent } from "../../app-web/services/analytics";
 
 const { mockRefreshSession, mockNavigate, mockResetGuestConfig } = vi.hoisted(() => ({
   mockRefreshSession: vi.fn(),
@@ -106,6 +107,7 @@ beforeEach(() => {
   mockResetGuestConfig.mockReset();
   mockRefreshSession.mockReset();
   mockNavigate.mockReset();
+  vi.mocked(trackEvent).mockClear();
   defaultsFixture.accessLevel = "edit";
   defaultsFixture.save.mockClear();
 });
@@ -114,6 +116,7 @@ describe("SetupPage — guest unlink", () => {
   it("shows Setup as the configured page title", () => {
     const { container } = renderSetupPage();
     expect(container.querySelector(".topbar-title")?.textContent).toBe("Setup");
+    expect(trackEvent).not.toHaveBeenCalled();
   });
 
   it("shows Edit guests a management hint for hidden defaults without mutation actions", async () => {

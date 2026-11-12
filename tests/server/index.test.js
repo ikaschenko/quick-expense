@@ -72,6 +72,10 @@ const mocks = vi.hoisted(() => ({
     deleteColumnFromSheet: vi.fn(),
     insertCustomColumnInSheet: vi.fn(),
   },
+  google: {
+    exchangeAuthorizationCode: vi.fn(),
+    fetchGoogleUserInfo: vi.fn(),
+  },
 }));
 
 vi.mock("express-session", () => ({
@@ -86,6 +90,10 @@ vi.mock("../../app-server/db.js", () => ({ default: mocks.pool }));
 vi.mock("../../app-server/store.js", () => mocks.store);
 vi.mock("../../app-server/sharing.js", () => mocks.sharing);
 vi.mock("../../app-server/email.js", () => mocks.email);
+vi.mock("../../app-server/google-client.js", async (importOriginal) => ({
+  ...(await importOriginal()),
+  ...mocks.google,
+}));
 vi.mock("../../app-server/google-sheets.js", async (importOriginal) => ({
   ...(await importOriginal()),
   ...mocks.sheets,
@@ -133,6 +141,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   for (const key of Object.keys(mocks.session)) delete mocks.session[key];
   mocks.session.destroy = vi.fn((cb) => cb());
+  mocks.session.regenerate = vi.fn((cb) => cb());
   mocks.store.getUserRecord.mockImplementation(async (email) => USERS[email] ?? null);
   mocks.sharing.getShareForGuest.mockResolvedValue(null);
   mocks.store.reserveConnectionChange.mockResolvedValue(1);
@@ -361,6 +370,55 @@ describe("requireAuthenticatedUser", () => {
   });
 });
 
+describe("GET /api/auth/callback", () => {
+  beforeEach(() => {
+    mocks.session.oauthState = "valid-state";
+    mocks.session.codeVerifier = "verifier";
+    mocks.google.exchangeAuthorizationCode.mockResolvedValue({ access_token: "token", expires_in: 3600 });
+    mocks.google.fetchGoogleUserInfo.mockResolvedValue({ email: OWNER.email });
+  });
+
+  it.each([true, false])("carries the database new-account result %s through the regenerated session", async (isNewUser) => {
+    mocks.store.updateUserRecord.mockResolvedValue({ ...OWNER, isNewUser });
+
+    const response = await fetch(`${baseUrl}/api/auth/callback?code=code&state=valid-state`, { redirect: "manual" });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("http://localhost:5173/home");
+    expect(mocks.session.authentication).toEqual({
+      id: expect.any(String), isNewUser,
+      signupId: isNewUser ? expect.any(String) : null,
+      timestamp: expect.any(Number),
+    });
+    expect(mocks.session.authentication.signupId).not.toBe(mocks.session.authentication.id);
+    expect(mocks.session.authentication.id).toMatch(/^[a-f0-9-]{36}$/);
+    const first = await request("GET", "/api/auth/session");
+    const second = await request("GET", "/api/auth/session");
+    expect(first.body.session.authentication).toEqual(mocks.session.authentication);
+    expect(second.body.session.authentication).toEqual(first.body.session.authentication);
+  });
+
+  it.each(["error=access_denied", "code=code&state=wrong-state"])("does not mark rejected authentication: %s", async (query) => {
+    await fetch(`${baseUrl}/api/auth/callback?${query}`, { redirect: "manual" });
+
+    expect(mocks.session.authentication).toBeUndefined();
+    expect(mocks.store.updateUserRecord).not.toHaveBeenCalled();
+  });
+
+  it("does not mark a failed token exchange", async () => {
+    mocks.google.exchangeAuthorizationCode.mockRejectedValue(new Error("exchange failed"));
+    await fetch(`${baseUrl}/api/auth/callback?code=code&state=valid-state`, { redirect: "manual" });
+    expect(mocks.session.authentication).toBeUndefined();
+  });
+
+  it("does not mark a failed session regeneration", async () => {
+    mocks.store.updateUserRecord.mockResolvedValue({ ...OWNER, isNewUser: true });
+    mocks.session.regenerate.mockImplementation((callback) => callback(new Error("session failed")));
+    await fetch(`${baseUrl}/api/auth/callback?code=code&state=valid-state`, { redirect: "manual" });
+    expect(mocks.session.authentication).toBeUndefined();
+  });
+});
+
 describe("GET /api/auth/session", () => {
   it("should report unauthenticated when there is no session user", async () => {
     const res = await request("GET", "/api/auth/session");
@@ -384,6 +442,7 @@ describe("GET /api/auth/session", () => {
 
     expect(res.body.authenticated).toBe(true);
     expect(res.body.session).toMatchObject({ email: OWNER.email, isGuest: false, guestAccessLevel: null, configStatus: "ok" });
+    expect(res.body.session.authentication).toBeNull();
   });
 
   it("should describe a guest session with the owner's config status", async () => {

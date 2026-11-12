@@ -570,6 +570,7 @@
                 capture_pageview: true,
                 capture_pageleave: true,
                 cross_subdomain_cookie: true,
+                cookieWinsOnConflict: true,
                 autocapture: { dom_event_allowlist: ['click'], element_allowlist: ['a', 'button'] },
                 // Keeps landing paths apart from app paths in PostHog Paths (same project, same pathnames).
                 before_send: function (event) {

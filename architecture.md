@@ -592,13 +592,80 @@ Frontend services in `app-web/services/` are thin wrappers around `fetch`:
 
 - **Provider:** PostHog Cloud (US, free tier), one project shared by the app and the landing page.
 - **Key delivery:** the `phc_` project key is the Fly.io secret `VITE_POSTHOG_KEY` on both Fly apps, read at runtime — never committed and not baked into the Vite build. Express injects `<meta name="posthog-key">` into `index.html` (`injectPosthogKey()` in `app-server/utils.js`); the landing page's nginx replaces the `__POSTHOG_KEY__` placeholder via `sub_filter`. In local dev, `VITE_POSTHOG_KEY` in `.env` is used as a fallback (leave blank to keep dev traffic out). Missing or non-`phc_` keys disable analytics; all wrapper functions become no-ops.
-- **App config:** `autocapture: false`, `capture_pageview: "history_change"` (SPA route changes; only fires when the pathname changes), `capture_pageleave: true`, `cross_subdomain_cookie: true`.
+- **App config:** `autocapture: false`, `capture_pageview: "history_change"` (SPA route changes; only fires when the pathname changes), `capture_pageleave: true`, `cross_subdomain_cookie: true`, `cookieWinsOnConflict: true`.
 - **Path prefixing:** a `before_send` hook (app: `prefixPathWithHost()` in `analytics.ts`; landing: inline in `landing/index.html`) rewrites `$pathname` to `<$host><path>` on `$pageview`/`$pageleave`, so PostHog Paths shows `q-expense.com/` vs `app.q-expense.com/home`. `$host` and `$current_url` are unchanged; events before this change keep bare paths. Insights filtering on a bare path must use the prefixed form.
-- **Identity:** `identify()` uses the SHA-256 hex of the lowercased, trimmed email — the raw email is never sent. `reset()` on sign-out.
-- **Custom events:** `sign_in`, `sign_out`, `setup_saved`, `setup_created`, `currency_added`, `column_added`, `expense_added`, `expense_added_close`, `expense_edited`, `search_performed`.
-- **Landing:** loads `array.js` from `us-assets.i.posthog.com`; pageview + pageleave + click autocapture on links/buttons. CTAs carry `data-ph-capture-attribute-cta` (`header`/`hero`/`bottom`). `cross_subdomain_cookie` shares the anonymous ID between `q-expense.com` and `app.q-expense.com`, enabling landing → sign-in funnels.
+- **Identity:** `identify()` uses the SHA-256 hex of the lowercased, trimmed email — the raw email is never sent. Identification completes before `AuthContext` publishes a signed-in session. `reset()` on sign-out invalidates pending identification. Analytics initialization/capture/storage failures do not fail authentication or expense/setup operations.
+- **Custom events:** `sign_in`, `sign_in_completed`, `user_signed_up`, `sign_out`, `setup_path_selected`, `setup_completed`, `setup_failed`, `setup_saved`, `setup_created`, `currency_added`, `column_added`, `expense_added`, `expense_added_close`, `expense_edited`, `search_performed`. Acquisition/onboarding semantics and manual reporting setup are specified in §8.6.
+- **Landing:** loads `array.js` from `us-assets.i.posthog.com`; pageview + pageleave + click autocapture on links/buttons. CTAs carry `data-ph-capture-attribute-cta` (`header`/`hero`/`bottom`). `cross_subdomain_cookie: true` shares the anonymous ID between `q-expense.com` and `app.q-expense.com`; `cookieWinsOnConflict: true` prefers shared cookie identity over stale per-origin local storage on both sites.
 - **CSP:** `scriptSrc` allows `https://us-assets.i.posthog.com`; `connectSrc` allows `https://us.i.posthog.com` and `https://us-assets.i.posthog.com`.
 - **SDK updates:** `.github/dependabot.yml` opens a monthly grouped PR for `posthog-js`/`@posthog/*`.
+
+### 8.6 User Acquisition, Onboarding & Retention Tracking
+
+Application implementation scope (2026-11-12; implemented in code, production verification pending deployment):
+
+1. Preserve external `utm_source` tags and the shared landing/app PostHog cookie; do not tag internal landing-to-app links or add manual UTM forwarding without evidence of a continuity failure.
+2. Detect new accounts atomically during the PostgreSQL user upsert. Carry a stable authentication event ID and new-account flag through the authenticated session response; identify before emitting `sign_in_completed` and `user_signed_up`, with retry-safe event IDs. Existing accounts must not become signups on deployment.
+3. Capture explicit `setup_path_selected` choices, successful `setup_completed` results, and safely classified `setup_failed` results with `method = new_sheet | existing_sheet`. Preserve legacy events and exclude automatic config restoration from these events.
+4. Reuse successful `expense_added` events for activation and retention. Expose owner/guest context without sending raw emails, spreadsheet identifiers, or expense contents.
+5. Test authentication failure, concurrency, refresh/reload deduplication, identity ordering, setup branches, guests, disabled analytics, and analytics failures; run the test suite and production build.
+6. Document actual application/config behavior and the production verification procedure here. Dashboard creation and internal-user report exclusions are manual PostHog actions after deployment, not part of this implementation.
+
+#### 8.6.1 External URLs & First-Touch Attribution
+
+Published external links lead to the landing page with a consistent lowercase `utm_source`, for example `https://q-expense.com/?utm_source=producthunt`. Supported naming examples are `github`, `producthunt`, `tinylaunch`, and `linkedin`; use the values actually published when configuring reports. `utm_medium`, `utm_campaign`, and `utm_content` are optional refinements, not required for source tracking. Landing-to-app CTAs remain untagged: landing is a journey step, not an acquisition source.
+
+Both sites must receive the same `VITE_POSTHOG_KEY` in the same PostHog project (delivery described in §8.5). No new secret, dependency, database migration, or manual UTM forwarding is required. Deploy both the main app and landing because both cookie configurations changed; their existing Fly workflows deploy them separately.
+
+PostHog captures UTMs/referrers on entry and persists initial attribution. Shared cookies carry anonymous identity/initial attribution from `q-expense.com` to `app.q-expense.com`; app identification joins the anonymous journey to the hashed account identity. Use person property `$initial_utm_source` for original discovery among identified users, not the current referrer (which may be the landing page or Google). An untagged first visit may have no initial UTM; inspect `$initial_referring_domain` as a fallback without overwriting discovery with a later campaign.
+
+Web Analytics channel customization only groups sources into channel labels, generally using session entry data. It does not create funnel events, replace first-touch account attribution, or measure retention. For anonymous landing drop-offs, use event-level source breakdowns and keep missing values visible; initial person-property breakdowns need not cover visitors who never identify. Funnel "First touchpoint" on event `utm_source` means first within that funnel, not necessarily lifetime discovery.
+
+#### 8.6.2 Application Event Contract
+
+| Event | Trigger | Properties / interpretation |
+|---|---|---|
+| `$pageview` | Landing load or app navigation | Use unmodified `$host` for per-step host filters; `$pathname` is host-prefixed (§8.5). |
+| `sign_in` | User starts Google authentication | Existing login-click event; never treat it as successful acquisition. |
+| `sign_in_completed` | Successful OAuth callback followed by authenticated app initialization | Existing and new accounts; `account_type = owner | guest`, `access_level = edit | view`. |
+| `user_signed_up` | Same initialization, only when that callback inserted the account | Acquisition milestone; existing accounts and pre-deployment sessions do not emit it. |
+| `setup_path_selected` | Explicit chooser click in `SetupPage` | `method = new_sheet | existing_sheet`; changing choice records another selection. Automatic restoration, back navigation, and config repair navigation are not chooser selections. |
+| `setup_completed` | Server-confirmed create/connect result in `useSpreadsheetSetup` | Same `method`. Successful mapping retries or later reconnections may emit again; use funnels/unique users for onboarding, not raw event totals. Legacy `setup_created`/`setup_saved` are preserved. |
+| `setup_failed` | Failed create, picker, or connection attempt | Same `method`, `stage = create | picker | connect`, and `error_kind` from `AppError.kind`, or `unexpected`. Picker cancellation is not a failure. No raw error messages are captured. |
+| `expense_added` | Successful app expense submission | Existing event retained for first tracked expense and later retention; not emitted for editing. Do not combine with `expense_added_close`, which is an additional event for some saves. |
+
+On each authenticated session load, `identifyUser(email, session)` identifies with the existing normalized-email hash, sets `account_type` and `access_level` person properties, and registers the same values for subsequent app events. These describe the current session and can change over time. Filter `account_type = owner` on the **signup step** of the owner-onboarding funnel to scope signup-time role; do not globally require setup from guests. Read-only guests are not expected to submit expenses. No new custom payload includes raw emails, owner emails, spreadsheet identifiers, amounts, comments, tokens, or arbitrary error text. SDK-standard metadata such as page URLs remains enabled as before.
+
+#### 8.6.3 Authentication Identity & Retry Handling
+
+`updateUserRecord()` returns `isNewUser` from PostgreSQL's `INSERT ... ON CONFLICT ... RETURNING (xmax = 0) AS inserted`, not from a racy pre-insert lookup. Only the successful account insertion counts as new. Existing first-sign-in timestamps remain operational history; they are not replayed as analytics signups.
+
+After successful session regeneration, the OAuth callback stores `authentication = { id, isNewUser, signupId, timestamp }` in the server session. IDs are random event UUIDs, not the session cookie or authentication credentials; `signupId` is null for existing accounts. `GET /api/auth/session` returns this metadata (null for legacy sessions), unchanged across refreshes. `authApi` passes it through the optional `AuthSession.authentication` contract. Failed/cancelled OAuth or session regeneration does not create completion metadata for that attempt.
+
+The analytics wrapper waits for hashing/identification, captures successful-login and optional signup events with the SDK's `uuid` and stable `timestamp` capture options, then retains a receipt in memory and `localStorage` key `qe_analytics_auth`. The receipt contains only the hashed identity and login event ID. It suppresses repeated checks and reloads after SDK acceptance, not after confirmed delivery. A rejected/disabled capture is retried on a subsequent session refresh; denied storage falls back to memory. Simultaneous tabs or cleared storage may still resubmit the same UUID/timestamp; ingestion deduplication is best-effort, not an exactly-once guarantee. Network blockers/consent/quota limits can still lose events, and the application never waits for a PostHog network acknowledgment.
+
+Logout invalidates in-flight hashing and pending session refreshes. Startup replay in React StrictMode discards superseded session responses. No client-side first-visit flag decides whether an account is new. An account created but never observed by the browser after successful login may have no signup event; if a session cannot be established after insertion, a later login treats the account as existing. This is product analytics, not an authoritative account ledger.
+
+#### 8.6.4 Manual PostHog Configuration After Deployment
+
+These are recommended future settings, **not automatically provisioned or verified by application deployment**:
+
+1. Verify new events/properties under Activity after the production smoke test; missing historical events cannot be reconstructed. Record the actual deployment/measurement start date rather than using the implementation date above as the production launch date.
+2. Locate the maintainer's identified person via known recent activity (raw email lookup will not work), create an `Internal users` cohort containing only that person and explicit test accounts, and exclude it from each saved insight. Family users remain included. This is report filtering, not collection opt-out; unrelated anonymous/incognito visits cannot be excluded until linked to a known identity. No `ADMIN_EMAIL`-based tracking exclusion is implemented.
+3. Create a blank `Acquisition & Activation` dashboard. Save a sequential unique-user funnel: landing `$pageview` (`$host = q-expense.com`) -> app `$pageview` (`$host = app.q-expense.com`) -> `sign_in` -> `user_signed_up`. Start with a 7-day conversion window and a 30-day reporting range; host filters belong on their individual steps, not globally.
+4. Save `user_signed_up` -> `expense_added` for all signup roles. Save owner onboarding separately: owner signup -> `setup_path_selected` -> `setup_completed` -> `expense_added`. Compare the two methods with separate selection -> completion -> expense funnels, filtering both setup steps by method. Users who switch paths may belong to both branch reports.
+5. Break down identified signup/activation reports by person `$initial_utm_source`. Keep an unbroken-down acquisition funnel as a totals check and an event-UTM breakdown for anonymous entry sources. Retain unattributed values instead of dropping them.
+6. Create weekly Retention: start `user_signed_up`, return `expense_added`, unique users, first-ever start occurrence, returning criterion `On`. Duplicate with first-ever `expense_added` as start for activated-user retention. Review the first and second subsequent weeks, ignoring incomplete periods. First tracked expense is not necessarily the user's first historical spreadsheet expense.
+
+The free analytics allowance is sufficient to enable these standard insights within usage limits; monitor the project's Billing page. Retention and acquisition charts need different time ranges, so initially leave dashboard date overrides unset. Reporting date boundaries/conversion windows and incomplete cohorts can make recent conversions appear missing. Channel customization is optional and separate from these reports.
+
+#### 8.6.5 Verification & Limits
+
+Automated coverage lives in `tests/server/store.test.js`, `tests/server/index.test.js`, `tests/client/analytics.test.ts`, `tests/client/AuthContext.test.tsx`, `tests/client/useSpreadsheetSetup.test.tsx`, and the existing Setup page tests. Analytics tests execute the landing initialization snippet with a mocked SDK to verify matching cookie settings and untagged internal CTAs. Required gates: `npm test` and `npm run build`.
+
+After deploying **both** sites, use a fresh browser profile with tracking allowed and a genuinely new test account. Open a tagged landing URL, follow an untagged app CTA, finish Google authentication, select/setup a spreadsheet, and save an expense. Confirm one identified timeline links the landing and app, retains the original source, and contains one signup with the expected method events. Reload/refresh without repeating login: no extra auth completion/signup should be captured. Log in again: login completion only. Test both setup methods, cancellation, a returning account, and a shared-setup guest; then exclude test accounts from reports.
+
+Ad blockers, denied consent/storage, very fast navigation before the asynchronous landing SDK loads, different devices/browsers before identification, and cleared cookies can break anonymous continuity. First-touch attribution cannot be guaranteed or reconstructed for those gaps. Local tests verify application behavior, not production cookie scope, actual Fly secrets, OAuth redirects, ingestion, or dashboard configuration. No new consent policy or collection opt-out mechanism is introduced; keep collection consistent with the site's privacy/consent requirements.
 
 ### 8.4 Key Front-End Conventions
 
