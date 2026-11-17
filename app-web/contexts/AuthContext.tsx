@@ -9,6 +9,7 @@ import {
   type JSX,
 } from "react";
 import { authApi } from "../services/authApi";
+import { onboardingApi } from "../services/onboardingApi";
 import { identifyUser, resetUser, trackEvent } from "../services/analytics";
 import { metricsCache } from "../services/metricsCache";
 import { AuthSession } from "../types/expense";
@@ -23,6 +24,8 @@ interface AuthContextValue {
   signOut: () => void;
   refreshSession: () => Promise<void>;
   touchSession: () => void;
+  /** Optimistically flags the Setup tour as seen and persists it; failures are ignored. */
+  markOnboardingTourSeen: () => void;
   clearError: () => void;
 }
 
@@ -88,6 +91,11 @@ export function AuthProvider({ children }: PropsWithChildren): JSX.Element {
     setSession(updatedSession);
   };
 
+  const markOnboardingTourSeen = (): void => {
+    setSession((current) => (current ? { ...current, onboardingTourSeen: true } : current));
+    void onboardingApi.markTourSeen().catch(() => undefined);
+  };
+
   const value = useMemo<AuthContextValue>(
     () => ({
       status,
@@ -97,6 +105,7 @@ export function AuthProvider({ children }: PropsWithChildren): JSX.Element {
       signOut,
       refreshSession,
       touchSession,
+      markOnboardingTourSeen,
       clearError: () => setError(null),
     }),
     [error, session, status],

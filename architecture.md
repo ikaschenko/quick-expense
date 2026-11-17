@@ -123,7 +123,9 @@ quick-expense/
 │   │   ├── Setup{ReportList,StructureGuide}.tsx, HeaderMismatchTable.tsx ← Setup validation feedback
 │   │   ├── SheetStructureCard.tsx / SheetStructureRow.tsx ← sheet column management UI
 │   │   ├── ColumnMappingSection.tsx, SharingSection.tsx ← Setup sub-sections (configured path)
-│   │   └── ConnectedSheetCard.tsx, GuestUnlinkBanner.tsx, DisplayPreferencesCard.tsx ← Setup cards
+│   │   ├── ConnectedSheetCard.tsx, GuestUnlinkBanner.tsx, DisplayPreferencesCard.tsx ← Setup cards
+│   │   ├── EmptyStateCard.tsx ← shared "Welcome" / "No expenses yet" card (Home + empty History)
+│   │   └── PermissionGatedAction.tsx ← link that becomes a disabled button + always-visible reason (view-only guests)
 │   ├── constants/
 │   │   ├── expenses.ts        ← fixed header names, header builder, limits, budget pace thresholds
 │   │   └── feedback.ts        ← Google Forms feedback URL
@@ -136,6 +138,7 @@ quick-expense/
 │   │   ├── useSpreadsheetSetup.ts ← connect/create spreadsheet flow + its banners
 │   │   ├── useSheetStructure.ts ← add/rename/remove/reorder/hide sheet columns
 │   │   ├── useColumnMapping.ts ← column mapping load/edit state
+│   │   ├── useOnboardingTour.ts ← driver.js wrapper for the owner Setup tour (start/skip/complete, analytics, seen flag)
 │   │   └── useSetupSharing.ts  ← owner share list + grant/update/revoke
 │   ├── pages/                 ← route-level page components
 │   │   ├── AddExpensePage.tsx  <- expense form with currency conversion; accepts repeat record via React Router location state
@@ -151,6 +154,7 @@ quick-expense/
 │   │   ├── googleSheets.ts    ← /api/config + /api/expenses calls
 │   │   ├── http.ts            ← fetch wrappers with typed error handling
 │   │   ├── metricsCache.ts    ← localStorage metrics cache for Home dashboard (key: qe_metrics_{email})
+│   │   ├── onboardingApi.ts   ← POST /api/onboarding/tour-seen
 │   │   └── sharingApi.ts      ← /api/sharing/* calls (owner share management + guest reset)
 │   ├── types/
 │   │   └── expense.ts         ← all shared types and AppError class
@@ -162,6 +166,7 @@ quick-expense/
 │       ├── date.ts            ← local date formatting + sheet date-format detection
 │       ├── expenseTable.ts    ← expense card helpers: preview length, display amount, detail detection
 │       ├── monthDetails.ts    ← average-per-day, prior-month range clamping, category breakdown/grouping for MonthDetailsPanel
+│       ├── onboardingTour.ts  ← pure Setup tour steps (copy, targets, endings) + missing-target filtering
 │       ├── search.ts          ← client-side expense filtering
 │       ├── setupColumns.ts    ← sheet column classification + type/config-mode labels
 │       ├── setupStatus.ts     ← resolves Setup status banner state (loading/configured/needs-setup/invalid/load-error)
@@ -194,6 +199,7 @@ Dependency versions are declared in `package.json`, the source of truth for vers
 | Test runner | Vitest 5 + jsdom | `npm test` runs `vitest run` |
 | Charts | echarts | ECharts powers the MTD line/area chart and category pie chart; MTD actual data uses straight daily segments and remaining current-month days use a gray forecast region |
 | Icons | lucide-react | |
+| Onboarding tour | driver.js (MIT, ~5–7 KB gz, zero deps) | Owner-only Setup walkthrough wrapped by `app-web/hooks/useOnboardingTour.ts`; base `driver.css` imported in `main.tsx`, restyled via `.qe-tour-popover` tokens in `index.css` |
 | Back-end runtime | Node.js 22, Express 4 | ES modules (`"type": "module"` in package.json) |
 | Session management | express-session + connect-pg-simple | PostgreSQL-backed sessions |
 | Data persistence | PostgreSQL (Supabase Free) | `users`, `fx_rate_backups`, `sessions` tables — see §7 |
@@ -277,13 +283,13 @@ All API routes are defined in `app-server/index.js`.
 | GET | `/api/health` | No | Health check (`{ ok: true }`) |
 | GET | `/api/auth/login` | No | Initiate Google OAuth (redirect) |
 | GET | `/api/auth/callback` | No | OAuth callback (token exchange → session) |
-| GET | `/api/auth/session` | No | Check current session status |
+| GET | `/api/auth/session` | No | Check current session status. Authenticated responses include `onboardingTourSeen` (boolean, from `users.onboarding_tour_seen_at`). |
 | POST | `/api/auth/logout` | No | Destroy session |
 | GET | `/api/auth/picker-config` | Yes | Get access token + API key for Google Picker |
-| GET | `/api/config` | Yes | Get user's configured spreadsheet |
+| GET | `/api/config` | Yes | Get user's configured spreadsheet. Includes `connectionOrigin` (`created` \| `existing` \| `unknown`) for owners, `null` for guests; `POST /api/config` and `POST /api/config/create-spreadsheet` return the same field. |
 | POST | `/api/config` | Yes | Save/validate spreadsheet URL |
 | DELETE | `/api/config` | Yes | Remove spreadsheet configuration |
-| POST | `/api/config/create-spreadsheet` | Yes | Copy template spreadsheet into user's Drive |
+| POST | `/api/config/create-spreadsheet` | Yes | Copy template spreadsheet into user's Drive. Response `config` carries `configMode`, `predefinedCategories` and mapping-aware validation, detected from the new sheet's Config tab (same as `POST /api/config`). |
 | GET | `/api/config/mapping` | Yes | Get current column mapping, config mode, and detected columns |
 | POST | `/api/config/mapping` | Yes | Save column mapping to Config sheet (requires `confirmed: true`) |
 | GET | `/api/sheet/modifiedtime` | Yes | Fetch the Drive `modifiedTime` timestamp of the configured spreadsheet. Returns `{ modifiedTime: string \| null }` — `null` when the file is not accessible via `drive.file` scope (e.g. shared-setup guests). Used by `HomePage` to validate the `localStorage` metrics cache. |
@@ -303,6 +309,7 @@ All API routes are defined in `app-server/index.js`.
 | PATCH | `/api/sharing/:guestEmail` | Yes (owner) | Update access level for a shared user |
 | DELETE | `/api/sharing/:guestEmail` | Yes (owner) | Remove a user from the share list |
 | POST | `/api/sharing/guest/reset` | Yes (guest) | Guest-initiated reset: detach from shared setup and clear to re-run Setup |
+| POST | `/api/onboarding/tour-seen` | Yes (owner) | Mark the Setup onboarding tour as seen (`users.onboarding_tour_seen_at`, first timestamp kept). Returns `204`; idempotent. |
 | GET | `/api/admin/metrics` | Yes (app admin) | Return a consistent usage-metrics snapshot (no-store) |
 | GET | `/api/activity/envelope` | Yes (signed-in identity) | Issue a short-lived signed envelope for usage activity tracking; does not require spreadsheet setup |
 | POST | `/api/activity` | Yes (signed-in identity) | Record deduplicated daily activity and session starts; does not require spreadsheet setup |
@@ -340,6 +347,7 @@ Stores authenticated user records: OAuth tokens, spreadsheet configuration, and 
 | `connection_validated_at` | TIMESTAMPTZ | |
 | `connection_origin` | TEXT | Nullable; CHECK IN (`created`, `existing`, `unknown`) |
 | `connection_revision` | BIGINT | NOT NULL, DEFAULT 0 |
+| `onboarding_tour_seen_at` | TIMESTAMPTZ | Nullable; set once when the owner finishes or skips the auto-started Setup tour (migration 015, no backfill) |
 | `created_at` | TIMESTAMPTZ | DEFAULT now() |
 | `updated_at` | TIMESTAMPTZ | DEFAULT now() |
 
@@ -526,6 +534,7 @@ Current migrations:
 | `012_numeric_user_ids.sql` | Re-key users and ownership foreign keys to numeric IDs |
 | `013_setup_field_defaults.sql` | Add per-owner setup-field defaults, seeded from existing users and synchronized when the spreadsheet connection changes |
 | `014_admin_usage_tracking.sql` | Add validated-connection provenance, usage/activity/session tracking, and tracking-coverage records |
+| `015_onboarding_tour.sql` | Add nullable `users.onboarding_tour_seen_at` (no backfill) for the persisted Setup tour flag |
 
 ---
 
@@ -542,7 +551,7 @@ The SPA uses three nested context providers (wrapped in `App.tsx`):
       <Routes>
 ```
 
-- **AuthContext:** Checks `/api/auth/session` on mount. Exposes `status` (`initializing` | `signed_out` | `signed_in`), `session` (email + timestamps), `signIn()`, `signOut()`, `refreshSession()`.
+- **AuthContext:** Checks `/api/auth/session` on mount. Exposes `status` (`initializing` | `signed_out` | `signed_in`), `session` (email + timestamps + `onboardingTourSeen`), `signIn()`, `signOut()`, `refreshSession()`, and `markOnboardingTourSeen()` (optimistically sets `session.onboardingTourSeen` and fire-and-forget calls `POST /api/onboarding/tour-seen`; failures are ignored).
 - **ConfigContext:** Fetches `/api/config` when a session is present. Exposes the `SpreadsheetConfig` object and methods to save/clear/refresh. The config includes a `configMode` field (`"default"` | `"config-driven"` | `"config-invalid"`) indicating whether a column mapping is active. When `configMode` is `"config-invalid"`, a `configModeReason` string explains the problem. `hiddenColumns: string[]` lists canonical field names hidden from the Add Expense form; `toggleColumnVisibility(field, hidden)` updates this list optimistically with server sync and automatic revert on failure.
 - **DatasetContext:** Manages the loaded expense dataset. Key behaviors:
   - `loadDataset()` — fetches from `/api/expenses` unless a valid cached snapshot exists. Called on Home page mount (when status is `idle`) as well as by the History page. Concurrent callers join the in-flight Promise instead of starting a duplicate request. A generation counter ensures stale Phase-2 results are discarded if a reload was triggered in the meantime.
@@ -586,6 +595,7 @@ Frontend services in `app-web/services/` are thin wrappers around `fetch`:
 - **`currency.ts`** — manual FX rate parsing and USD conversion logic.
 - **`metricsCache.ts`** — `localStorage` cache for Home dashboard metrics (`qe_metrics_{email}`). Stores pre-computed `TodayStats`, `PeriodStats` (MTD/YTD/Rolling12M), chart daily amounts, `sheetLastModifiedTime`, and a `ytdForecast` (now including a `deviation` field comparing the forecast to last year's actual full-year total, same shape as the other `PeriodStats.deviation` fields). Entries are **not** expired at midnight — `load()` returns cross-day entries so `HomePage` can render them immediately while refreshing; only a `spreadsheetId` mismatch or a failed sanitize evicts. Cleared on sign-out and config clear; entries also carry a `schemaVersion` (currently `9`) and are discarded as a cache miss on mismatch, safely invalidating stale shapes without a migration.
 - **`sharingApi.ts`** — `/api/sharing/*` calls: list/add/update/remove shared users (owner); guest reset.
+- **`onboardingApi.ts`** — `markTourSeen()` → `POST /api/onboarding/tour-seen` (called fire-and-forget by `AuthContext.markOnboardingTourSeen()`).
 - **`analytics.ts`** — PostHog wrapper: `initAnalytics()`, `identifyUser()`, `resetUser()`, `trackEvent()`. See §8.5.
 
 ### 8.5 Product Analytics (PostHog)
@@ -633,6 +643,10 @@ Web Analytics channel customization only groups sources into channel labels, gen
 | `setup_completed` | Server-confirmed create/connect result in `useSpreadsheetSetup` | Same `method`. Successful mapping retries or later reconnections may emit again; use funnels/unique users for onboarding, not raw event totals. Legacy `setup_created`/`setup_saved` are preserved. |
 | `setup_failed` | Failed create, picker, or connection attempt | Same `method`, `stage = create | picker | connect`, and `error_kind` from `AppError.kind`, or `unexpected`. Picker cancellation is not a failure. No raw error messages are captured. |
 | `expense_added` | Successful app expense submission | Existing event retained for first tracked expense and later retention; not emitted for editing. Do not combine with `expense_added_close`, which is an additional event for some saves. |
+| `onboarding_tour_started` | Setup tour begins (`useOnboardingTour`) | `trigger = auto | replay`, `path = new_sheet | existing_sheet`, `total_steps` (steps whose target is on screen). |
+| `onboarding_tour_step_viewed` | Each tour step is highlighted | `step_id = currencies | spent-fields-visibility | custom-columns | sharing | add-nav`, 1-based `step_index`, `total_steps`. |
+| `onboarding_tour_skipped` | Tour closed via Skip tour, ×, or Esc | `step_id` and 1-based `step_index` of the step the user left. |
+| `onboarding_tour_completed` | Final step finished (Add my first expense / Done) | `trigger`, `path`. |
 
 On each authenticated session load, `identifyUser(email, session)` identifies with the existing normalized-email hash, sets `account_type` and `access_level` person properties, and registers the same values for subsequent app events. These describe the current session and can change over time. Filter `account_type = owner` on the **signup step** of the owner-onboarding funnel to scope signup-time role; do not globally require setup from guests. Read-only guests are not expected to submit expenses. No new custom payload includes raw emails, owner emails, spreadsheet identifiers, amounts, comments, tokens, or arbitrary error text. SDK-standard metadata such as page URLs remains enabled as before.
 
@@ -656,6 +670,7 @@ These are recommended future settings, **not automatically provisioned or verifi
 4. Save `user_signed_up` -> `expense_added` for all signup roles. Save owner onboarding separately: owner signup -> `setup_path_selected` -> `setup_completed` -> `expense_added`. Compare the two methods with separate selection -> completion -> expense funnels, filtering both setup steps by method. Users who switch paths may belong to both branch reports.
 5. Break down identified signup/activation reports by person `$initial_utm_source`. Keep an unbroken-down acquisition funnel as a totals check and an event-UTM breakdown for anonymous entry sources. Retain unattributed values instead of dropping them.
 6. Create weekly Retention: start `user_signed_up`, return `expense_added`, unique users, first-ever start occurrence, returning criterion `On`. Duplicate with first-ever `expense_added` as start for activated-user retention. Review the first and second subsequent weeks, ignoring incomplete periods. First tracked expense is not necessarily the user's first historical spreadsheet expense.
+7. **Onboarding tour (carry-over action item after the tour ships):** save a sequential unique-user funnel `setup_completed` -> `onboarding_tour_started` -> `onboarding_tour_completed`, broken down by event property `path`. Save a Trends insight of `onboarding_tour_skipped` (total count) broken down by `step_id` to find the step where most users quit. Add both insights to the `Acquisition & Activation` dashboard and apply the `Internal users` exclusion. Optionally filter `trigger = auto` to separate first-run behavior from replays.
 
 The free analytics allowance is sufficient to enable these standard insights within usage limits; monitor the project's Billing page. Retention and acquisition charts need different time ranges, so initially leave dashboard date overrides unset. Reporting date boundaries/conversion windows and incomplete cohorts can make recent conversions appear missing. Channel customization is optional and separate from these reports.
 
@@ -778,7 +793,7 @@ Every Winston log entry receives `requestId` from the request context, plus nume
 3. **Client-side search** — the full dataset is loaded into the browser. Capped at 10 MB JSON payload.
 4. **Edit of existing records** — supported via `PUT /api/expenses/:rowNumber`. Returns `{ record, moveMode }`. When the date change keeps the row in chronological order, an in-place cell update is performed (`moveMode: false`). When the date change would break order, `moveExpenseRow` calls the existing `addExpenseRow` (insert/append decision fully reused), then deletes the original row (`moveMode: true`). The client performs a full dataset reload on `moveMode: true`, identical to the add insert-mode flow. Delete is scoped to the **last row only**, available from Tail view. Protected by a row-count conflict check: the client passes the expected row count; the backend rejects with HTTP 409 if the sheet was updated concurrently.
 5. **Client-side duplicate confirmation** — before saving a new expense, the Add form checks loaded dataset records for matching date, case-insensitive category, and amount (non-USD amounts when provided, otherwise USD; tolerance 0.005). Dates are converted to the detected sheet format before comparison. Possible duplicates require confirmation to save or can be cancelled; edits bypass this check. This is an advisory check against loaded records, not a server-side uniqueness constraint. Confirmed saves use the normal append/insert flow.
-6. **Currency:** Users configure up to 3 non-USD currencies from a dictionary of 26 (stored in `app-server/config/currencies.json` and `user_currencies` DB table). At most one non-USD currency at a time per expense, optionally alongside USD. Manual FX rate entry is supported; Add forms request a dated market rate via `GET /api/fx/rates` (proxied from `fawazahmed0/currency-api`, with a Cloudflare Pages fallback host and up-to-5-day backward date search — free, key-less, daily rates) and pre-fill it for the selected date. For today, the market rate is also displayed as a tappable *"Live rate"* hint, labeled with the resolved date when it falls back to an earlier day's published rate. Silent fallback to manual entry on any upstream failure. Edit forms derive a rate from the existing USD and non-USD amounts when both are available. Archived currency columns remain in the sheet.
+6. **Currency:** Users configure up to 3 non-USD currencies from a dictionary of 26 (stored in `app-server/config/currencies.json` and `user_currencies` DB table). At most one non-USD currency at a time per expense, optionally alongside USD. Manual FX rate entry is supported; Add forms request a dated market rate via `GET /api/fx/rates` (proxied from `fawazahmed0/currency-api`, with a Cloudflare Pages fallback host and up-to-5-day backward date search — free, key-less, daily rates) and pre-fill it for the selected date. For today, the market rate is also offered as a *"Use market rate X.XX"* button, suffixed with the resolved date when it falls back to an earlier day's published rate. Silent fallback to manual entry on any upstream failure. Edit forms derive a rate from the existing USD and non-USD amounts when both are available. A selectable USD pill records USD-only expenses (no rate needed); the default pill follows the last saved expense, including USD. Archived currency columns remain in the sheet.
 7. **No pagination** — search results capped at 100.
 8. **Single sheet named "Expenses"** — no multi-sheet support.
 9. **Concurrency** — relies on Google Sheets API atomic append; no manual row indexing.
@@ -790,7 +805,7 @@ Every Winston log entry receives `requestId` from the request context, plus nume
 15. **Setup status badge** — `Layout.tsx` overlays a green ✓ (`CheckCircle`) or red ⚠ (`AlertCircle`) badge on the Setup gear icon in the global bottom nav. Badge is computed from `ConfigContext.config.configMode`: green = sheet connected and valid; red = no sheet, or `configMode === 'config-invalid'`.
 16. **Two-phase progressive dataset load** — `GET /api/expenses` binary-searches the date column (`findExpenseStartRow`); with ≥20 historical rows it returns only the last `EXPENSE_RECENT_MONTHS` months (default 24) in Phase 1, then the client (`DatasetContext`) fetches the remainder via `GET /api/expenses/history?endRow=N` in the background. `DatasetSnapshot.loadPhase` (`"recent"` | `"full"`) tracks completion.
 
-17. **USD is mandatory when a non-USD amount is provided** — if a non-USD amount is entered with USD empty and no FX rate to derive it, both the Add form and the backend (`validateUsdMandatory()` in `app-server/validation.js`, HTTP 400) reject it.
+17. **USD is mandatory when a non-USD amount is provided** — the Add form derives USD from the exchange rate whenever a non-USD currency is selected (USD cannot be typed directly in that mode), so a valid rate is required for any non-zero non-USD amount (*"Enter an exchange rate to convert to USD."*); edits of legacy rows that already carry a USD value are accepted. The backend (`validateUsdMandatory()` in `app-server/validation.js`, HTTP 400) independently rejects a non-USD amount without a USD amount.
 
 18. **Setup sharing model** — an owner shares their full config (spreadsheet, currencies, column visibility) via `POST /api/sharing`; guests store a DB reference to the owner record (no data duplicated). `requireAuthenticatedUser` resolves the reference on every request. `edit` guests have full read/write; `view` guests are read-only (writes blocked at API + UI). Guests cannot modify Setup. When an owner's config becomes invalid, guests see a blocking `SharedConfigInvalidModal`.
 
@@ -807,3 +822,5 @@ Every Winston log entry receives `requestId` from the request context, plus nume
 24. **"Spent For" mandatory fixed column** — `Spent For` (ForWhom) sits between `Spent By` and `Comment` in the canonical header (server `parseSheetStructure`, client `expense.ts`), required by `validateRequiredFields()` and the Add form. Individually hideable like `Spent By` (both default to the signed-in user's email so hidden-field validation passes). History has matching `Spent By`/`Spent For` substring filters.
 
 25. **Track budget (History burn-up)** — client-only: `BudgetTrackerPanel.tsx` is mounted only while expanded from the Budget button beside the filtered Results total. `buildBudgetTimeline()` (`app-web/utils/budgetTimeline.ts`) computes cumulative USD spend from all filtered matches, not the display limit. Overall pace is spend from the timeline start (From filter, else earliest match) through today divided by inclusive calendar days. Recent pace is spend in the last 7 inclusive calendar days divided by 7 (zero-spend days count; future expenses are excluded), and is included after 7 elapsed days. Forecasts anchor at the later of today and the latest match. At least 3 distinct spend days are required; cap-hit dates are exact in verdict data while chart projection is capped at 730 days. Spans over 90 days switch to weekly points (Monday–Sunday weeks). Verdict copy and normal/warning/alert classification live in pure `app-web/utils/budgetVerdict.ts`; the chart renders one dashed pace or a shaded band between two paces with a compact USD Y-axis. The amber verdict uses `--color-warning-text: #B45309` for readable contrast. Budget and end date are persisted in `localStorage` under `qe_budget_{email}` (one pair per user, independent of filters, kept on sign-out — no expense data is stored).
+
+26. **Owner onboarding tour (driver.js)** — `app-web/hooks/useOnboardingTour.ts` wraps driver.js; step copy, targets, and endings live in pure `app-web/utils/onboardingTour.ts`. Steps target stable `data-tour` attributes (`currencies`, `spent-fields-visibility`, `custom-columns`, `sharing`, `add-nav`); steps whose target is absent are dropped so progress counts reachable steps only. The tour auto-starts once, only for owners, only right after a successful create/connect in the current session (`useSpreadsheetSetup.completedPath`, never persisted), and only while `session.onboardingTourSeen` is false — so pre-existing owners and later Setup visits are not auto-toured. Finishing or skipping an auto tour persists the flag per user in PostgreSQL (`users.onboarding_tour_seen_at` via `POST /api/onboarding/tour-seen`, owner-only, idempotent), so another device does not repeat it. Owners can replay via "Take a quick tour"; the variant comes from `config.connectionOrigin` (`created` → new-sheet copy, otherwise existing-sheet copy), replays always end with "Done", and replays never write the flag. Guests never see the tour.

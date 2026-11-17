@@ -13,11 +13,12 @@ export function SharingSection({ sharing }: SharingSectionProps): JSX.Element {
   const { shares, loadError, actionError, actionBusy, newShareEmail, newShareLevel } = sharing;
 
   return (
-    <div className="card setup-card sharing-section">
+    <div className="card setup-card sharing-section" data-tour="sharing">
       <div className="setup-card-icon">
         <Share2 size={24} aria-hidden />
         <span className="setup-card-title">Share your setup</span>
       </div>
+      <p className="setup-card-description">Let family or friends see or add expenses in your sheet. They won&apos;t need to set anything up.</p>
 
       <p className="sharing-section-note">
         Make sure to also share your Google Spreadsheet directly in Google Sheets with each

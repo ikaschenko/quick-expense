@@ -62,6 +62,7 @@ function rowToUserRecord(row) {
     firstSignedInAt: row.first_signed_in_at,
     connectionValidatedAt: row.connection_validated_at,
     connectionOrigin: row.connection_origin,
+    onboardingTourSeenAt: row.onboarding_tour_seen_at,
   };
 }
 
@@ -172,6 +173,14 @@ export async function disconnectValidatedConnection(userId) {
        connection_validated_at = NULL, connection_origin = NULL,
        connection_revision = connection_revision + 1, updated_at = now()
      WHERE id = $1`,
+    [userId],
+  );
+}
+
+// Idempotent: COALESCE keeps the first timestamp on repeated calls.
+export async function markOnboardingTourSeen(userId) {
+  await pool.query(
+    "UPDATE users SET onboarding_tour_seen_at = COALESCE(onboarding_tour_seen_at, now()) WHERE id = $1",
     [userId],
   );
 }

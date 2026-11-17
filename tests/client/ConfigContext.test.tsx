@@ -77,6 +77,7 @@ function Harness(): JSX.Element {
     signOut: vi.fn(),
     refreshSession: vi.fn(),
     touchSession: vi.fn(),
+    markOnboardingTourSeen: vi.fn(),
     clearError: vi.fn(),
   });
 

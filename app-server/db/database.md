@@ -110,6 +110,7 @@ psql -U postgres -d quickexpense -f app-server/db/011_reset_hidden_comment.sql
 psql -U postgres -d quickexpense -f app-server/db/012_numeric_user_ids.sql
 psql -U postgres -d quickexpense -f app-server/db/013_setup_field_defaults.sql
 psql -U postgres -d quickexpense -f app-server/db/014_admin_usage_tracking.sql
+psql -U postgres -d quickexpense -f app-server/db/015_onboarding_tour.sql
 ```
 
 > Migration 011 removes any previously hidden `Comment` entries — `Comment` is now a protected (non-hideable) field.
@@ -117,3 +118,5 @@ psql -U postgres -d quickexpense -f app-server/db/014_admin_usage_tracking.sql
 > Migration 013 adds owner setup-field defaults and seeds one row for each existing user. Migration 014 adds connection provenance and Admin usage tracking. It backfills `users.first_signed_in_at` from `created_at`, the available historical sign-in evidence; it intentionally does not treat previously saved spreadsheet IDs as validated connections because older flows could save unvalidated candidates.
 >
 > Apply all pending migrations in order, including 013 and 014, **before deploying the server build that starts Admin usage instrumentation**. This ensures the new tracking and provenance schema exists before the instrumented server starts.
+>
+> Migration 015 adds the nullable `users.onboarding_tour_seen_at` column (owner Setup tour flag) with no backfill. Apply it **before deploying** the server build that reads it, because `GET /api/auth/session` and `POST /api/onboarding/tour-seen` depend on the column.

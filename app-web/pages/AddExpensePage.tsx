@@ -31,6 +31,11 @@ function formatColumnLabel(name: string): string {
   return name.replaceAll("_", " ").replace(/([a-z])([A-Z])/g, "$1 $2");
 }
 
+function formatDayMonth(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleString("en-GB", { day: "numeric", month: "short" });
+}
+
 function createInitialDraft(defaultEmail: string, currencies: string[], customColumns: string[]): ExpenseDraft {
   const currencyAmounts: Record<string, string> = {};
   for (const code of currencies) {
@@ -104,20 +109,21 @@ function deriveFxRateFromAmountPair(usdValue: string, nonUsdValue: string): stri
   return (Math.abs(amount) / Math.abs(usd)).toFixed(2);
 }
 
+/** Returns the non-USD currency to preselect, or null when the record is USD-only (USD pill). */
 function getPreferredCurrency(
-  record: { currencyAmounts?: Record<string, string> } | null | undefined,
+  record: { USD?: string; currencyAmounts?: Record<string, string> } | null | undefined,
   currencies: string[],
 ): string | null {
   if (currencies.length === 0) return null;
-  if (!record?.currencyAmounts) return currencies[0];
+  if (!record) return currencies[0];
 
   for (const code of currencies) {
-    if (record.currencyAmounts[code]?.trim()) {
+    if (record.currencyAmounts?.[code]?.trim()) {
       return code;
     }
   }
 
-  return currencies[0];
+  return record.USD?.trim() ? null : currencies[0];
 }
 
 function parseNonUsdValues(
@@ -316,12 +322,12 @@ export function AddExpensePage(): JSX.Element {
   }, [activeCurrencies, config, customColumns, detectedDateFormat, editRecord, isConfigLoading, isEditMode, repeatRecord, visibleCurrencies]);
 
   useEffect(() => {
-    if (hasManuallySelectedCurrency || repeatRecord || !dataset.snapshot) {
+    if (isEditMode || hasManuallySelectedCurrency || repeatRecord || !dataset.snapshot) {
       return;
     }
 
     setActiveNonUsdCurrency(latestSavedCurrency);
-  }, [dataset.snapshot, hasManuallySelectedCurrency, latestSavedCurrency, repeatRecord]);
+  }, [dataset.snapshot, hasManuallySelectedCurrency, isEditMode, latestSavedCurrency, repeatRecord]);
 
   useEffect(() => {
     if (!config) {
@@ -515,15 +521,16 @@ export function AddExpensePage(): JSX.Element {
   const selectNonUsdCurrency = (currency: string): void => {
     if (success) setSuccess(null);
     setHasManuallySelectedCurrency(true);
+    const wasUsd = activeNonUsdCurrency === null;
     setActiveNonUsdCurrency(currency);
 
-    // Clear other non-USD amounts
+    // Clear other non-USD amounts; a USD amount typed in USD mode would otherwise be saved silently.
     setDraft((d) => {
       const nextAmounts = { ...d.currencyAmounts };
       for (const code of activeCurrencies) {
         if (code !== currency) nextAmounts[code] = "";
       }
-      return { ...d, currencyAmounts: nextAmounts };
+      return { ...d, USD: wasUsd ? "" : d.USD, currencyAmounts: nextAmounts };
     });
     setErrors((e) => {
       const next = { ...e };
@@ -539,6 +546,25 @@ export function AddExpensePage(): JSX.Element {
       }
       return next;
     });
+  };
+
+  const selectUsd = (): void => {
+    if (success) setSuccess(null);
+    setHasManuallySelectedCurrency(true);
+    if (activeNonUsdCurrency === null) return;
+    setActiveNonUsdCurrency(null);
+    // USD-only expense: drop non-USD amounts and the derived USD value so the field starts clean.
+    setDraft((d) => ({
+      ...d,
+      USD: "",
+      currencyAmounts: Object.fromEntries(activeCurrencies.map((code) => [code, ""])),
+    }));
+    setErrors((e) => {
+      const next = { ...e };
+      for (const code of activeCurrencies) delete next[code];
+      return next;
+    });
+    setFxErrors({});
   };
 
   const executeSave = async (normalizedDraft: ExpenseDraft): Promise<void> => {
@@ -661,8 +687,8 @@ export function AddExpensePage(): JSX.Element {
           nextFxErrors[currency] = "Provide a valid USD rate.";
         }
 
-        if (amount !== null && amount !== 0 && !draft.USD.trim() && rate === null) {
-          nextFxErrors[currency] = "USD amount is required — enter an exchange rate here or fill the USD field directly.";
+        if (amount !== null && amount !== 0 && rate === null && !(isEditMode && draft.USD.trim())) {
+          nextFxErrors[currency] = "Enter an exchange rate to convert to USD.";
         }
       } catch (fxError) {
         nextFxErrors[currency] = (fxError as Error).message;
@@ -763,6 +789,7 @@ export function AddExpensePage(): JSX.Element {
         {/* Date + Amount — Date sits compact beside the hero Amount input */}
         <div className="add-date-amount-row">
           <div className="add-date-compact-group">
+            <label className="input-label add-field-caption" htmlFor="expense-date-field">Date</label>
             <div className="add-date-picker-row" data-invalid={errors.Date ? "true" : undefined}>
               <Calendar size={16} aria-hidden />
               <DatePicker
@@ -779,7 +806,6 @@ export function AddExpensePage(): JSX.Element {
                 popperPlacement="bottom-start"
                 showPopperArrow={false}
                 required
-                aria-label="Expense date"
               />
             </div>
             {errors.Date ? <div className="field-error">{errors.Date}</div> : null}
@@ -787,6 +813,7 @@ export function AddExpensePage(): JSX.Element {
 
           {activeNonUsdCurrency ? (
             <div className="add-amount-field add-amount-field--inline">
+              <label className="input-label add-field-caption" htmlFor="amount-field">Amount ({activeNonUsdCurrency})</label>
               <input
                 id="amount-field"
                 ref={amountInputRef}
@@ -795,7 +822,6 @@ export function AddExpensePage(): JSX.Element {
                 value={draft.currencyAmounts[activeNonUsdCurrency] ?? ""}
                 onChange={(event) => updateCurrencyAmount(activeNonUsdCurrency, event.target.value)}
                 placeholder="0.00"
-                aria-label={`Amount in ${activeNonUsdCurrency}`}
                 data-invalid={errors[activeNonUsdCurrency] || errors.USD ? "true" : undefined}
               />
               {errors[activeNonUsdCurrency] ? (
@@ -804,6 +830,7 @@ export function AddExpensePage(): JSX.Element {
             </div>
           ) : (
             <div className="add-amount-field add-amount-field--inline">
+              <label className="input-label add-field-caption" htmlFor="amount-field">Amount (USD)</label>
               <input
                 id="amount-field"
                 ref={amountInputRef}
@@ -812,7 +839,6 @@ export function AddExpensePage(): JSX.Element {
                 value={draft.USD}
                 onChange={(event) => updateDraft("USD", event.target.value)}
                 placeholder="0.00"
-                aria-label="Amount in USD"
                 data-invalid={errors.USD ? "true" : undefined}
               />
               {errors.USD ? (
@@ -838,13 +864,16 @@ export function AddExpensePage(): JSX.Element {
                 {currency}
               </button>
             ))}
-            <div
+            <button
               className={`currency-pill${!activeNonUsdCurrency ? " active" : ""}`}
-              style={{ opacity: 0.6 }}
+              onClick={selectUsd}
+              role="tab"
+              type="button"
+              aria-selected={!activeNonUsdCurrency}
               title="US Dollar"
             >
               USD
-            </div>
+            </button>
           </div>
         ) : null}
 
@@ -857,9 +886,13 @@ export function AddExpensePage(): JSX.Element {
           isFetchingLiveRates
         ) ? (
           <div className="add-fx-card">
+            <div className="add-fx-card-header">
+              <span className="add-fx-card-title">Converted to USD</span>
+              <span className="add-fx-card-helper">Totals are kept in USD.</span>
+            </div>
             <div className="add-fx-card-body">
-              <div className="add-fx-card-col">
-                <span className="add-fx-col-label">{activeNonUsdCurrency}/USD</span>
+              <div className="add-fx-rate-row">
+                <span className="add-fx-rate-text" aria-hidden>1 USD =</span>
                 <input
                   className="add-fx-card-rate-input"
                   inputMode="decimal"
@@ -869,43 +902,32 @@ export function AddExpensePage(): JSX.Element {
                   aria-label={`Exchange rate: ${activeNonUsdCurrency} per 1 USD`}
                   data-invalid={fxErrors[activeNonUsdCurrency] ? "true" : undefined}
                 />
+                <span className="add-fx-rate-text" aria-hidden>{activeNonUsdCurrency}</span>
               </div>
-              <div className="add-fx-card-col--live">
-                {draft.Date === getTodayLocalDate() ? (
-                  isFetchingLiveRates ? (
-                    <button type="button" className="add-fx-card-live-btn" disabled>
-                      <span className="add-fx-card-live-btn-tag">Live rate</span>
-                      <span className="add-fx-card-live-btn-val">…</span>
-                    </button>
-                  ) : liveFxRates[activeNonUsdCurrency] !== undefined ? (
-                    <button
-                      type="button"
-                      className="add-fx-card-live-btn"
-                      onClick={() => updateFxRate(activeNonUsdCurrency, liveFxRates[activeNonUsdCurrency]!.toFixed(2))}
-                    >
-                      <span className="add-fx-card-live-btn-tag">
-                        {/* Falls back to the nearest prior published date when today's rate isn't out yet. */}
-                        {liveFxRatesDate && liveFxRatesDate !== normalizedDraftDate
-                          ? `Live rate (${liveFxRatesDate})`
-                          : "Live rate"}
-                      </span>
-                      <span className="add-fx-card-live-btn-val">{liveFxRates[activeNonUsdCurrency]!.toFixed(2)}</span>
-                    </button>
-                  ) : null
-                ) : null}
-              </div>
-              <div className="add-fx-card-col">
-                <span className="add-fx-col-label">USD</span>
-                <div className="add-fx-card-result-value">{draft.USD || "0.00"}</div>
-              </div>
+              <div className="add-fx-card-result-value" aria-live="polite">≈ {draft.USD || "0.00"} USD</div>
             </div>
+            {draft.Date === getTodayLocalDate() ? (
+              isFetchingLiveRates ? (
+                <button type="button" className="add-fx-card-live-btn" disabled>Use market rate …</button>
+              ) : liveFxRates[activeNonUsdCurrency] !== undefined ? (
+                <button
+                  type="button"
+                  className="add-fx-card-live-btn"
+                  onClick={() => updateFxRate(activeNonUsdCurrency, liveFxRates[activeNonUsdCurrency]!.toFixed(2))}
+                >
+                  Use market rate {liveFxRates[activeNonUsdCurrency]!.toFixed(2)}
+                  {/* Falls back to the nearest prior published date when today's rate isn't out yet. */}
+                  {liveFxRatesDate && liveFxRatesDate !== normalizedDraftDate ? ` (${formatDayMonth(liveFxRatesDate)})` : null}
+                </button>
+              ) : null
+            ) : null}
             {fxErrors[activeNonUsdCurrency] ? (
-              <div className="field-error" style={{ padding: "0 var(--space-4) var(--space-3)" }}>
+              <div className="field-error add-fx-card-error">
                 {fxErrors[activeNonUsdCurrency]}
               </div>
             ) : null}
             {errors.USD ? (
-              <div className="field-error" style={{ padding: "0 var(--space-4) var(--space-3)" }}>
+              <div className="field-error add-fx-card-error">
                 {errors.USD}
               </div>
             ) : null}

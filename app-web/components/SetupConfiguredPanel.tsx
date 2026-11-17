@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { RotateCcw } from "lucide-react";
+import { Compass, RotateCcw } from "lucide-react";
 import { StatusBanner } from "./StatusBanner";
 import { SetupReportList } from "./SetupReportList";
 import { GuestUnlinkBanner } from "./GuestUnlinkBanner";
@@ -7,6 +7,7 @@ import { ConnectedSheetCard } from "./ConnectedSheetCard";
 import { SheetStructureCard } from "./SheetStructureCard";
 import { ColumnMappingSection } from "./ColumnMappingSection";
 import { SharingSection } from "./SharingSection";
+import { DisplayPreferencesCard } from "./DisplayPreferencesCard";
 import { useConfig } from "../contexts/ConfigContext";
 import { useSheetStructure } from "../hooks/useSheetStructure";
 import { useColumnMapping } from "../hooks/useColumnMapping";
@@ -20,9 +21,11 @@ interface SetupConfiguredPanelProps {
   setupReport: SetupReport | null;
   onChangeSheet: () => void;
   onFixConfig: () => void;
+  /** Owner-only: replays the onboarding tour. */
+  onStartTour?: () => void;
 }
 
-export function SetupConfiguredPanel({ success, setupReport, onChangeSheet, onFixConfig }: SetupConfiguredPanelProps): JSX.Element {
+export function SetupConfiguredPanel({ success, setupReport, onChangeSheet, onFixConfig, onStartTour }: SetupConfiguredPanelProps): JSX.Element {
   const { config, loadDefaults, defaultsError, defaultsConflict } = useConfig();
   const isGuest = config?.isGuest ?? false;
   const structure = useSheetStructure();
@@ -48,11 +51,20 @@ export function SetupConfiguredPanel({ success, setupReport, onChangeSheet, onFi
         <ConnectedSheetCard config={config} onChangeSheet={onChangeSheet} onFixConfig={onFixConfig} />
       ) : null}
 
+      {onStartTour && !isGuest ? (
+        <button type="button" className="btn btn-ghost btn-sm qe-tour-replay" onClick={onStartTour}>
+          <Compass size={16} aria-hidden />
+          Take a quick tour
+        </button>
+      ) : null}
+
       <SheetStructureCard structure={structure} isGuest={isGuest}>
         <ColumnMappingSection mapping={mapping} />
       </SheetStructureCard>
 
       {!isGuest ? <SharingSection sharing={sharing} /> : null}
+
+      <DisplayPreferencesCard />
     </>
   );
 }

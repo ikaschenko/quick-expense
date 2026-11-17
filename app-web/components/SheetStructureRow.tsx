@@ -76,9 +76,10 @@ function DisplayRow({ col, structure }: SheetStructureRowProps): JSX.Element {
   const index = list.indexOf(col.name);
   const onMove = isCurrency ? structure.moveCurrency : structure.moveCustomColumn;
   const isHidden = hiddenColumns.includes(col.name);
+  const tourTarget = isCurrency ? "currencies" : isCustom ? "custom-columns" : undefined;
 
   return (
-    <li className="custom-columns-row">
+    <li className="custom-columns-row" data-tour={tourTarget}>
       <div className="custom-columns-name">
         <span>{col.name} <span className={`custom-columns-type-badge custom-columns-type-badge--${col.type}`}>{typeLabel(col.type)}</span></span>
         {(col.name === "Spent For" || isCustom) && defaults && Object.hasOwn(defaults.values, col.name) ? (
@@ -126,6 +127,7 @@ function DisplayRow({ col, structure }: SheetStructureRowProps): JSX.Element {
               type="button"
               disabled={actionBusy}
               onClick={() => void structure.toggleVisibility(col.name)}
+              data-tour={col.name === "Spent By" || col.name === "Spent For" ? "spent-fields-visibility" : undefined}
               aria-label={isHidden ? `Show ${col.name} on Add and History screens` : `Hide ${col.name} from Add and History screens`}
               title={isHidden ? "Hidden from Add and History screens" : "Visible on Add and History screens"}
             >

@@ -26,6 +26,11 @@ export function SheetStructureCard({ structure, isGuest, children }: SheetStruct
         <TableProperties size={24} aria-hidden />
         <span className="setup-card-title">Sheet Structure</span>
       </div>
+      <p className="setup-card-description">
+        {isGuest
+          ? "These are the columns in the shared Google Sheet."
+          : "These are the columns in your Google Sheet. Choose the currencies you spend in and the details you want to record for each expense."}
+      </p>
 
       {actionError ? <StatusBanner variant="error" message={actionError} toast /> : null}
       {actionSuccess ? <StatusBanner variant="success" message={actionSuccess} /> : null}

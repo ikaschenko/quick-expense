@@ -237,6 +237,7 @@ export function Layout({ children, title, onBack }: LayoutProps): JSX.Element {
             to="/add"
             className={`bottom-nav-item${location.pathname === "/add" ? " active" : ""}`}
             aria-label="Add expense"
+            data-tour="add-nav"
           >
             <Plus size={22} />
             <span>Add</span>

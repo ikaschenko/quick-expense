@@ -6,6 +6,7 @@ import DatePicker from "react-datepicker";
 import { HISTORY_PAGE_SIZE, FILTER_DEBOUNCE_MS } from "../constants/expenses";
 import { AutosuggestInput } from "../components/AutosuggestInput";
 import { BudgetTrackerPanel } from "../components/BudgetTrackerPanel";
+import { EmptyStateCard } from "../components/EmptyStateCard";
 import { ExpenseTable } from "../components/ExpenseTable";
 import { FormattedAmount } from "../components/FormattedAmount";
 import { Layout } from "../components/Layout";
@@ -176,6 +177,8 @@ export function HistoryPage(): JSX.Element {
 
   const lastRecord = dataset.snapshot?.records.at(-1) ?? null;
   const totalRecords = dataset.snapshot?.records.length ?? 0;
+  // "Empty" is judged on the fully loaded dataset, never on a partial/recent load.
+  const isSheetEmpty = datasetIsComplete && !dataset.isLoadingHistory && totalRecords === 0;
 
   // Per-day totals: shown only in the default unfiltered view, and only for date groups
   // whose visible record count matches the full in-memory dataset's count for that date
@@ -656,6 +659,8 @@ export function HistoryPage(): JSX.Element {
               <StatusBanner variant="error" message="History failed to load \u2014 filter results may be incomplete. Try reloading." />
             )}
           </>
+        ) : isSheetEmpty ? (
+          <EmptyStateCard variant="no-data" showGhostChart={false} />
         ) : (
           <>
             <ExpenseTable

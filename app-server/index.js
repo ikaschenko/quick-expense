@@ -84,6 +84,7 @@ import {
   defaultsConflict,
   withSetupDefaultsLock,
   writeSetupDefaults,
+  markOnboardingTourSeen,
 } from "./store.js";
 import {
   addShare,
@@ -480,6 +481,7 @@ app.get("/api/auth/session", async (req, res) => {
         ownerEmail,
         configStatus,
         isAppAdmin: isAppAdminEmail(userRecord.email),
+        onboardingTourSeen: !!userRecord.onboardingTourSeenAt,
         authentication: req.session.authentication ?? null,
       },
     });
@@ -552,6 +554,7 @@ app.get("/api/config", requireAuthenticatedUser, async (req, res) => {
         isGuest: req.isGuest,
         accessLevel: req.accessLevel,
         ownerEmail: req.isGuest ? configRecord.email : null,
+        connectionOrigin: req.isGuest ? null : configRecord.connectionOrigin ?? null,
         ...(configModeReason ? { configModeReason } : {}),
       },
     });
@@ -696,6 +699,7 @@ app.post("/api/config", requireAuthenticatedUser, requireOwner, async (req, res)
         isGuest: false,
         accessLevel: req.accessLevel,
         ownerEmail: null,
+        connectionOrigin: savedConnection.origin,
         ...(configModeReason ? { configModeReason } : {}),
       },
       setupReport,
@@ -720,7 +724,10 @@ app.post("/api/config/create-spreadsheet", requireAuthenticatedUser, requireOwne
     const accessToken = await getAuthorizedAccessToken(req.configRecord);
     const { spreadsheetId, spreadsheetUrl } = await createSpreadsheet(accessToken, name);
 
-    const setupReport = await validateSpreadsheet(accessToken, spreadsheetId);
+    // The template ships a Config tab (categories_list, optional column_mapping) — read it like a connected sheet.
+    const { mode: configMode, mapping = null, reason: configModeReason, predefinedCategories = [] } =
+      await detectConfigSheet(accessToken, spreadsheetId);
+    const setupReport = await validateSpreadsheet(accessToken, spreadsheetId, mapping);
 
     const savedConnection = await saveValidatedConnection(req.userRecord.id, spreadsheetId, spreadsheetUrl, "created", connectionRevision);
     if (savedConnection.stale) {
@@ -737,12 +744,14 @@ app.post("/api/config/create-spreadsheet", requireAuthenticatedUser, requireOwne
         sheetName: "Expenses",
         currencies: setupReport.sheetCurrencies,
         customColumns: setupReport.customColumns,
-        configMode: "default",
-        predefinedCategories: [],
+        configMode,
+        predefinedCategories,
         hiddenColumns: [],
         isGuest: false,
         accessLevel: req.accessLevel,
         ownerEmail: null,
+        connectionOrigin: savedConnection.origin,
+        ...(configModeReason ? { configModeReason } : {}),
       },
       setupReport,
     });
@@ -1466,6 +1475,16 @@ app.post("/api/sharing/guest/reset", requireAuthenticatedUser, requireGuest, asy
     res.status(204).end();
   } catch (error) {
     logRouteError(req, "sharing_guest_reset_failed", error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+app.post("/api/onboarding/tour-seen", requireAuthenticatedUser, requireOwner, async (req, res) => {
+  try {
+    await markOnboardingTourSeen(req.userRecord.id);
+    res.status(204).end();
+  } catch (error) {
+    logRouteError(req, "onboarding_tour_seen_failed", error);
     res.status(500).json({ message: error.message });
   }
 });

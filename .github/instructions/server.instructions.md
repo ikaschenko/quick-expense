@@ -13,7 +13,7 @@ description: "Backend conventions for Express server files (plain JavaScript, ES
 |---|---|---|
 | Read-only data (expenses, config, sharing) reachable by owner or guest | `requireAuthenticatedUser` only | `GET /api/expenses` |
 | Expense data mutation (create/update/delete expense rows) | `requireAuthenticatedUser, requireEditAccess` | `POST /api/expenses` |
-| Setup/config mutation (spreadsheet structure, columns, currencies, sharing management) — owner only | `requireAuthenticatedUser, requireOwner` | `POST /api/sheet/column` |
+| Setup/config mutation (spreadsheet structure, columns, currencies, sharing management) — owner only | `requireAuthenticatedUser, requireOwner` | `POST /api/sheet/column`, `POST /api/onboarding/tour-seen` |
 | Guest-only action | `requireAuthenticatedUser, requireGuest` | `POST /api/sharing/guest/reset` |
 
 - `requireOwner` blocks **guests entirely** — use on any route that mutates the setup/config itself (not expense rows). `requireEditAccess` blocks **view-only guests** — use on any route that mutates expense data.

@@ -11,9 +11,13 @@ import { googleSheetsService } from "../../app-web/services/googleSheets";
 
 import type { JSX } from "react";
 
+const mockSession = vi.hoisted(() => ({
+  current: { guestAccessLevel: null as "view" | "edit" | null, ownerEmail: null as string | null, email: "test@example.com", givenName: "Test", picture: null },
+}));
+
 vi.mock("../../app-web/contexts/AuthContext", () => ({
   useAuth: () => ({
-    session: { guestAccessLevel: null, email: "test@example.com", givenName: "Test", picture: null },
+    session: mockSession.current,
     error: null,
     status: "signed_in",
     signIn: vi.fn(),
@@ -148,10 +152,48 @@ describe("HomePage page states", () => {
     expect(screen.queryByText("Failed to load expense data.")).toBeNull();
   });
 
+  it("shows the welcome copy in the connect-sheet state", () => {
+    vi.mocked(useConfig).mockReturnValueOnce({ ...useConfig(), config: null });
+    renderHome();
+    expect(screen.getByRole("heading", { name: "Welcome to Quick Expense!" })).toBeTruthy();
+    expect(screen.getByText("Connect a Google Sheet to store your expenses. The sheet is yours: Quick Expense never keeps a copy.")).toBeTruthy();
+  });
+
   it("shows the no-data state for a ready empty dataset", () => {
     mockDataset({ snapshot: { ...useDataset().snapshot!, records: [] } });
     renderHome();
     expect(screen.getByText("No expenses yet")).toBeTruthy();
+    expect(screen.getByText("Add your first expense and this screen will show your spending summary.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "+ Add Expense" }).getAttribute("href")).toBe("/add");
+    expect(document.querySelector(".permission-note")).toBeNull();
+  });
+
+  describe("no-data Add button for guests", () => {
+    afterEach(() => {
+      mockSession.current = { ...mockSession.current, guestAccessLevel: null, ownerEmail: null };
+    });
+
+    it.each([
+      ["owner@example.com", "You have view-only access. Ask owner@example.com for edit access to add expenses."],
+      [null, "Ask the owner of this setup for edit access to add expenses."],
+    ])("disables the button with a visible reason for view-only guests (owner %s)", (ownerEmail, reason) => {
+      mockSession.current = { ...mockSession.current, guestAccessLevel: "view", ownerEmail };
+      mockDataset({ snapshot: { ...useDataset().snapshot!, records: [] } });
+      renderHome();
+      const button = screen.getByRole("button", { name: "+ Add Expense" }) as HTMLButtonElement;
+      expect(button.disabled).toBe(true);
+      expect(screen.queryByRole("link", { name: "+ Add Expense" })).toBeNull();
+      const note = screen.getByText(reason);
+      expect(button.getAttribute("aria-describedby")).toBe(note.id);
+    });
+
+    it("keeps the link enabled for edit guests", () => {
+      mockSession.current = { ...mockSession.current, guestAccessLevel: "edit", ownerEmail: "owner@example.com" };
+      mockDataset({ snapshot: { ...useDataset().snapshot!, records: [] } });
+      renderHome();
+      expect(screen.getByRole("link", { name: "+ Add Expense" })).toBeTruthy();
+      expect(document.querySelector(".permission-note")).toBeNull();
+    });
   });
 
   it("retries a dataset error and handles a rejected reload", async () => {

@@ -752,3 +752,65 @@ describe("HistoryPage — Track budget toggle", () => {
     expect(document.querySelector(".budget-tracker")).toBeNull();
   });
 });
+
+describe("HistoryPage — empty sheet prompt (onboarding Story E)", () => {
+  const distinctValues = { Category: [], spentBy: [], spentFor: [], customFields: {} };
+  const emptySnapshot = { records: [], distinctValues, loadedAt: 0, payloadBytes: 0, loadPhase: "full" as const };
+  const defaultAuth = mockUseAuth.getMockImplementation()!;
+
+  beforeEach(() => {
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+  });
+
+  afterEach(() => {
+    mockUseAuth.mockImplementation(defaultAuth);
+  });
+
+  it("shows the add-first-expense card without a chart for a fully loaded empty sheet", () => {
+    mockDataset({ snapshot: emptySnapshot });
+
+    const { container } = renderHistory();
+
+    expect(screen.getByRole("heading", { name: "No expenses yet" })).toBeTruthy();
+    expect(screen.getByText("Add your first expense and this screen will show your spending summary.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "+ Add Expense" }).getAttribute("href")).toBe("/add");
+    expect(container.querySelector(".home-ghost-chart")).toBeNull();
+    expect(screen.queryByText("No records found.")).toBeNull();
+    expect(screen.getByPlaceholderText(/Search by words/i)).toBeTruthy();
+  });
+
+  it("disables the Add button with a visible reason for view-only guests", () => {
+    mockUseAuth.mockReturnValue({ ...defaultAuth(), session: { guestAccessLevel: "view", email: "guest@example.com", givenName: "Guest", picture: null } });
+    mockDataset({ snapshot: emptySnapshot });
+
+    renderHistory();
+
+    const button = screen.getByRole("button", { name: "+ Add Expense" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(screen.getByText("Ask the owner of this setup for edit access to add expenses.").id).toBe(button.getAttribute("aria-describedby"));
+  });
+
+  it.each([
+    ["the history is still loading", { snapshot: { ...emptySnapshot, loadPhase: "recent" as const }, isLoadingHistory: true }],
+    ["the dataset is loading", { status: "loading" as const, snapshot: null }],
+    ["the dataset failed to load", { status: "error" as const, snapshot: null, error: "Boom" }],
+  ])("does not show the card while %s", (_label, overrides) => {
+    mockDataset(overrides);
+
+    renderHistory();
+
+    expect(screen.queryByRole("heading", { name: "No expenses yet" })).toBeNull();
+  });
+
+  it("keeps the no-match message when a filter finds nothing in a non-empty sheet", () => {
+    mockDataset({
+      snapshot: { ...emptySnapshot, records: [makeRecord(1, "2026-06-09", "10")] },
+      searchFilters: { ...emptyFilters, categories: ["Travel"], dateFrom: "", dateTo: "" },
+    });
+
+    renderHistory();
+
+    expect(screen.getByText("No expenses match your search")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "No expenses yet" })).toBeNull();
+  });
+});

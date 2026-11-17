@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { initAnalytics } from "./services/analytics";
 import "react-datepicker/dist/react-datepicker.css";
+import "driver.js/dist/driver.css";
 import "./index.css";
 
 initAnalytics();

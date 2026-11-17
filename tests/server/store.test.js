@@ -24,6 +24,7 @@ let renameVisibilityEntry;
 let getSetupDefaults;
 let withSetupDefaultsLock;
 let writeSetupDefaults;
+let markOnboardingTourSeen;
 
 beforeAll(async () => {
   ({
@@ -40,6 +41,7 @@ beforeAll(async () => {
     getSetupDefaults,
     withSetupDefaultsLock,
     writeSetupDefaults,
+    markOnboardingTourSeen,
   } = await import("../../app-server/store.js"));
 });
 
@@ -126,6 +128,27 @@ describe("getUserRecord", () => {
       lastActivityAt: 1699999500000,
     });
     expect(mockQuery).toHaveBeenCalledWith("SELECT * FROM users WHERE email = $1", ["user@test.com"]);
+  });
+});
+
+describe("markOnboardingTourSeen", () => {
+  it("sets the timestamp only once so repeated calls keep the first value", async () => {
+    mockQuery.mockResolvedValue({ rows: [] });
+
+    await markOnboardingTourSeen(7);
+
+    const [sql, params] = mockQuery.mock.calls[0];
+    expect(sql).toContain("onboarding_tour_seen_at = COALESCE(onboarding_tour_seen_at, now())");
+    expect(params).toEqual([7]);
+  });
+
+  it("maps the stored timestamp onto the user record", async () => {
+    const seenAt = new Date("2026-11-17T10:00:00Z");
+    mockQuery.mockResolvedValue({ rows: [{ id: "7", email: "user@test.com", onboarding_tour_seen_at: seenAt }] });
+
+    const result = await getUserRecord("user@test.com");
+
+    expect(result.onboardingTourSeenAt).toBe(seenAt);
   });
 });
 

@@ -1,12 +1,12 @@
 import { AppActivityTracker } from "../components/AppActivityTracker";
 import { useEffect, useMemo, useRef, useState, type JSX, type ReactNode } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { FileSpreadsheet, Receipt } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { HomeDashboard } from "../components/HomeDashboard";
 import { Layout } from "../components/Layout";
 import { MonthDetailsPanel } from "../components/MonthDetailsPanel";
 import { YearDetailsPanel } from "../components/YearDetailsPanel";
 import { StatusBanner } from "../components/StatusBanner";
+import { EmptyStateCard } from "../components/EmptyStateCard";
 import { useConfig } from "../contexts/ConfigContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useDataset } from "../contexts/DatasetContext";
@@ -29,39 +29,6 @@ import {
 import type { ExpenseRecord } from "../types/expense";
 import { metricsCache, type MetricsCacheEntry } from "../services/metricsCache";
 import { googleSheetsService } from "../services/googleSheets";
-
-interface EmptyStateProps {
-  variant: "no-sheet" | "no-data";
-}
-
-function HomeEmptyState({ variant }: EmptyStateProps): JSX.Element {
-  const isNoSheet = variant === "no-sheet";
-  return (
-    <div className="home-empty-state">
-      {isNoSheet
-        ? <FileSpreadsheet size={48} className="home-empty-state-icon" aria-hidden />
-        : <Receipt size={48} className="home-empty-state-icon" aria-hidden />}
-      <h2 className="home-empty-state-title">
-        {isNoSheet ? "Almost ready!" : "No expenses yet"}
-      </h2>
-      <p className="home-empty-state-body">
-        {isNoSheet
-          ? "Connect a Google Sheet to start tracking expenses."
-          : "Add your first one — it takes under 30 seconds — and this screen will show your spending summary."}
-      </p>
-      {!isNoSheet && (
-        <div className="home-ghost-chart" aria-hidden>
-          {[40, 65, 30, 80, 50, 70].map((h, i) => (
-            <div key={i} className="home-ghost-bar" style={{ height: `${h}%` }} />
-          ))}
-        </div>
-      )}
-      <Link to={isNoSheet ? "/setup" : "/add"} className="btn btn-primary home-empty-state-cta">
-        {isNoSheet ? "Connect Sheet →" : "+ Add Expense"}
-      </Link>
-    </div>
-  );
-}
 
 function MetricCardSkeleton(): JSX.Element {
   return <div className="skeleton-card" style={{ height: "120px" }} />;
@@ -99,9 +66,9 @@ function HomeContent({ view, onRetry, children }: {
     case "config-loading":
       return <div className="skeleton-list"><MetricCardSkeleton /><MetricCardSkeleton /><MetricCardSkeleton /></div>;
     case "no-sheet":
-      return <HomeEmptyState variant="no-sheet" />;
+      return <EmptyStateCard variant="no-sheet" />;
     case "no-data":
-      return <HomeEmptyState variant="no-data" />;
+      return <EmptyStateCard variant="no-data" />;
     case "dataset-loading":
       return (
         <div className="skeleton-list">

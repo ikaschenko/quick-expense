@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
     getSetupDefaults: vi.fn(),
     withSetupDefaultsLock: vi.fn(),
     writeSetupDefaults: vi.fn(),
+    markOnboardingTourSeen: vi.fn(),
     defaultsConflict: () => Object.assign(new Error("Reload defaults"), { status: 409, code: "DEFAULTS_CONFLICT" }),
   },
   sharing: {
@@ -477,6 +478,65 @@ describe("GET /api/auth/session", () => {
 
     expect(res.status).toBe(500);
   });
+
+  it.each([
+    [null, false],
+    [new Date("2026-11-17T10:00:00Z"), true],
+  ])("reports onboardingTourSeen for tour timestamp %s", async (seenAt, expected) => {
+    signInAs(OWNER);
+    mocks.store.getUserRecord.mockImplementation(async (email) =>
+      email === OWNER.email ? { ...OWNER, onboardingTourSeenAt: seenAt } : USERS[email] ?? null,
+    );
+
+    const res = await request("GET", "/api/auth/session");
+
+    expect(res.body.session.onboardingTourSeen).toBe(expected);
+  });
+});
+
+describe("POST /api/onboarding/tour-seen", () => {
+  it("should mark the tour seen for an owner and return 204", async () => {
+    signInAs(OWNER);
+
+    const res = await request("POST", "/api/onboarding/tour-seen");
+
+    expect(res.status).toBe(204);
+    expect(mocks.store.markOnboardingTourSeen).toHaveBeenCalledWith(OWNER.id);
+  });
+
+  it("should return 403 for a guest", async () => {
+    signInAsGuest("edit");
+
+    const res = await request("POST", "/api/onboarding/tour-seen");
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe("GUEST_CANNOT_MODIFY_CONFIG");
+    expect(mocks.store.markOnboardingTourSeen).not.toHaveBeenCalled();
+  });
+
+  it("should return 401 when signed out", async () => {
+    const res = await request("POST", "/api/onboarding/tour-seen");
+
+    expect(res.status).toBe(401);
+  });
+
+  it("should reject a request without the CSRF header", async () => {
+    signInAs(OWNER);
+
+    const res = await request("POST", "/api/onboarding/tour-seen", { csrf: false });
+
+    expect(res.status).toBe(403);
+    expect(mocks.store.markOnboardingTourSeen).not.toHaveBeenCalled();
+  });
+
+  it("should return 500 when saving fails", async () => {
+    signInAs(OWNER);
+    mocks.store.markOnboardingTourSeen.mockRejectedValue(new Error("db down"));
+
+    const res = await request("POST", "/api/onboarding/tour-seen");
+
+    expect(res.status).toBe(500);
+  });
 });
 
 describe("POST /api/auth/logout", () => {
@@ -597,6 +657,7 @@ describe("POST /api/config and /api/config/create-spreadsheet", () => {
       isGuest: false,
       accessLevel: "edit",
       ownerEmail: null,
+      connectionOrigin: "existing",
     });
     expect(mocks.store.getHiddenColumns).toHaveBeenCalledWith(OWNER.id, "new-sheet-id");
   });
@@ -613,7 +674,49 @@ describe("POST /api/config and /api/config/create-spreadsheet", () => {
       isGuest: false,
       accessLevel: "edit",
       ownerEmail: null,
+      connectionOrigin: "created",
     });
+  });
+
+  it("should return the template's predefined categories and config mode when creating a sheet", async () => {
+    signInAs(OWNER);
+    const mapping = { Date: "When" };
+    mocks.sheets.detectConfigSheet.mockResolvedValue({
+      mode: "config-driven",
+      mapping,
+      predefinedCategories: ["Food & Groceries", "Dining Out"],
+    });
+
+    const res = await request("POST", "/api/config/create-spreadsheet", { body: {} });
+
+    expect(res.status).toBe(200);
+    expect(mocks.sheets.detectConfigSheet).toHaveBeenCalledWith(expect.anything(), "created-id");
+    expect(mocks.sheets.validateSpreadsheet).toHaveBeenCalledWith(expect.anything(), "created-id", mapping);
+    expect(res.body.config).toMatchObject({
+      configMode: "config-driven",
+      predefinedCategories: ["Food & Groceries", "Dining Out"],
+    });
+  });
+
+  it("should return no predefined categories when the created sheet has no Config tab", async () => {
+    signInAs(OWNER);
+
+    const res = await request("POST", "/api/config/create-spreadsheet", { body: {} });
+
+    expect(res.body.config).toMatchObject({ configMode: "default", predefinedCategories: [] });
+  });
+
+  it("should return the stored connection origin from GET /api/config for an owner", async () => {
+    signInAs(OWNER);
+    mocks.store.getUserRecord.mockImplementation(async (email) =>
+      email === OWNER.email ? { ...OWNER, accessToken: "token", accessTokenExpiresAt: Date.now() + 3_600_000, connectionValidatedAt: new Date(), connectionOrigin: "existing" } : USERS[email] ?? null,
+    );
+    mocks.store.getHiddenColumns.mockResolvedValue([]);
+
+    const res = await request("GET", "/api/config");
+
+    expect(res.status).toBe(200);
+    expect(res.body.config.connectionOrigin).toBe("existing");
   });
 
   it("does not activate or record provenance for a first setup that fails validation", async () => {

@@ -3,12 +3,14 @@ import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
 import { AuthProvider, useAuth } from "../../app-web/contexts/AuthContext";
 import { authApi } from "../../app-web/services/authApi";
+import { onboardingApi } from "../../app-web/services/onboardingApi";
 import { identifyUser, resetUser, trackEvent } from "../../app-web/services/analytics";
 import type { AuthSession } from "../../app-web/types/expense";
 
 vi.mock("../../app-web/services/authApi", () => ({ authApi: { getSession: vi.fn(), startLogin: vi.fn(), logout: vi.fn() } }));
 vi.mock("../../app-web/services/analytics", () => ({ identifyUser: vi.fn(), resetUser: vi.fn(), trackEvent: vi.fn() }));
 vi.mock("../../app-web/services/metricsCache", () => ({ metricsCache: { clear: vi.fn() } }));
+vi.mock("../../app-web/services/onboardingApi", () => ({ onboardingApi: { markTourSeen: vi.fn() } }));
 
 const session: AuthSession = {
   email: "user@example.com", givenName: null, picture: null,
@@ -24,6 +26,8 @@ function Probe() {
     <button onClick={auth.signIn}>Sign in</button>
     <button onClick={auth.signOut}>Sign out</button>
     <button onClick={() => void auth.refreshSession()}>Refresh</button>
+    <button onClick={auth.markOnboardingTourSeen}>Mark tour seen</button>
+    <span data-testid="tour-seen">{String(auth.session?.onboardingTourSeen ?? false)}</span>
   </>;
 }
 
@@ -35,6 +39,20 @@ beforeEach(() => {
 });
 
 describe("AuthProvider", () => {
+  it.each([
+    ["succeeds", () => Promise.resolve()],
+    ["fails", () => Promise.reject(new Error("offline"))],
+  ])("flags the onboarding tour as seen immediately when saving %s", async (_label, result) => {
+    vi.mocked(onboardingApi.markTourSeen).mockImplementation(result);
+    render(<AuthProvider><Probe /></AuthProvider>);
+    await screen.findByText("signed_in");
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "Mark tour seen" }));
+
+    expect(screen.getByTestId("tour-seen").textContent).toBe("true");
+    expect(onboardingApi.markTourSeen).toHaveBeenCalledOnce();
+    expect(screen.getByText("signed_in")).toBeTruthy();
+  });
   it("identifies before publishing an authenticated session to descendants", async () => {
     let finish!: () => void;
     vi.mocked(identifyUser).mockImplementation(() => new Promise<void>((resolve) => { finish = resolve; }));

@@ -18,6 +18,7 @@ export const authApi = {
       ownerEmail: response.session.ownerEmail ?? null,
       configStatus: response.session.configStatus ?? "ok",
       isAppAdmin: response.session.isAppAdmin ?? false,
+      onboardingTourSeen: response.session.onboardingTourSeen ?? false,
     };
   },
 

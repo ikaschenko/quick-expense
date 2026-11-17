@@ -16,6 +16,7 @@ export function DisplayPreferencesCard(): JSX.Element {
         <CalendarDays size={24} aria-hidden />
         <span className="setup-card-title">Display preferences</span>
       </div>
+      <p className="setup-card-description">Choose how dates appear in Quick Expense on this device. Your sheet isn&apos;t changed.</p>
       <div className="input-group setup-preference-group">
         <label className="input-label" htmlFor="date-display-format">Date format</label>
         <select

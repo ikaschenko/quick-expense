@@ -66,6 +66,8 @@ export interface SpreadsheetConfig {
   accessLevel: 'view' | 'edit';
   /** Email of the owner when isGuest is true, otherwise null. */
   ownerEmail: string | null;
+  /** How the owner's current sheet was connected; null for guests. */
+  connectionOrigin?: "created" | "existing" | "unknown" | null;
 }
 
 export interface SetupReport {
@@ -191,6 +193,8 @@ export interface AuthSession {
   configStatus: 'ok' | 'shared_config_invalid';
   /** Server-derived allow-list result; never trusted from client input. */
   isAppAdmin?: boolean;
+  /** True once the owner finished or skipped the auto-started Setup tour (persisted server-side). */
+  onboardingTourSeen?: boolean;
   authentication?: { id: string; isNewUser: boolean; signupId: string | null; timestamp: number } | null;
 }
 

@@ -108,7 +108,7 @@ async function renderAddPage() {
       </Routes>
     </MemoryRouter>,
   );
-  await screen.findByRole("textbox", { name: /Amount in/ });
+  await screen.findByRole("textbox", { name: /^Amount \(/ });
   return view;
 }
 
@@ -121,7 +121,7 @@ async function renderAddPageWithRepeat(repeatRecord: ExpenseRecord, wait = true)
       </Routes>
     </MemoryRouter>,
   );
-  if (wait) await screen.findByRole("textbox", { name: /Amount in/ });
+  if (wait) await screen.findByRole("textbox", { name: /^Amount \(/ });
   return view;
 }
 
@@ -134,7 +134,7 @@ async function renderAddPageWithPrefillDate(prefillDate: string) {
       </Routes>
     </MemoryRouter>
   );
-  await screen.findByRole("textbox", { name: /Amount in/ });
+  await screen.findByRole("textbox", { name: /^Amount \(/ });
   return view;
 }
 
@@ -150,7 +150,7 @@ function renderEditPage(record: ExpenseRecord) {
 }
 
 function fillMinimalForm() {
-  const amountInput = screen.getByRole("textbox", { name: /Amount in USD/i });
+  const amountInput = screen.getByRole("textbox", { name: /Amount \(USD\)/i });
   fireEvent.change(amountInput, { target: { value: "10.00" } });
 
   const categoryInput = document.getElementById("category-field") as HTMLInputElement;
@@ -243,7 +243,7 @@ describe("AddExpensePage — Save & Continue field retention", () => {
     fireEvent.change(commentInput, { target: { value: "Bus ride" } });
 
     // Fill amount so the form is valid
-    const amountInput = screen.getByRole("textbox", { name: /Amount in USD/i });
+    const amountInput = screen.getByRole("textbox", { name: /Amount \(USD\)/i });
     fireEvent.change(amountInput, { target: { value: "5.00" } });
 
     fireEvent.click(screen.getByRole("button", { name: /Save & Continue/i }));
@@ -259,7 +259,7 @@ describe("AddExpensePage — Save & Continue field retention", () => {
   it("B — amount fields are cleared after Save & Continue", async () => {
     await renderAddPage();
 
-    const amountInput = screen.getByRole("textbox", { name: /Amount in USD/i }) as HTMLInputElement;
+    const amountInput = screen.getByRole("textbox", { name: /Amount \(USD\)/i }) as HTMLInputElement;
     fireEvent.change(amountInput, { target: { value: "10.00" } });
 
     const categoryInput = document.getElementById("category-field") as HTMLInputElement;
@@ -306,7 +306,7 @@ describe("AddExpensePage — repeat mode pre-fill", () => {
     const categoryInput = document.getElementById("category-field") as HTMLInputElement;
     expect(categoryInput.value).toBe("Transport");
 
-    const amountInput = screen.getByRole("textbox", { name: /Amount in USD/i }) as HTMLInputElement;
+    const amountInput = screen.getByRole("textbox", { name: /Amount \(USD\)/i }) as HTMLInputElement;
     expect(amountInput.value).toBe("42.50");
 
     const commentInput = document.getElementById("comment-field") as HTMLTextAreaElement;
@@ -391,7 +391,7 @@ describe("AddExpensePage — repeat currency during configuration loading", () =
       </MemoryRouter>,
     );
 
-    const amountInput = await screen.findByRole("textbox", { name: /Amount in BYN/i }) as HTMLInputElement;
+    const amountInput = await screen.findByRole("textbox", { name: /Amount \(BYN\)/i }) as HTMLInputElement;
     expect(amountInput.value).toBe("47.43");
     expect(screen.getByRole("tab", { name: "BYN" }).getAttribute("aria-selected")).toBe("true");
   });
@@ -435,7 +435,7 @@ describe("AddExpensePage — history date pre-fill", () => {
 
     await renderAddPageWithPrefillDate("15/06/2026");
 
-    expect((screen.getByRole("textbox", { name: "Expense date" }) as HTMLInputElement).value).toBe("2026-06-15");
+    expect((screen.getByRole("textbox", { name: "Date" }) as HTMLInputElement).value).toBe("2026-06-15");
   });
 });
 
@@ -1004,5 +1004,132 @@ describe("AddExpensePage — shared field defaults", () => {
     expect((screen.getByLabelText("Theme") as HTMLInputElement).value).toBe("Manual");
     expect(screen.getByText(context.defaultsError)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Reload page" })).toBeTruthy();
+  });
+});
+
+describe("AddExpensePage — currency selection and conversion card (onboarding Story D)", () => {
+  const gbpConfig = {
+    config: {
+      email: "test@example.com",
+      spreadsheetId: "abc123",
+      spreadsheetUrl: "https://docs.google.com/spreadsheets/d/abc123/edit",
+      sheetName: "Expenses" as const,
+      currencies: ["GBP"],
+      customColumns: [],
+      configMode: "default" as const,
+      predefinedCategories: [],
+      hiddenColumns: [],
+      isGuest: false,
+      accessLevel: "edit" as const,
+      ownerEmail: null,
+    },
+    isConfigLoading: false,
+    error: null,
+    fileName: null,
+    isFileNameLoading: false,
+    saveConfig: vi.fn(),
+    clearConfig: vi.fn(),
+    clearError: vi.fn(),
+    refreshConfig: vi.fn(),
+    updateStructure: vi.fn(),
+    toggleColumnVisibility: vi.fn(),
+    ...defaultsContext,
+  };
+  const originalConfig = useConfig();
+
+  function mockRecords(records: ExpenseRecord[]) {
+    vi.mocked(useDataset).mockReturnValue({
+      snapshot: { records, distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} }, loadedAt: 0, payloadBytes: 0, loadPhase: "full", dateOrderIssueRows: [] },
+      status: "ready",
+      error: null,
+      isLoadingHistory: false,
+      loadDataset: vi.fn(),
+      reloadDataset: vi.fn(),
+      appendToDataset: vi.fn(),
+      updateInDataset: vi.fn(),
+      removeLastFromDataset: vi.fn(),
+      distinctValues: { Category: [], spentBy: [], spentFor: [], customFields: {} },
+      searchFilters: { comment: "", categories: [], dateFrom: "", dateTo: "", amountFrom: "", amountTo: "", spentBy: "", spentByExact: false, spentFor: "", spentForExact: false, customFields: {}, customFieldsExact: {} },
+      setSearchFilters: vi.fn(),
+      invalidateDataset: vi.fn(),
+      clearError: vi.fn(),
+    });
+  }
+
+  const usdOnlyRecord: ExpenseRecord = {
+    Date: "2026-06-30", USD: "10.00", Category: "Food",
+    spentBy: "test@example.com", spentFor: "test@example.com", Comment: "",
+    currencyAmounts: { GBP: "" }, customFields: {}, rowNumber: 2,
+  };
+
+  beforeEach(() => {
+    vi.mocked(googleSheetsService.appendExpenseRow).mockReset();
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+    vi.mocked(useConfig).mockReturnValue(gbpConfig);
+    mockRecords([]);
+  });
+
+  afterEach(() => {
+    vi.mocked(useConfig).mockReturnValue(originalConfig);
+  });
+
+  it("labels the date and amount fields with the active currency", async () => {
+    await renderAddPage();
+
+    expect(screen.getByRole("textbox", { name: "Date" })).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Amount (GBP)" })).toBeTruthy();
+  });
+
+  it("lets the user select USD, clearing other amounts and hiding the conversion card", async () => {
+    await renderAddPage();
+    fireEvent.change(screen.getByRole("textbox", { name: "Amount (GBP)" }), { target: { value: "5" } });
+    expect(screen.getByText("Converted to USD")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("tab", { name: "USD" }));
+
+    expect(screen.getByRole("tab", { name: "USD" }).getAttribute("aria-selected")).toBe("true");
+    expect((screen.getByRole("textbox", { name: "Amount (USD)" }) as HTMLInputElement).value).toBe("");
+    expect(screen.queryByText("Converted to USD")).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "GBP" }));
+    expect((screen.getByRole("textbox", { name: "Amount (GBP)" }) as HTMLInputElement).value).toBe("");
+  });
+
+  it("saves a USD-only expense without asking for an exchange rate", async () => {
+    vi.mocked(googleSheetsService.appendExpenseRow).mockResolvedValue({ record: usdOnlyRecord, insertMode: false });
+    await renderAddPage();
+    fireEvent.click(screen.getByRole("tab", { name: "USD" }));
+    fillMinimalForm();
+
+    fireEvent.click(screen.getByRole("button", { name: /Save & Continue/i }));
+
+    await waitFor(() => expect(googleSheetsService.appendExpenseRow).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText("Enter an exchange rate to convert to USD.")).toBeNull();
+  });
+
+  it("blocks saving a non-USD amount without an exchange rate", async () => {
+    await renderAddPage();
+    fireEvent.change(screen.getByRole("textbox", { name: "Amount (GBP)" }), { target: { value: "5" } });
+    fireEvent.change(document.getElementById("category-field") as HTMLInputElement, { target: { value: "Food" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /Save & Continue/i }));
+
+    expect(await screen.findByText("Enter an exchange rate to convert to USD.")).toBeTruthy();
+    expect(googleSheetsService.appendExpenseRow).not.toHaveBeenCalled();
+  });
+
+  it("opens with USD selected when the last saved expense was USD-only", async () => {
+    mockRecords([usdOnlyRecord]);
+
+    await renderAddPage();
+
+    await waitFor(() => expect(screen.getByRole("tab", { name: "USD" }).getAttribute("aria-selected")).toBe("true"));
+    expect(screen.getByRole("textbox", { name: "Amount (USD)" })).toBeTruthy();
+  });
+
+  it("opens an edited USD-only expense with USD selected", async () => {
+    renderEditPage(usdOnlyRecord);
+
+    await waitFor(() => expect(screen.getByRole("tab", { name: "USD" }).getAttribute("aria-selected")).toBe("true"));
+    expect((screen.getByRole("textbox", { name: "Amount (USD)" }) as HTMLInputElement).value).toBe("10.00");
   });
 });

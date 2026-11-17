@@ -26,6 +26,8 @@ export interface SpreadsheetSetup {
   onCreateSpreadsheet: () => Promise<void>;
   /** Re-runs validation for the sheet picked in this session (used after a mapping save). */
   resaveCurrentSpreadsheet: () => Promise<void>;
+  /** Path that just succeeded in this session; drives the one-time onboarding tour. Never persisted. */
+  completedPath: "new_sheet" | "existing_sheet" | null;
 }
 
 export function useSpreadsheetSetup(): SpreadsheetSetup {
@@ -42,6 +44,7 @@ export function useSpreadsheetSetup(): SpreadsheetSetup {
   const [isSaving, setIsSaving] = useState(false);
   const [isPicking, setIsPicking] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [completedPath, setCompletedPath] = useState<SpreadsheetSetup["completedPath"]>(null);
 
   const resetBanners = (): void => {
     setError(null);
@@ -65,6 +68,7 @@ export function useSpreadsheetSetup(): SpreadsheetSetup {
       setSetupReport(report);
       setShowMappingEditor(false);
       setSuccess("Spreadsheet is configured and validated.");
+      setCompletedPath("existing_sheet");
       trackEvent("setup_saved");
       trackEvent("setup_completed", { method: "existing_sheet" });
     } catch (saveError) {
@@ -110,6 +114,7 @@ export function useSpreadsheetSetup(): SpreadsheetSetup {
       saveConfig(nextConfig);
       setSetupReport(report);
       setSuccess("Your spreadsheet has been created and is ready to use.");
+      setCompletedPath("new_sheet");
       trackEvent("setup_created");
       trackEvent("setup_completed", { method: "new_sheet" });
     } catch (createError) {
@@ -143,5 +148,6 @@ export function useSpreadsheetSetup(): SpreadsheetSetup {
     onPickFromDrive,
     onCreateSpreadsheet,
     resaveCurrentSpreadsheet: () => saveSpreadsheet(spreadsheetUrl.trim()),
+    completedPath,
   };
 }

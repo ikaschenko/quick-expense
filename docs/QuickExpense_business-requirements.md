@@ -172,7 +172,11 @@ After a successful Setup validation, the application reports what actions were t
 
 Can multiple currency fields be filled simultaneously? Answer: Allow USD together with at most one non-USD currency. Only one non-USD currency may be filled at a time (regardless of which currencies are configured).
 
-**USD is mandatory when a non-USD amount is entered.** If the user fills a non-USD currency field, the USD amount must also be provided — either entered directly or derived via an exchange rate. The form blocks submission and shows a single error: *"USD amount is required — enter an exchange rate here or fill the USD field directly."* The backend enforces the same rule independently (HTTP 400).
+**USD is mandatory when a non-USD amount is entered.** On the Add form the USD amount is derived from the exchange rate whenever a non-USD currency is selected (the USD amount cannot be typed directly in that mode), so the form blocks submission until a valid rate is entered and shows: *"Enter an exchange rate to convert to USD."* When editing a legacy record whose USD amount is already present, the existing USD value is accepted. The backend enforces the USD rule independently (HTTP 400).
+
+**Currency selection on the Add form.** The currency pills show the user's non-USD currencies followed by a selectable **USD** pill. Selecting USD records a USD-only expense: other-currency amounts are cleared, the conversion card is hidden, and no exchange rate is needed. Selecting a non-USD currency shows the conversion card and clears a USD amount typed in USD mode. The Add form opens on the currency of the last saved expense — USD when that expense was USD-only; edit and repeat open on the currency of the source record (USD for USD-only records). The date and amount fields have visible captions: **Date** and **Amount (GBP)** / **Amount (USD)** (the active currency).
+
+**Conversion card.** Shown while a non-USD currency is selected: header *"Converted to USD"* with helper *"Totals are kept in USD."*, a rate field displayed as **1 USD = [rate] GBP** (amount of that currency per 1 USD), a market-rate button **Use market rate 0.76** (with the resolved date, e.g. *"(16 Nov)"*, when the rate falls back to an earlier published day), and the most prominent converted result **≈ 13.16 USD**.
 
 Currency conversion: Here are key cases:
 
@@ -182,7 +186,7 @@ Currency conversion: Here are key cases:
 For the conversion of currency, here are key guidelines:
 
 * Currency conversion rates can be entered manually by the user in the Add flow.
-* When adding an expense, the form fetches the market rate for the selected date from a free key-less exchange-rate API and pre-fills the rate input. For today, the rate is also displayed as a tappable hint: *"Market: X.XX"*. Tapping the hint copies the rate into the input field. If the fetch fails for any reason, the form falls back to fully manual entry. Edit mode derives the rate from the existing USD and non-USD amounts when both are available.
+* When adding an expense, the form fetches the market rate for the selected date from a free key-less exchange-rate API and pre-fills the rate input. For today, the rate is also offered as a button: *"Use market rate X.XX"*. Tapping it copies the rate into the input field. If the fetch fails for any reason, the form falls back to fully manual entry. Edit mode derives the rate from the existing USD and non-USD amounts when both are available.
 * Converted USD value must be rounded to 2 decimal places.
 * Missing or invalid manual rate input must block Save when a non-USD amount is entered and USD is not entered directly.
 * The last-used FX rate for each currency is backed up in the database and used as a fallback when a market rate is unavailable for a normal Add flow.
@@ -194,6 +198,30 @@ What format for currency fields? Answer:
 * Negative values are allowed (for example, when a user sold some item via ebay, so this is a profit instead of expense).
 
 What if identical record is submitted twice? Answer: No duplicate detection in v1. Each Save appends a new row.
+
+### 2.2.2 Setup section explanations and onboarding tour
+
+**Section explanations.** Each connected-sheet Setup card shows a one-line plain-language explanation under its title (secondary, muted text that screen readers read as ordinary page text):
+
+- **Sheet Structure:** *"These are the columns in your Google Sheet. Choose the currencies you spend in and the details you want to record for each expense."* Guests see the read-only variant *"These are the columns in the shared Google Sheet."*
+- **Share your setup** (owners only): *"Let family or friends see or add expenses in your sheet. They won't need to set anything up."*
+- **Display preferences:** *"Choose how dates appear in Quick Expense on this device. Your sheet isn't changed."*
+
+**Guided Setup tour (owners only).** A short step-by-step tour of the connected-sheet Setup screen:
+
+- **Auto-start:** once, the first time an owner reaches the connected-sheet Setup screen right after successfully creating a new sheet or connecting an existing one, and only if the user has not seen the tour yet. Owners who completed setup before this feature, later Setup visits, and later sheet changes do not auto-start it. Guests never get it.
+- **Seen flag:** finishing or skipping the auto-started tour marks it seen for that user in the database, so it does not reappear on another device or browser. If saving the flag fails, the user is not blocked and the tour may appear again next time.
+- **Appearance:** each step darkens the rest of the screen, highlights the explained control, points a hint bubble at it, and scrolls it into view. The bubble shows progress (*"2 of 5"*), Back (hidden on the first step) / Next, *Skip tour*, and a close (×) control. Esc closes the tour (counts as skipped). Keyboard focus moves into the bubble. Fits a 360 px wide screen.
+- **Steps (new sheet):**
+  1. Currency rows — *"We've added a few sample currencies to get you started. Remove the ones you don't need and add the ones you actually use: up to 3, plus USD."*
+  2. Spent By / Spent For eye icon — *"Only tracking for yourself? Tap the eye to hide Spent By and Spent For. You can bring them back anytime."*
+  3. Extra-field rows — *"Want to record extra details, like a payment method or a trip? Add your own fields here, or remove these sample ones."*
+  4. Share your setup — *"Expenses are better together. Invite family or friends to view your expenses, or to add their own."*
+  5. Bottom-nav **+** — *"You're all set! Let's add your first expense."* with button **Add my first expense** (completes the tour and opens the Add screen).
+- **Steps (existing sheet):** step 1 reads *"These are the currencies found in your sheet. Add or remove any anytime."*; step 3 ends *"…or remove fields you don't need."* If the sheet already has expenses, step 5 reads *"You're all set. Tap + whenever you spend."* with **Done** (stays on Setup).
+- **Missing controls:** a step whose control is not on screen is skipped and the step count adjusts (e.g. *"1 of 4"*).
+- **Replay:** owners always see a **Take a quick tour** link on the connected-sheet Setup screen. It replays the matching variant (new sheet or existing sheet), always ends with **Done**, and does not change the seen flag.
+- **Analytics:** tour start, step views, skips (with the step left), and completion are tracked (see architecture §8.6.2).
 
 ## 2.3 New expense submission (Add)
 
@@ -281,6 +309,8 @@ The separate **Tail** and **Search** screens have been merged into a single **Hi
 
 Displays the most recent records in reverse-insertion order (same as old Tail). The header shows total record count and how many rows are currently visible. A **"Show earlier"** button progressively expands the view. **Reload** re-fetches the full sheet.
 
+**Empty sheet:** when the full history has loaded and the sheet contains 0 expenses, History shows the same *"No expenses yet"* card as Home (without the ghost chart) instead of *"No records found."*: *"Add your first expense and this screen will show your spending summary."* with a **+ Add Expense** button opening the Add screen. For View guests the button is disabled with the same always-visible view-only note as Home. The card is not shown while History is loading or failed to load, and a filtered search with no matches in a non-empty sheet keeps showing *"No expenses match your search"*. Search and filter controls stay in place.
+
 ### Filtering
 
 A comment text input in the expandable **Filter** panel enables instant substring search across the Comment field (case-insensitive, debounced). The panel provides criteria in this order:
@@ -335,6 +365,13 @@ Available actions: **Reload**, **Edit** (redirect to edit form), **Delete last r
 ## 2.7 Home Screen Dashboard
 
 When a user is authenticated **and** has a sheet configured **and** the sheet contains at least one expense record, the home screen displays a spending summary dashboard instead of a simple navigation menu.
+
+**Empty states (onboarding):**
+
+- **No sheet connected:** title *"Welcome to Quick Expense!"*, body *"Connect a Google Sheet to store your expenses. The sheet is yours: Quick Expense never keeps a copy."*, and a **Connect Sheet →** button leading to Setup.
+- **Sheet connected, no expenses:** title *"No expenses yet"*, body *"Add your first expense and this screen will show your spending summary."*, a ghost bar chart, and a **+ Add Expense** button. For View guests the button stays visible but disabled, with an always-visible note above it: *"You have view-only access. Ask {owner email} for edit access to add expenses."* (or *"Ask the owner of this setup for edit access to add expenses."* when the owner email is unknown). The note is announced to screen readers as the button's description.
+
+**Display preferences placement:** the Display preferences card (date format) appears only on the connected-sheet Setup screen, as its last card. It is not shown on the setup path chooser, "Create your spreadsheet", or "Connect existing sheet" screens.
 
 ### 2.7.1 Data source and loading
 
