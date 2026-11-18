@@ -596,7 +596,8 @@ async function fetchTemplateSheets() {
   if (!apiKey) throw new Error("GOOGLE_API_KEY is not configured.");
   const fields = encodeURIComponent("sheets.properties(sheetId,title),namedRanges(name,range)");
   const response = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${TEMPLATE_SPREADSHEET_ID}?fields=${fields}&key=${encodeURIComponent(apiKey)}`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${TEMPLATE_SPREADSHEET_ID}?fields=${fields}`,
+    { headers: { "X-Goog-Api-Key": apiKey } },
   );
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));

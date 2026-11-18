@@ -1304,9 +1304,10 @@ describe("createSpreadsheet", () => {
 
     const templateCall = mockFetch.mock.calls.find((c) => c[0]?.includes(TEMPLATE_ID));
     expect(templateCall).toBeDefined();
-    expect(templateCall[0]).toContain("key=test-api-key");
     expect(templateCall[0]).toContain("fields=");
-    expect(templateCall[1]).toBeUndefined(); // plain GET, no init
+    expect(templateCall[0]).not.toContain("key=");
+    expect(templateCall[0]).not.toContain("test-api-key");
+    expect(templateCall[1].headers["X-Goog-Api-Key"]).toBe("test-api-key");
   });
 
   it("grants SA editor access on the new spreadsheet using the user token", async () => {
