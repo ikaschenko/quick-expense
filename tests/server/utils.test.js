@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { injectPosthogKey, serializeError } from "../../app-server/utils.js";
+import { injectPosthogKey, serializeError, getAnalyticsKey, hashAnalyticsIdentity } from "../../app-server/utils.js";
 
 describe("injectPosthogKey", () => {
   const html = "<html><head><title>QE</title></head><body></body></html>";
@@ -16,6 +16,26 @@ describe("injectPosthogKey", () => {
       expect(injectPosthogKey(html, key)).toBe(html);
     },
   );
+});
+
+describe("getAnalyticsKey", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it.each([[" phc_Abc123 ", "phc_Abc123"], ["", null], ["abc123", null], ['phc_x"y', null]])(
+    "should resolve %j to %j",
+    (value, expected) => {
+      vi.stubEnv("VITE_POSTHOG_KEY", value);
+      expect(getAnalyticsKey()).toBe(expected);
+    },
+  );
+});
+
+describe("hashAnalyticsIdentity", () => {
+  it("should hash the trimmed lowercase email like the browser does", () => {
+    // sha256("user@example.com")
+    const expected = "b4c9a289323b21a01c3e940f150eb9b8c542587f1abfd8f0e1cc1ffc5e475514";
+    expect(hashAnalyticsIdentity("  User@Example.com ")).toBe(expected);
+  });
 });
 
 describe("serializeError", () => {

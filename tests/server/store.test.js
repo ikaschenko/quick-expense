@@ -1,4 +1,6 @@
 // @vitest-environment node
+import crypto from "node:crypto";
+
 const mockQuery = vi.fn();
 const mockRelease = vi.fn();
 
@@ -174,6 +176,36 @@ describe("updateUserRecord", () => {
     expect(mockQuery.mock.calls[1][0]).toContain("INSERT INTO users");
     expect(mockQuery.mock.calls[1][0]).toContain("ON CONFLICT");
     expect(mockQuery.mock.calls[1][0]).toContain("(xmax = 0) AS inserted");
+  });
+
+  it("queues the signup event in the same statement as the account insert, keyed by the hashed email", async () => {
+    vi.stubEnv("VITE_POSTHOG_KEY", "phc_test");
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    mockQuery.mockResolvedValueOnce({ rows: [{ id: "9", inserted: true }] });
+
+    await updateUserRecord("New@Test.com ", (current) => ({ ...current, accessToken: "t", lastAuthenticatedAt: 1700000000000 }));
+
+    const [sql, params] = mockQuery.mock.calls[1];
+    expect(sql).toContain("INSERT INTO analytics_outbox");
+    expect(sql).toContain("WHERE inserted AND");
+    expect(params.slice(12)).toEqual([
+      expect.stringMatching(/^[0-9a-f-]{36}$/),
+      crypto.createHash("sha256").update("new@test.com").digest("hex"),
+      new Date(1700000000000),
+      true,
+    ]);
+    vi.unstubAllEnvs();
+  });
+
+  it("does not queue signups when analytics is not configured", async () => {
+    vi.stubEnv("VITE_POSTHOG_KEY", "");
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    mockQuery.mockResolvedValueOnce({ rows: [{ id: "9", inserted: true }] });
+
+    await updateUserRecord("new@test.com", (current) => ({ ...current, accessToken: "t", lastAuthenticatedAt: 1 }));
+
+    expect(mockQuery.mock.calls[1][1][15]).toBe(false);
+    vi.unstubAllEnvs();
   });
 
   it("does not report a signup when a concurrent insert wins after the lookup", async () => {

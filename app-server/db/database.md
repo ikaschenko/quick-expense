@@ -111,6 +111,7 @@ psql -U postgres -d quickexpense -f app-server/db/012_numeric_user_ids.sql
 psql -U postgres -d quickexpense -f app-server/db/013_setup_field_defaults.sql
 psql -U postgres -d quickexpense -f app-server/db/014_admin_usage_tracking.sql
 psql -U postgres -d quickexpense -f app-server/db/015_onboarding_tour.sql
+psql -U postgres -d quickexpense -f app-server/db/016_analytics_outbox.sql
 ```
 
 > Migration 011 removes any previously hidden `Comment` entries — `Comment` is now a protected (non-hideable) field.
@@ -120,3 +121,5 @@ psql -U postgres -d quickexpense -f app-server/db/015_onboarding_tour.sql
 > Apply all pending migrations in order, including 013 and 014, **before deploying the server build that starts Admin usage instrumentation**. This ensures the new tracking and provenance schema exists before the instrumented server starts.
 >
 > Migration 015 adds the nullable `users.onboarding_tour_seen_at` column (owner Setup tour flag) with no backfill. Apply it **before deploying** the server build that reads it, because `GET /api/auth/session` and `POST /api/onboarding/tour-seen` depend on the column.
+>
+> Migration 016 adds `analytics_outbox` (queued server-side PostHog events such as `user_signed_up`). Apply it **before deploying** the server build that writes to it, because the user upsert in `updateUserRecord()` references the table, so **every sign-in fails** until it exists. Existing users are not backfilled.

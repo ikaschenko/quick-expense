@@ -146,10 +146,10 @@ describe("when analytics is enabled", () => {
     email: "user@example.com", givenName: null, picture: null,
     lastAuthenticatedAt: 1, lastActivityAt: 1,
     isGuest: false, guestAccessLevel: null, ownerEmail: null, configStatus: "ok",
-    authentication: { id: "login-id", isNewUser: true, signupId: "signup-id", timestamp: 1000 },
+    authentication: { id: "login-id", timestamp: 1000 },
   } satisfies import("../../app-web/types/expense").AuthSession;
 
-  it("identifies before reporting signup and suppresses repeated session checks and reloads", async () => {
+  it("identifies before reporting login and suppresses repeated session checks and reloads", async () => {
     setMetaKey("phc_meta");
     let analytics = await loadAnalytics();
     analytics.initAnalytics();
@@ -158,17 +158,16 @@ describe("when analytics is enabled", () => {
     expect(posthogMock.identify.mock.invocationCallOrder[0]).toBeLessThan(posthogMock.capture.mock.invocationCallOrder[0]);
     expect(posthogMock.capture.mock.calls).toEqual([
       ["sign_in_completed", { account_type: "owner", access_level: "edit" }, { uuid: "login-id", timestamp: new Date(1000) }],
-      ["user_signed_up", { account_type: "owner", access_level: "edit" }, { uuid: "signup-id", timestamp: new Date(1000) }],
     ]);
     await analytics.identifyUser(session.email, session);
     analytics = await loadAnalytics();
     analytics.initAnalytics();
     await analytics.identifyUser(session.email, session);
-    expect(posthogMock.capture).toHaveBeenCalledTimes(2);
+    expect(posthogMock.capture).toHaveBeenCalledTimes(1);
     expect(localStorage.getItem("qe_analytics_auth")).not.toContain(session.email);
   });
 
-  it("reports another successful login without turning an existing guest into a signup", async () => {
+  it("reports another successful login for a guest", async () => {
     setMetaKey("phc_meta");
     const analytics = await loadAnalytics();
     analytics.initAnalytics();
@@ -176,7 +175,7 @@ describe("when analytics is enabled", () => {
     posthogMock.capture.mockClear();
     await analytics.identifyUser(session.email, {
       ...session, isGuest: true, guestAccessLevel: "view",
-      authentication: { id: "next-login", isNewUser: false, signupId: null, timestamp: 2000 },
+      authentication: { id: "next-login", timestamp: 2000 },
     });
     expect(posthogMock.capture.mock.calls).toEqual([
       ["sign_in_completed", { account_type: "guest", access_level: "view" }, { uuid: "next-login", timestamp: new Date(2000) }],
@@ -184,7 +183,16 @@ describe("when analytics is enabled", () => {
     expect(posthogMock.register).toHaveBeenLastCalledWith({ account_type: "guest", access_level: "view" });
   });
 
-  it("identifies legacy sessions without manufacturing login or signup events", async () => {
+  it("never emits user_signed_up from the browser, even for sessions that predate the server-side signup event", async () => {
+    setMetaKey("phc_meta");
+    const analytics = await loadAnalytics();
+    analytics.initAnalytics();
+    const legacy = { ...session, authentication: { id: "login-id", isNewUser: true, signupId: "signup-id", timestamp: 1000 } };
+    await analytics.identifyUser(session.email, legacy as typeof session);
+    expect(posthogMock.capture.mock.calls.map(([name]) => name)).toEqual(["sign_in_completed"]);
+  });
+
+  it("identifies legacy sessions without manufacturing login events", async () => {
     setMetaKey("phc_meta");
     const analytics = await loadAnalytics();
     analytics.initAnalytics();
@@ -202,11 +210,11 @@ describe("when analytics is enabled", () => {
     try {
       await analytics.identifyUser(session.email, session);
       await analytics.identifyUser(session.email, session);
-      expect(posthogMock.capture).toHaveBeenCalledTimes(2);
+      expect(posthogMock.capture).toHaveBeenCalledTimes(1);
       analytics = await loadAnalytics();
       analytics.initAnalytics();
       await analytics.identifyUser(session.email, session);
-      expect(posthogMock.capture.mock.calls[0]).toEqual(posthogMock.capture.mock.calls[2]);
+      expect(posthogMock.capture.mock.calls[0]).toEqual(posthogMock.capture.mock.calls[1]);
     } finally {
       read.mockRestore();
       write.mockRestore();
@@ -221,19 +229,8 @@ describe("when analytics is enabled", () => {
     await analytics.identifyUser(session.email, session);
     expect(localStorage.getItem("qe_analytics_auth")).toBeNull();
     await analytics.identifyUser(session.email, session);
-    expect(posthogMock.capture.mock.calls.map(([name]) => name)).toEqual(["sign_in_completed", "sign_in_completed", "user_signed_up"]);
-  });
-
-  it("retries a partially accepted signup with the same event UUIDs", async () => {
-    setMetaKey("phc_meta");
-    const analytics = await loadAnalytics();
-    analytics.initAnalytics();
-    posthogMock.capture.mockReturnValueOnce({}).mockReturnValueOnce(undefined);
-    await analytics.identifyUser(session.email, session);
-    expect(localStorage.getItem("qe_analytics_auth")).toBeNull();
-    await analytics.identifyUser(session.email, session);
-    expect(posthogMock.capture.mock.calls[0]).toEqual(posthogMock.capture.mock.calls[2]);
-    expect(posthogMock.capture.mock.calls[1]).toEqual(posthogMock.capture.mock.calls[3]);
+    expect(posthogMock.capture.mock.calls.map(([name]) => name)).toEqual(["sign_in_completed", "sign_in_completed"]);
+    expect(posthogMock.capture.mock.calls[0]).toEqual(posthogMock.capture.mock.calls[1]);
   });
 
   it("does not identify or capture after logout interrupts hashing", async () => {

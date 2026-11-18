@@ -95,6 +95,7 @@ import {
   updateShareAccessLevel,
 } from "./sharing.js";
 import { sendShareGrantedEmail, sendShareRevokedEmail } from "./email.js";
+import { startAnalyticsDelivery, triggerAnalyticsDelivery } from "./analytics.js";
 import logger, { startWarningDigestScheduler, listLogFiles, readLogEntries, logRouteError } from "./logger.js";
 import pool from "./db.js";
 import { injectPosthogKey, serializeError } from "./utils.js";
@@ -423,12 +424,8 @@ app.get("/api/auth/callback", async (req, res) => {
       req.session.userGivenName = userInfo.given_name ?? null;
       req.session.userFullName  = userInfo.name ?? null;
       req.session.userPicture = userInfo.picture ?? null;
-      req.session.authentication = {
-        id: crypto.randomUUID(),
-        isNewUser: updatedUser.isNewUser === true,
-        signupId: updatedUser.isNewUser === true ? crypto.randomUUID() : null,
-        timestamp: now,
-      };
+      req.session.authentication = { id: crypto.randomUUID(), timestamp: now };
+      if (updatedUser.isNewUser === true) triggerAnalyticsDelivery();
       res.redirect(`${getFrontendBaseUrl()}/home`);
     });
   } catch (callbackError) {
@@ -1638,6 +1635,7 @@ export function startServer() {
   });
   registerSignalHandlers();
   startWarningDigestScheduler();
+  startAnalyticsDelivery();
   void initializeUsageTracking().catch((error) => logger.error("usage_tracking_init_failed", { error: error.message }));
   const heartbeat = setInterval(() => { void heartbeatUsageTracking().catch((error) => logger.warn("usage_tracking_heartbeat_failed", { error: error.message })); }, 60_000);
   const cleanup = setInterval(() => { void cleanupUsageTracking().catch((error) => logger.warn("usage_tracking_cleanup_failed", { error: error.message })); }, 15 * 60_000);

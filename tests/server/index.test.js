@@ -44,6 +44,10 @@ const mocks = vi.hoisted(() => ({
     sendErrorAlertEmail: vi.fn(),
     sendWarningDigestEmail: vi.fn(),
   },
+  analytics: {
+    startAnalyticsDelivery: vi.fn(),
+    triggerAnalyticsDelivery: vi.fn(),
+  },
   logs: {
     listLogFiles: vi.fn(),
     readLogEntries: vi.fn(),
@@ -91,6 +95,7 @@ vi.mock("../../app-server/db.js", () => ({ default: mocks.pool }));
 vi.mock("../../app-server/store.js", () => mocks.store);
 vi.mock("../../app-server/sharing.js", () => mocks.sharing);
 vi.mock("../../app-server/email.js", () => mocks.email);
+vi.mock("../../app-server/analytics.js", () => mocks.analytics);
 vi.mock("../../app-server/google-client.js", async (importOriginal) => ({
   ...(await importOriginal()),
   ...mocks.google,
@@ -379,20 +384,16 @@ describe("GET /api/auth/callback", () => {
     mocks.google.fetchGoogleUserInfo.mockResolvedValue({ email: OWNER.email });
   });
 
-  it.each([true, false])("carries the database new-account result %s through the regenerated session", async (isNewUser) => {
+  it.each([true, false])("stores login metadata and triggers signup delivery only for new accounts (isNewUser=%s)", async (isNewUser) => {
     mocks.store.updateUserRecord.mockResolvedValue({ ...OWNER, isNewUser });
 
     const response = await fetch(`${baseUrl}/api/auth/callback?code=code&state=valid-state`, { redirect: "manual" });
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe("http://localhost:5173/home");
-    expect(mocks.session.authentication).toEqual({
-      id: expect.any(String), isNewUser,
-      signupId: isNewUser ? expect.any(String) : null,
-      timestamp: expect.any(Number),
-    });
-    expect(mocks.session.authentication.signupId).not.toBe(mocks.session.authentication.id);
+    expect(mocks.session.authentication).toEqual({ id: expect.any(String), timestamp: expect.any(Number) });
     expect(mocks.session.authentication.id).toMatch(/^[a-f0-9-]{36}$/);
+    expect(mocks.analytics.triggerAnalyticsDelivery).toHaveBeenCalledTimes(isNewUser ? 1 : 0);
     const first = await request("GET", "/api/auth/session");
     const second = await request("GET", "/api/auth/session");
     expect(first.body.session.authentication).toEqual(mocks.session.authentication);
@@ -404,6 +405,7 @@ describe("GET /api/auth/callback", () => {
 
     expect(mocks.session.authentication).toBeUndefined();
     expect(mocks.store.updateUserRecord).not.toHaveBeenCalled();
+    expect(mocks.analytics.triggerAnalyticsDelivery).not.toHaveBeenCalled();
   });
 
   it("does not mark a failed token exchange", async () => {
@@ -412,11 +414,12 @@ describe("GET /api/auth/callback", () => {
     expect(mocks.session.authentication).toBeUndefined();
   });
 
-  it("does not mark a failed session regeneration", async () => {
+  it("does not mark a failed session regeneration or trigger delivery", async () => {
     mocks.store.updateUserRecord.mockResolvedValue({ ...OWNER, isNewUser: true });
     mocks.session.regenerate.mockImplementation((callback) => callback(new Error("session failed")));
     await fetch(`${baseUrl}/api/auth/callback?code=code&state=valid-state`, { redirect: "manual" });
     expect(mocks.session.authentication).toBeUndefined();
+    expect(mocks.analytics.triggerAnalyticsDelivery).not.toHaveBeenCalled();
   });
 });
 

@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 const HTML_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 
 /**
@@ -22,6 +24,25 @@ export function injectPosthogKey(html, key) {
     return html;
   }
   return html.replace("</head>", `<meta name="posthog-key" content="${key}" />\n</head>`);
+}
+
+/**
+ * Returns the runtime PostHog project key, or null when it is missing or not a `phc_` key.
+ * @returns {string | null}
+ */
+export function getAnalyticsKey() {
+  const key = process.env.VITE_POSTHOG_KEY?.trim();
+  return key && /^phc_[A-Za-z0-9]+$/.test(key) ? key : null;
+}
+
+/**
+ * One-way analytics identity for an email. Must match hashEmail() in app-web/services/analytics.ts
+ * so server events land on the person the browser identifies.
+ * @param {string} email
+ * @returns {string}
+ */
+export function hashAnalyticsIdentity(email) {
+  return crypto.createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
 }
 
 /**

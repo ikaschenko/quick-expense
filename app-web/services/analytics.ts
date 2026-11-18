@@ -77,9 +77,6 @@ export async function identifyUser(email: string, session?: AuthSession): Promis
     } catch {}
     const timestamp = new Date(authentication.timestamp);
     if (!posthog.capture("sign_in_completed", properties, { uuid: authentication.id, timestamp })) return;
-    if (authentication.isNewUser && authentication.signupId) {
-      if (!posthog.capture("user_signed_up", properties, { uuid: authentication.signupId, timestamp })) return;
-    }
     authenticationReceipt = receipt;
     try {
       localStorage.setItem(AUTH_RECEIPT_KEY, receipt);

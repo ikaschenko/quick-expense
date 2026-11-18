@@ -1,4 +1,6 @@
+import crypto from "node:crypto";
 import pool from "./db.js";
+import { getAnalyticsKey, hashAnalyticsIdentity } from "./utils.js";
 
 export function defaultsConflict() {
   return Object.assign(new Error("Defaults changed. Reload the page before trying again."), {
@@ -80,22 +82,28 @@ export async function updateUserRecord(email, updater) {
   next.connectionValidatedAt = current?.connectionValidatedAt ?? next.connectionValidatedAt ?? null;
   next.connectionOrigin = current?.connectionOrigin ?? next.connectionOrigin ?? null;
 
+  // One statement = one transaction: the signup event is queued if and only if this call inserted the account.
   const { rows } = await pool.query(
-    `INSERT INTO users (email, access_token, access_token_expires_at, refresh_token,
-                        spreadsheet_url, spreadsheet_id, last_authenticated_at, last_activity_at,
-                        first_signed_in_at, connection_validated_at, connection_origin, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
-     ON CONFLICT (email) DO UPDATE SET
-       access_token = EXCLUDED.access_token,
-       access_token_expires_at = EXCLUDED.access_token_expires_at,
-       refresh_token = EXCLUDED.refresh_token,
-       spreadsheet_url = CASE WHEN $12 THEN EXCLUDED.spreadsheet_url ELSE users.spreadsheet_url END,
-       spreadsheet_id = CASE WHEN $12 THEN EXCLUDED.spreadsheet_id ELSE users.spreadsheet_id END,
-       last_authenticated_at = EXCLUDED.last_authenticated_at,
-       last_activity_at = EXCLUDED.last_activity_at,
-       updated_at = now()
-      RETURNING id, (xmax = 0) AS inserted`,
-
+    `WITH upserted AS (
+       INSERT INTO users (email, access_token, access_token_expires_at, refresh_token,
+                          spreadsheet_url, spreadsheet_id, last_authenticated_at, last_activity_at,
+                          first_signed_in_at, connection_validated_at, connection_origin, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
+       ON CONFLICT (email) DO UPDATE SET
+         access_token = EXCLUDED.access_token,
+         access_token_expires_at = EXCLUDED.access_token_expires_at,
+         refresh_token = EXCLUDED.refresh_token,
+         spreadsheet_url = CASE WHEN $12 THEN EXCLUDED.spreadsheet_url ELSE users.spreadsheet_url END,
+         spreadsheet_id = CASE WHEN $12 THEN EXCLUDED.spreadsheet_id ELSE users.spreadsheet_id END,
+         last_authenticated_at = EXCLUDED.last_authenticated_at,
+         last_activity_at = EXCLUDED.last_activity_at,
+         updated_at = now()
+       RETURNING id, (xmax = 0) AS inserted
+     ), queued_signup AS (
+       INSERT INTO analytics_outbox (event_id, event, distinct_id, occurred_at)
+       SELECT $13::uuid, 'user_signed_up', $14::text, $15::timestamptz FROM upserted WHERE inserted AND $16::boolean
+     )
+     SELECT id, inserted FROM upserted`,
     [
       normalizedEmail,
       next.accessToken,
@@ -109,6 +117,10 @@ export async function updateUserRecord(email, updater) {
       next.connectionValidatedAt,
       next.connectionOrigin,
       !!current && (next.spreadsheetId !== current.spreadsheetId || next.spreadsheetUrl !== current.spreadsheetUrl),
+      crypto.randomUUID(),
+      hashAnalyticsIdentity(normalizedEmail),
+      new Date(next.lastAuthenticatedAt),
+      getAnalyticsKey() !== null,
     ],
   );
 

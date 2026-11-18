@@ -195,7 +195,7 @@ export interface AuthSession {
   isAppAdmin?: boolean;
   /** True once the owner finished or skipped the auto-started Setup tour (persisted server-side). */
   onboardingTourSeen?: boolean;
-  authentication?: { id: string; isNewUser: boolean; signupId: string | null; timestamp: number } | null;
+  authentication?: { id: string; timestamp: number } | null;
 }
 
 export interface AuthSessionMeta {
