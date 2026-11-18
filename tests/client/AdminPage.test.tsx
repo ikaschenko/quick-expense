@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { AdminPage } from "../../app-web/pages/AdminPage";
@@ -109,6 +109,7 @@ describe("per-period observation status", () => {
     await screen.findByText("Total users");
     expect(screen.getAllByText(/Current:.*Observed partial counts.*Previous:.*Unavailable/)).toHaveLength(2);
     expect(screen.getAllByText("Previous period: Unavailable").length).toBeGreaterThan(0);
-    expect(screen.getByRole("region", { name: "Tracking coverage gaps" }).textContent).toContain("2026-10-01T01:00:00.000Z");
+    const gaps = screen.getByRole("region", { name: "Tracking coverage gaps" });
+    expect(within(gaps).getByRole("listitem").textContent).toBe("2026-10-01T01:00:00.000Z – 02:00:00.000Z, 01h:00m:00s");
   });
 });

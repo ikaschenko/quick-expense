@@ -3377,6 +3377,8 @@ button { cursor: pointer; }
 }
 .admin-section h2 { margin-bottom: var(--space-2); font-size: var(--font-size-xl); }
 .admin-section > p:not(.admin-periods):not(.admin-coverage) { color: var(--color-text-secondary); }
+.admin-gap-list { list-style: disc; padding-left: var(--space-5); font-variant-numeric: tabular-nums; }
+.admin-gap-list li + li { margin-top: var(--space-1); }
 .admin-periods { margin: 0 0 var(--space-4); color: var(--color-text-secondary); font-size: var(--font-size-sm); }
 .admin-metric-grid {
   display: grid;

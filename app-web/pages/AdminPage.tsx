@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, RefreshCw, Shield } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { adminApi } from "../services/adminApi";
 import type { AdminUsageMetrics, MetricChange } from "../types/expense";
+import { formatCoverageGap } from "../utils/coverageGap";
 
 function formatDate(value: string): string {
   return new Date(`${value}T00:00:00Z`).toLocaleDateString(undefined, { timeZone: "UTC", year: "numeric", month: "short", day: "numeric", timeZoneName: undefined });
@@ -158,7 +159,7 @@ export function AdminPage(): JSX.Element {
 
         {metrics.coverageGaps?.length ? <section className="admin-section" aria-label="Tracking coverage gaps">
           <h2>Tracking coverage gaps</h2>
-          <ul>{metrics.coverageGaps.map((gap, index) => <li key={index}>{new Date(gap.start).toISOString()} – {new Date(gap.end).toISOString()}</li>)}</ul>
+          <ul className="admin-gap-list">{metrics.coverageGaps.map((gap, index) => <li key={index}>{formatCoverageGap(gap)}</li>)}</ul>
         </section> : null}
         <section className="admin-section" aria-labelledby="admin-operations-heading">
           <h2 id="admin-operations-heading">Operations</h2>
