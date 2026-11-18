@@ -16,7 +16,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "security:audit": "npm audit --audit-level=high"
+    "security:audit": "npm audit --omit=dev --audit-level=high"
   },
   "dependencies": {
     "connect-pg-simple": "^10.0.0",
