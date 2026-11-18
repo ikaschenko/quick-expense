@@ -101,7 +101,7 @@ export function useOnboardingTour(): { start: (options: StartTourOptions) => boo
       onDoneClick: () => {
         outcome = "completed";
         tour.destroy();
-        if (ending === "add-expense") navigateRef.current("/add");
+        if (ending === "add-expense") void navigateRef.current("/add");
       },
       onDestroyed: (_element, _step, { reason }) => {
         const result = outcome ?? (reason === "done" ? "completed" : "skipped");
