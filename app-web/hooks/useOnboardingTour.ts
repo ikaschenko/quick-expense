@@ -5,6 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { trackEvent } from "../services/analytics";
 import {
   buildTourSteps,
+  computeTourScrollDelta,
   filterAvailableSteps,
   type TourStepId,
   type TourTrigger,
@@ -18,6 +19,20 @@ export interface StartTourOptions {
 }
 
 const selectorFor = (id: TourStepId): string => `[data-tour="${id}"]`;
+
+/** driver.js ignores the fixed topbar and bottom nav, so the target is scrolled between them here. */
+function scrollTargetIntoView(element: Element | undefined): void {
+  if (!element || element.closest(".topbar, .bottom-nav")) return;
+  const rect = element.getBoundingClientRect();
+  const delta = computeTourScrollDelta({
+    targetTop: rect.top,
+    targetHeight: rect.height,
+    viewportHeight: window.innerHeight,
+    topInset: document.querySelector(".topbar")?.getBoundingClientRect().bottom ?? 0,
+    bottomInset: window.innerHeight - (document.querySelector(".bottom-nav")?.getBoundingClientRect().top ?? window.innerHeight),
+  });
+  if (delta !== 0) window.scrollBy(0, delta);
+}
 
 /** Wraps driver.js for the Setup onboarding tour. `start` returns false when no step target is on screen. */
 export function useOnboardingTour(): { start: (options: StartTourOptions) => boolean } {
@@ -60,7 +75,7 @@ export function useOnboardingTour(): { start: (options: StartTourOptions) => boo
       allowKeyboardControl: true,
       overlayClickBehavior: "nextStep",
       focus: "popover",
-      smoothScroll: true,
+      scrollIntoView: false,
       stagePadding: 6,
       stageRadius: 10,
       onPopoverRender: (popover, { index }) => {
@@ -78,6 +93,7 @@ export function useOnboardingTour(): { start: (options: StartTourOptions) => boo
         });
         popover.footer.insertBefore(skip, popover.footerButtons);
       },
+      onHighlightStarted: (element) => scrollTargetIntoView(element),
       onHighlighted: (_element, _step, { index }) => {
         activeIndex = index ?? 0;
         trackEvent("onboarding_tour_step_viewed", { step_id: steps[activeIndex].id, step_index: activeIndex + 1, total_steps: total });

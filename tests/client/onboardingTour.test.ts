@@ -1,4 +1,4 @@
-import { buildTourSteps, filterAvailableSteps, tourVariantFromOrigin, type TourStepId } from "../../app-web/utils/onboardingTour";
+import { buildTourSteps, computeTourScrollDelta, filterAvailableSteps, tourVariantFromOrigin, type TourStepId } from "../../app-web/utils/onboardingTour";
 
 describe("buildTourSteps", () => {
   it("should return the five steps in agreed order for a new sheet", () => {
@@ -49,6 +49,20 @@ describe("filterAvailableSteps", () => {
 
   it("should return an empty list when no control is present", () => {
     expect(filterAvailableSteps(steps, () => false)).toEqual([]);
+  });
+});
+
+describe("computeTourScrollDelta", () => {
+  const viewport = { viewportHeight: 800, topInset: 56, bottomInset: 64 };
+
+  it.each([
+    ["target and popover already between the bars", 300, 40, 0],
+    ["target hidden under the topbar", 20, 40, -226],
+    ["target hidden under the bottom nav", 700, 40, 454],
+    ["target visible but its popover would not fit below", 600, 40, 354],
+    ["target taller than the visible area, aligned to the top", 500, 900, 432],
+  ])("should handle %s", (_label, targetTop, targetHeight, expected) => {
+    expect(computeTourScrollDelta({ ...viewport, targetTop, targetHeight })).toBe(expected);
   });
 });
 

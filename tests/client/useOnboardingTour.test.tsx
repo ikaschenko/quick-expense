@@ -99,6 +99,27 @@ describe("useOnboardingTour", () => {
     expect(mocks.markSeen).not.toHaveBeenCalled();
   });
 
+  it("should scroll a target hidden under the topbar and leave fixed-bar targets alone", () => {
+    document.body.innerHTML = '<header class="topbar"></header><div data-tour="currencies" id="t"></div><nav class="bottom-nav"><a data-tour="add-nav" id="n"></a></nav>';
+    const rect = (top: number, height: number) => ({ top, height, bottom: top + height }) as DOMRect;
+    vi.spyOn(document.querySelector(".topbar")!, "getBoundingClientRect").mockReturnValue(rect(0, 56));
+    vi.spyOn(document.querySelector(".bottom-nav")!, "getBoundingClientRect").mockReturnValue(rect(736, 64));
+    vi.spyOn(document.getElementById("t")!, "getBoundingClientRect").mockReturnValue(rect(20, 40));
+    const scrollBy = vi.fn();
+    vi.stubGlobal("scrollBy", scrollBy);
+    vi.stubGlobal("innerHeight", 800);
+    startTour({ variant: "new_sheet", trigger: "auto", hasExpenses: false });
+    expect(mocks.config!.scrollIntoView).toBe(false);
+
+    mocks.config!.onHighlightStarted?.(document.getElementById("t")!, {}, {} as never);
+    expect(scrollBy).toHaveBeenCalledWith(0, -226);
+
+    scrollBy.mockClear();
+    mocks.config!.onHighlightStarted?.(document.getElementById("n")!, {}, {} as never);
+    expect(scrollBy).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
   it("should track each viewed step with a 1-based index", () => {
     startTour({ variant: "new_sheet", trigger: "auto", hasExpenses: false });
 

@@ -59,6 +59,37 @@ export function buildTourSteps({ variant, hasExpenses, isReplay }: TourOptions):
   ];
 }
 
+/** Room kept for the popover next to the highlight: popover offset, stage padding and arrow. */
+export const TOUR_POPOVER_GAP = 20;
+/** Rough popover height, used before the popover is rendered. */
+export const TOUR_POPOVER_HEIGHT = 240;
+const TOUR_EDGE_GAP = 12;
+
+export interface TourScrollInput {
+  /** Target rect in viewport coordinates. */
+  targetTop: number;
+  targetHeight: number;
+  viewportHeight: number;
+  /** Height covered by fixed bars at the top and bottom of the viewport. */
+  topInset: number;
+  bottomInset: number;
+}
+
+/**
+ * Pixels to scroll the page (positive = down) so the highlighted target and its popover sit between
+ * the fixed bars. Returns 0 when they already do; a target too tall to fit is aligned to the top.
+ */
+export function computeTourScrollDelta({ targetTop, targetHeight, viewportHeight, topInset, bottomInset }: TourScrollInput): number {
+  const areaTop = topInset + TOUR_EDGE_GAP;
+  const areaBottom = viewportHeight - bottomInset - TOUR_EDGE_GAP;
+  const stackHeight = targetHeight + TOUR_POPOVER_GAP + TOUR_POPOVER_HEIGHT;
+  const fits = stackHeight <= areaBottom - areaTop;
+  if (fits && targetTop >= areaTop && targetTop + stackHeight <= areaBottom) return 0;
+
+  const desiredTop = fits ? areaTop + (areaBottom - areaTop - stackHeight) / 2 : areaTop;
+  return Math.round(targetTop - desiredTop);
+}
+
 /** Drops steps whose control is not on screen, so progress counts only reachable steps. */
 export function filterAvailableSteps(steps: TourStep[], isPresent: (id: TourStepId) => boolean): TourStep[] {
   return steps.filter((step) => isPresent(step.id));
