@@ -904,7 +904,7 @@ export function AddExpensePage(): JSX.Element {
                 />
                 <span className="add-fx-rate-text" aria-hidden>{activeNonUsdCurrency}</span>
               </div>
-              <div className="add-fx-card-result-value" aria-live="polite">≈ {draft.USD || "0.00"} USD</div>
+              <div className={`add-fx-card-result-value${draft.USD ? "" : " add-fx-card-result-value--empty"}`} aria-live="polite">≈ {draft.USD || "0.00"} USD</div>
             </div>
             {draft.Date === getTodayLocalDate() ? (
               isFetchingLiveRates ? (
