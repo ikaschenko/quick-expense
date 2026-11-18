@@ -28,3 +28,18 @@ describe("014 admin usage tracking migration", () => {
     expect(migration).toContain("FROM authenticated");
   });
 });
+
+describe("017 users analytics id migration", () => {
+  const analyticsMigration = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../app-server/db/017_users_analytics_id.sql"), "utf8");
+
+  it("backfills existing users with the same SHA-256 hex of the normalized email", () => {
+    expect(analyticsMigration).toContain("encode(sha256(convert_to(lower(btrim(email)), 'UTF8')), 'hex')");
+  });
+
+  it("makes the column required and unique only after the backfill", () => {
+    const backfill = analyticsMigration.indexOf("UPDATE users SET analytics_id");
+    expect(backfill).toBeGreaterThan(analyticsMigration.indexOf("ADD COLUMN analytics_id"));
+    expect(analyticsMigration.indexOf("SET NOT NULL")).toBeGreaterThan(backfill);
+    expect(analyticsMigration).toContain("CREATE UNIQUE INDEX users_analytics_id_idx ON users (analytics_id)");
+  });
+});

@@ -112,6 +112,7 @@ psql -U postgres -d quickexpense -f app-server/db/013_setup_field_defaults.sql
 psql -U postgres -d quickexpense -f app-server/db/014_admin_usage_tracking.sql
 psql -U postgres -d quickexpense -f app-server/db/015_onboarding_tour.sql
 psql -U postgres -d quickexpense -f app-server/db/016_analytics_outbox.sql
+psql -U postgres -d quickexpense -f app-server/db/017_users_analytics_id.sql
 ```
 
 > Migration 011 removes any previously hidden `Comment` entries — `Comment` is now a protected (non-hideable) field.
@@ -123,3 +124,5 @@ psql -U postgres -d quickexpense -f app-server/db/016_analytics_outbox.sql
 > Migration 015 adds the nullable `users.onboarding_tour_seen_at` column (owner Setup tour flag) with no backfill. Apply it **before deploying** the server build that reads it, because `GET /api/auth/session` and `POST /api/onboarding/tour-seen` depend on the column.
 >
 > Migration 016 adds `analytics_outbox` (queued server-side PostHog events such as `user_signed_up`). Apply it **before deploying** the server build that writes to it, because the user upsert in `updateUserRecord()` references the table, so **every sign-in fails** until it exists. Existing users are not backfilled.
+>
+> Migration 017 adds `users.analytics_id` (the PostHog distinct ID: hex SHA-256 of the trimmed, lowercased email), backfills existing users, then makes it `NOT NULL` + unique. Apply it **before deploying** the server build that writes it, because the user upsert in `updateUserRecord()` references the column, so **every sign-in fails** until it exists. To exclude people (e.g. the product team) in PostHog, look up their IDs: `SELECT email, analytics_id FROM users WHERE email IN (...)`.

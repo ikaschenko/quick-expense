@@ -87,8 +87,8 @@ export async function updateUserRecord(email, updater) {
     `WITH upserted AS (
        INSERT INTO users (email, access_token, access_token_expires_at, refresh_token,
                           spreadsheet_url, spreadsheet_id, last_authenticated_at, last_activity_at,
-                          first_signed_in_at, connection_validated_at, connection_origin, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
+                          first_signed_in_at, connection_validated_at, connection_origin, analytics_id, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $14::text, now())
        ON CONFLICT (email) DO UPDATE SET
          access_token = EXCLUDED.access_token,
          access_token_expires_at = EXCLUDED.access_token_expires_at,

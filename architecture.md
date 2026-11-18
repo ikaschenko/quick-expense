@@ -349,6 +349,7 @@ Stores authenticated user records: OAuth tokens, spreadsheet configuration, and 
 | `connection_origin` | TEXT | Nullable; CHECK IN (`created`, `existing`, `unknown`) |
 | `connection_revision` | BIGINT | NOT NULL, DEFAULT 0 |
 | `onboarding_tour_seen_at` | TIMESTAMPTZ | Nullable; set once when the owner finishes or skips the auto-started Setup tour (migration 015, no backfill) |
+| `analytics_id` | TEXT | NOT NULL, UNIQUE; PostHog distinct ID = hex SHA-256 of the trimmed, lowercased email, set on insert by `updateUserRecord()` and never updated (migration 017, backfilled) |
 | `created_at` | TIMESTAMPTZ | DEFAULT now() |
 | `updated_at` | TIMESTAMPTZ | DEFAULT now() |
 
@@ -541,6 +542,7 @@ Current migrations:
 | `014_admin_usage_tracking.sql` | Add validated-connection provenance, usage/activity/session tracking, and tracking-coverage records |
 | `015_onboarding_tour.sql` | Add nullable `users.onboarding_tour_seen_at` (no backfill) for the persisted Setup tour flag |
 | `016_analytics_outbox.sql` | Add `analytics_outbox`, the durable queue for server-side PostHog events (`user_signed_up`); no backfill |
+| `017_users_analytics_id.sql` | Add `users.analytics_id` (PostHog distinct ID, SHA-256 of normalized email), backfill, `NOT NULL` + unique index |
 
 ---
 

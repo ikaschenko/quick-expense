@@ -197,6 +197,18 @@ describe("updateUserRecord", () => {
     vi.unstubAllEnvs();
   });
 
+  it("stores the analytics ID on insert and never overwrites it on conflict", async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] });
+    mockQuery.mockResolvedValueOnce({ rows: [{ id: "9", inserted: true }] });
+
+    await updateUserRecord("New@Test.com ", (current) => ({ ...current, accessToken: "t", lastAuthenticatedAt: 1 }));
+
+    const [sql, params] = mockQuery.mock.calls[1];
+    expect(sql).toMatch(/connection_origin, analytics_id, updated_at\)\s+VALUES \(.*\$14::text, now\(\)\)/);
+    expect(sql.split("DO UPDATE SET")[1].split("RETURNING")[0]).not.toContain("analytics_id");
+    expect(params[13]).toBe(crypto.createHash("sha256").update("new@test.com").digest("hex"));
+  });
+
   it("does not queue signups when analytics is not configured", async () => {
     vi.stubEnv("VITE_POSTHOG_KEY", "");
     mockQuery.mockResolvedValueOnce({ rows: [] });
