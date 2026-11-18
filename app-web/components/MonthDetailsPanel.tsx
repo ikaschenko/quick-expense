@@ -60,7 +60,7 @@ export function MonthDetailsPanel({ records, toIso, startDate, endDate, isLoadin
         currentLabel={monthLabel(startDate)}
         priorLabel={monthLabel(priorStartDate)}
         showInlineDetails
-        dateDisplayFormat={dateDisplayFormat}
+        expandHint="Expand to see transactions"        dateDisplayFormat={dateDisplayFormat}
       />
     </div>
   );

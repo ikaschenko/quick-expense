@@ -410,6 +410,11 @@ Dashboard data is loaded via the same mechanism as History (shared in-memory dat
   - Projected full-year USD total, based on the recent daily spending rate
   - Shows *"Not enough data"* instead of an amount when the forecast cannot be computed (insufficient recent baseline data)
   - **Year-over-year deviation:** compares the forecast to last year's actual full-year total; shown as muted *"No data"* when the prior year has no recorded expenses at all
+- **Category monthly trend (Year details):** tapping a category row in the Year details table (or activating its keyboard-accessible button) expands a bar chart of that category's USD spend per month (Jan–Dec) for the displayed year; tapping the row again collapses it.
+  - One category is expanded at a time; the trend collapses when the displayed year, the Group toggle or the Top 5 / All filter changes.
+  - Grouping matches the table: a merged row (e.g. `Food...`) sums all its member categories, so the 12 bars add up to the row's year amount.
+  - The chart has the same style as the yearly chart, with its own Y-axis scale, no average line and no prior-year overlay. In the in-progress year, future months are hatched placeholders and the current month shows its month-to-date amount; past months with no spend show a zero-height bar.
+  - Tapping a bar shows a tooltip with the month and exact USD amount; bars do not drill into Month details. The pie chart and table are unaffected.
 
 ### 2.7.5 Aggregation rules
 

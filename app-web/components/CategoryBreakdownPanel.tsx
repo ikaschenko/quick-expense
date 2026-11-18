@@ -1,8 +1,8 @@
-import { Fragment, useEffect, useMemo, useState, type JSX } from "react";
+import { Fragment, useEffect, useId, useMemo, useState, type JSX, type ReactNode } from "react";
 import { FormattedAmount } from "./FormattedAmount";
 import { CategoryPieChart } from "./CategoryPieChart";
 import { formatPctChange, IsoNormalizer } from "../utils/dashboardStats";
-import { getCategoryBreakdown, buildPieSlices } from "../utils/monthDetails";
+import { getCategoryBreakdown, buildPieSlices, type CategoryBreakdownRow } from "../utils/monthDetails";
 import { parseUsd } from "../utils/currencyTotals";
 import { COMMENT_PREVIEW_LENGTH } from "../utils/expenseTable";
 import { DateDisplayFormat, formatDisplayDate } from "../utils/date";
@@ -23,8 +23,12 @@ export interface CategoryBreakdownPanelProps {
   defaultGrouped?: boolean;
   /** Enables current-period transaction drill-down rows. */
   showInlineDetails?: boolean;
+  /** Makes rows expandable with custom content instead of the transaction drill-down. */
+  renderRowDetails?: (row: CategoryBreakdownRow) => ReactNode;
   /** Display format used by current-period transaction dates. */
   dateDisplayFormat?: DateDisplayFormat;
+  /** Hover hint (native tooltip) shown on collapsed expandable rows. */
+  expandHint?: string;
 }
 
 type TopFilter = "top5" | "all";
@@ -44,8 +48,12 @@ export function CategoryBreakdownPanel({
   priorLabel,
   defaultGrouped = false,
   showInlineDetails = false,
+  renderRowDetails,
   dateDisplayFormat = "locale",
+  expandHint,
 }: CategoryBreakdownPanelProps): JSX.Element {
+  const expandable = showInlineDetails || renderRowDetails !== undefined;
+  const idPrefix = useId();
   const [topFilter, setTopFilter] = useState<TopFilter>("all");
   const [grouped, setGrouped] = useState(defaultGrouped);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
@@ -123,20 +131,21 @@ export function CategoryBreakdownPanel({
             <tbody>
               {rows.map((row) => {
                 const isExpanded = expandedCategory === row.label;
-                const detailsId = `month-details-${row.label.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
+                const detailsId = `${idPrefix}-${row.label.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
                 return (
                   <Fragment key={row.label}>
                     {/* Row-level handler also catches clicks bubbling from the toggle button, so it fires exactly once. */}
                     <tr
-                      className={showInlineDetails ? "month-details-category-row" : undefined}
+                      className={expandable ? "month-details-category-row" : undefined}
+                      title={expandable && !isExpanded ? expandHint : undefined}
                       onClick={
-                        showInlineDetails
+                        expandable
                           ? () => setExpandedCategory((current) => (current === row.label ? null : row.label))
                           : undefined
                       }
                     >
                       <td>
-                        {showInlineDetails ? (
+                        {expandable ? (
                           <button
                             type="button"
                             className="month-details-category-toggle"
@@ -174,7 +183,12 @@ export function CategoryBreakdownPanel({
                         </span>
                       </td>
                     </tr>
-                    {showInlineDetails && isExpanded && (
+                    {isExpanded && renderRowDetails && (
+                      <tr id={detailsId} className="month-details-transactions">
+                        <td colSpan={4}>{renderRowDetails(row)}</td>
+                      </tr>
+                    )}
+                    {showInlineDetails && !renderRowDetails && isExpanded && (
                       <tr id={detailsId} className="month-details-transactions">
                         <td colSpan={4}>
                           <table aria-label={`${row.label} transactions`}>

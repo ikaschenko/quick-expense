@@ -1217,6 +1217,17 @@ button { cursor: pointer; }
   color: var(--color-text-secondary);
 }
 
+.month-details-trend {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.month-details-trend-label {
+  margin: var(--space-1) var(--space-2) 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
 /* Fixed width + right alignment keeps the decimal point at the same position across rows. */
 .month-details-amount {
   display: inline-block;

@@ -22,10 +22,12 @@ const MONTH_NAMES = [
 interface YearSpendChartProps {
   monthlyAmounts: (number | null)[];
   year: number;
-  averagePerMonth: number;
+  /** Draws the dashed average line; omit for charts without one (e.g. a single-category trend). */
+  averagePerMonth?: number | null;
   currentMonthIndex: number | null;
   /** Fires on desktop click, or on a second touch tap of the same bar (first tap only shows its tooltip). */
   onMonthClick?: (year: number, month: number) => void;
+  ariaLabel?: string;
 }
 
 export type MonthClickResolution = { type: "ignore" } | { type: "arm" } | { type: "navigate" };
@@ -50,7 +52,7 @@ export function resolveMonthClick(
 export function buildSeries(
   monthlyAmounts: (number | null)[],
   forecastHatchColor: string,
-  averagePerMonth: number,
+  averagePerMonth: number | null | undefined,
   averageLineColor: string,
   currentMonthIndex: number | null,
 ): BarSeriesOption[] {
@@ -78,13 +80,15 @@ export function buildSeries(
     ),
     barMaxWidth: 24,
     itemStyle: { color: "rgba(79,70,229,0.9)" },
-    markLine: {
-      silent: true,
-      symbol: "none",
-      lineStyle: { color: averageLineColor, type: "dashed" },
-      label: { show: false },
-      data: [{ yAxis: averagePerMonth }],
-    },
+    ...(averagePerMonth != null && {
+      markLine: {
+        silent: true,
+        symbol: "none",
+        lineStyle: { color: averageLineColor, type: "dashed" },
+        label: { show: false },
+        data: [{ yAxis: averagePerMonth }],
+      },
+    }),
   };
   if (!hasForecast) return [actualSeries];
 
@@ -101,7 +105,14 @@ export function buildSeries(
   return [actualSeries, forecastSeries];
 }
 
-export function YearSpendChart({ monthlyAmounts, year, averagePerMonth, currentMonthIndex, onMonthClick }: YearSpendChartProps): JSX.Element {
+export function YearSpendChart({
+  monthlyAmounts,
+  year,
+  averagePerMonth,
+  currentMonthIndex,
+  onMonthClick,
+  ariaLabel = "Monthly spending for the selected year",
+}: YearSpendChartProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
   // Touch-only: dataIndex of the bar whose tooltip is already showing from a first tap.
@@ -131,7 +142,8 @@ export function YearSpendChart({ monthlyAmounts, year, averagePerMonth, currentM
           const item = (Array.isArray(params) ? params[0] : params) as { dataIndex: number };
           const amount = monthlyAmounts[item.dataIndex];
           if (amount === null) return "";
-          return `${MONTH_NAMES[item.dataIndex]} ${year}<br/>Total: $${amount.toFixed(2)}`;
+          const hint = onMonthClick ? "<br/><em>Click to navigate to the details of this month</em>" : "";
+          return `${MONTH_NAMES[item.dataIndex]} ${year}<br/>Total: $${amount.toFixed(2)}${hint}`;
         },
       },
       xAxis: {
@@ -185,7 +197,7 @@ export function YearSpendChart({ monthlyAmounts, year, averagePerMonth, currentM
 
 
   return (
-    <div className="home-chart-container year-chart-container" ref={containerRef} role="img" aria-label="Monthly spending for the selected year">
+    <div className="home-chart-container year-chart-container" ref={containerRef} role="img" aria-label={ariaLabel}>
     </div>
   );
 }

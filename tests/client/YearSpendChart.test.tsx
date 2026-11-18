@@ -56,6 +56,17 @@ describe("YearSpendChart — buildSeries", () => {
 
     expect(series).toHaveLength(1);
   });
+  it("omits the average markLine when no average is provided", () => {
+    const [series] = buildSeries(Array.from({ length: 12 }, () => 5), "gray", null, "orange", null);
+
+    expect(series.markLine).toBeUndefined();
+  });
+
+  it("keeps the dashed average markLine when an average is provided", () => {
+    const [series] = buildSeries(Array.from({ length: 12 }, () => 5), "gray", 5, "orange", null);
+
+    expect(series.markLine?.data).toEqual([{ yAxis: 5 }]);
+  });
 });
 
 describe("YearSpendChart — resolveMonthClick", () => {
@@ -161,5 +172,14 @@ describe("YearSpendChart — rendering", () => {
 
     expect(chart.off).toHaveBeenCalledWith("click", expect.any(Function));
     expect(chart.dispose).toHaveBeenCalled();
+  });
+
+  it("should use the custom accessible label when provided", () => {
+    createFakeChart();
+    const view = render(
+      <YearSpendChart monthlyAmounts={monthlyAmounts} year={2026} currentMonthIndex={1} ariaLabel="Food spending by month" />,
+    );
+
+    expect(view.getByRole("img", { name: "Food spending by month" })).toBeTruthy();
   });
 });
