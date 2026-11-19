@@ -122,6 +122,44 @@ describe("handleAlertableEntry", () => {
     expect(sendErrorAlertEmail).toHaveBeenCalledTimes(1);
   });
 
+  it("reports how many errors were suppressed by the throttle in the next alert", () => {
+    vi.useFakeTimers();
+    try {
+      handleAlertableEntry({ level: "error", message: "first" });
+      handleAlertableEntry({ level: "error", message: "second" });
+      handleAlertableEntry({ level: "error", message: "third" });
+      vi.advanceTimersByTime(300_000);
+      handleAlertableEntry({ level: "error", message: "fourth" });
+      vi.advanceTimersByTime(300_000);
+      handleAlertableEntry({ level: "error", message: "fifth" });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(sendErrorAlertEmail.mock.calls.map(([params]) => [params.message, params.suppressedCount])).toEqual([
+      ["first", 0],
+      ["fourth", 2],
+      ["fifth", 0],
+    ]);
+  });
+
+  it("forwards request and error-type details to the alert email", () => {
+    handleAlertableEntry({
+      level: "error",
+      message: "unhandled_request_error",
+      errorType: "URIError",
+      method: "GET",
+      path: "/x",
+      statusCode: 500,
+      clientIp: "203.0.113.7",
+      userAgent: "curl/8",
+    });
+
+    expect(sendErrorAlertEmail).toHaveBeenCalledWith(expect.objectContaining({
+      errorType: "URIError", method: "GET", path: "/x", statusCode: 500, clientIp: "203.0.113.7", userAgent: "curl/8",
+    }));
+  });
+
   it("does not send an email for warn-level entries", () => {
     handleAlertableEntry({ level: "warn", message: "careful" });
 
@@ -172,8 +210,17 @@ describe("logRouteError", () => {
 
     logRouteError(req, "test_event", error);
 
-    expect(spy).toHaveBeenCalledWith("test_event", { event: "test_event", error: "boom", stack: error.stack });
+    expect(spy).toHaveBeenCalledWith("test_event", { event: "test_event", error: "boom", errorType: "Error", stack: error.stack });
     expect(error.logged).toBe(true);
+    spy.mockRestore();
+  });
+
+  it("merges extra metadata such as statusCode into the log entry", () => {
+    const spy = vi.spyOn(logger, "error").mockImplementation(() => {});
+
+    logRouteError({}, "test_event", new TypeError("bad"), { statusCode: 503 });
+
+    expect(spy).toHaveBeenCalledWith("test_event", expect.objectContaining({ errorType: "TypeError", statusCode: 503 }));
     spy.mockRestore();
   });
 
@@ -203,6 +250,27 @@ describe("contextFormat", () => {
 
     expect(entry).toMatchObject({ userId: 7, ownerUserId: 3, requestId: "req-1" });
     expect(JSON.stringify(entry)).not.toContain("@");
+  });
+
+  const request = { method: "GET", path: "/backend/x", clientIp: "203.0.113.7", userAgent: "scanner/1.0" };
+
+  it.each(["error", "warn"])("adds request details to %s entries without overriding explicit fields", async (level) => {
+    const entry = await runWithContext(
+      { requestId: "req-1", userId: 0, request },
+      () => contextFormat.transform({ level, message: "x", path: "/explicit" }),
+    );
+
+    expect(entry).toMatchObject({ method: "GET", path: "/explicit", clientIp: "203.0.113.7", userAgent: "scanner/1.0" });
+  });
+
+  it("does not add request details to info entries", async () => {
+    const entry = await runWithContext(
+      { requestId: "req-1", userId: 0, request },
+      () => contextFormat.transform({ level: "info", message: "x" }),
+    );
+
+    expect(entry).not.toHaveProperty("clientIp");
+    expect(entry).not.toHaveProperty("userAgent");
   });
 });
 

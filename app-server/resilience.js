@@ -1,4 +1,5 @@
-import winstonLogger from "./logger.js";
+import { STATUS_CODES } from "node:http";
+import winstonLogger, { logRouteError } from "./logger.js";
 import { serializeError } from "./utils.js";
 import { getContext } from "./request-context.js";
 
@@ -148,6 +149,52 @@ export async function checkDatabaseHealth(dbPool) {
   } catch {
     return { ok: false, checks: { db: "down" } };
   }
+}
+
+/**
+ * Returns the 4xx status for errors caused by malformed client input, or null otherwise.
+ * Only trusts Express URI-decoding errors and http-errors marked `expose` (body-parser):
+ * upstream errors (e.g. Google API) also carry 4xx statuses but are server-side failures.
+ */
+export function getClientErrorStatus(error) {
+  const status = Number(error?.status ?? error?.statusCode);
+  if (!Number.isInteger(status) || status < 400 || status >= 500) return null;
+  return error instanceof URIError || error?.expose === true ? status : null;
+}
+
+/** Final Express error handler: 4xx (warn, no alert) for bad client input, 5xx + error alert otherwise. */
+export function createErrorHandler({ logger = winstonLogger } = {}) {
+  return function errorHandler(error, req, res, next) {
+    const isApi = req.path.startsWith("/api/");
+    const clientStatus = getClientErrorStatus(error);
+    const status = clientStatus ?? (isApi ? 503 : 500);
+
+    if (clientStatus) {
+      const { message } = serializeError(error);
+      logger.warn("client_request_error", { event: "client_request_error", statusCode: status, error: message, errorType: error.name });
+    } else {
+      logRouteError(req, "unhandled_request_error", error, { statusCode: status });
+    }
+
+    if (res.headersSent) {
+      next(error);
+      return;
+    }
+
+    if (clientStatus) {
+      const reason = STATUS_CODES[status] ?? "Bad Request";
+      if (isApi) res.status(status).json({ message: `${reason}.` });
+      else res.status(status).type("text/plain").send(`${reason}.`);
+      return;
+    }
+
+    if (isApi) {
+      res.status(status).json({ message: "Service temporarily unavailable. Please try again." });
+      return;
+    }
+
+    res.status(status).send("Unexpected server error.");
+  };
 }
 
 export function createShutdownGuard({ isShuttingDown, excludedPaths = [] }) {

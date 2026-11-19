@@ -45,6 +45,7 @@ export function sweepLogDirectory(dir = LOG_DIR, maxTotalMb = MAX_TOTAL_MB) {
 }
 
 let lastErrorAlertAt = 0;
+let suppressedErrorCount = 0;
 let warningCount = 0;
 let warningSamples = [];
 let digestWindowStart = new Date().toISOString();
@@ -55,6 +56,8 @@ export function handleAlertableEntry(info) {
     const now = Date.now();
     if (now - lastErrorAlertAt >= ERROR_THROTTLE_MS) {
       lastErrorAlertAt = now;
+      const suppressedCount = suppressedErrorCount;
+      suppressedErrorCount = 0;
       void sendErrorAlertEmail({
         message: info.message,
         event: info.event,
@@ -63,18 +66,24 @@ export function handleAlertableEntry(info) {
         ownerUserId: info.ownerUserId,
         timestamp: info.timestamp ?? new Date().toISOString(),
         error: info.error,
+        errorType: info.errorType,
         stack: info.stack,
         path: info.path,
         method: info.method,
         statusCode: info.statusCode,
+        clientIp: info.clientIp,
+        userAgent: info.userAgent,
+        suppressedCount,
       });
+    } else {
+      suppressedErrorCount += 1;
     }
   } else if (info.level === "warn") {
     warningCount += 1;
     if (warningSamples.length >= MAX_WARNING_SAMPLES) {
       warningSamples.shift();
     }
-    warningSamples.push({ message: info.message, userId: info.userId ?? 0 });
+    warningSamples.push({ message: info.message, userId: info.userId ?? 0, path: info.path });
   }
 }
 
@@ -127,6 +136,12 @@ export const contextFormat = winston.format((info) => {
   info.userId = context.userId ?? 0;
   if (context.ownerUserId != null) info.ownerUserId = context.ownerUserId;
   if (context.requestId != null) info.requestId = context.requestId;
+  // Request details only on warn/error entries; info lines (e.g. http_request) stay compact.
+  if (context.request && (info.level === "error" || info.level === "warn")) {
+    for (const [key, value] of Object.entries(context.request)) {
+      if (info[key] === undefined && value !== undefined) info[key] = value;
+    }
+  }
   return info;
 })();
 
@@ -141,10 +156,11 @@ const logger = winston.createLogger({
 });
 
 /** Logs a route-terminating error exactly once via winston; no-ops if already logged (e.g. by stageFailure()). */
-export function logRouteError(req, event, error) {
+export function logRouteError(req, event, error, meta = {}) {
   if (error?.logged) return;
   const { message, stack } = serializeError(error);
-  logger.error(event, { event, error: message, stack });
+  const errorType = error instanceof Error ? error.name : undefined;
+  logger.error(event, { event, error: message, errorType, stack, ...meta });
   if (error && typeof error === "object") {
     error.logged = true;
   }

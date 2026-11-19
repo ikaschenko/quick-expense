@@ -1,11 +1,13 @@
 // @vitest-environment node
 import {
   checkDatabaseHealth,
+  createErrorHandler,
   createGracefulShutdown,
   createRequireAuthenticatedUser,
   createRequireIdentityAuthenticatedUser,
   createShutdownGuard,
   destroySession,
+  getClientErrorStatus,
   requireAppAdmin,
   requireEditAccess,
   requireGuest,
@@ -365,6 +367,120 @@ describe("checkDatabaseHealth", () => {
       ok: false,
       checks: { db: "down" },
     });
+  });
+});
+
+describe("getClientErrorStatus", () => {
+  function uriError() {
+    const error = new URIError("Failed to decode param '%%32'");
+    error.status = 400;
+    return error;
+  }
+
+  it.each([
+    ["an Express URI-decoding error", uriError(), 400],
+    ["a body-parser parse error", Object.assign(new SyntaxError("Unexpected token"), { status: 400, expose: true }), 400],
+    ["a body-parser size error", Object.assign(new Error("request entity too large"), { statusCode: 413, expose: true }), 413],
+    ["an upstream 403 (e.g. Google API) without expose", Object.assign(new Error("forbidden"), { status: 403 }), null],
+    ["an exposed 5xx error", Object.assign(new Error("boom"), { status: 500, expose: true }), null],
+    ["an error without status", new Error("boom"), null],
+    ["a non-error value", "boom", null],
+    ["null", null, null],
+  ])("should map %s to %s", (_label, error, expected) => {
+    expect(getClientErrorStatus(error)).toBe(expected);
+  });
+});
+
+describe("createErrorHandler", () => {
+  async function requestThrough(app, path) {
+    const server = await new Promise((resolve) => {
+      const instance = app.listen(0, () => resolve(instance));
+    });
+    try {
+      const response = await fetch(`http://127.0.0.1:${server.address().port}${path}`, path.startsWith("/api/json")
+        ? { method: "POST", headers: { "Content-Type": "application/json" }, body: "{bad" }
+        : undefined);
+      return { status: response.status, body: await response.text() };
+    } finally {
+      server.close();
+    }
+  }
+
+  async function buildApp(logger) {
+    const { default: express } = await import("express");
+    const app = express();
+    app.use("/api", express.json());
+    app.post("/api/json", (_req, res) => res.json({ ok: true }));
+    app.get("/api/upstream", () => {
+      throw Object.assign(new Error("Google said no"), { status: 403 });
+    });
+    app.get("/api/item/:id", (req, res) => res.json({ id: req.params.id }));
+    app.get("*", (_req, res) => res.send("spa"));
+    app.use(createErrorHandler({ logger }));
+    return app;
+  }
+
+  it("should answer 400 with a warn log (no error alert) for the malformed URI from the production alert", async () => {
+    const logger = { warn: vi.fn(), error: vi.fn() };
+    const errorSpy = vi.spyOn(winstonLogger, "error").mockImplementation(() => {});
+
+    const result = await requestThrough(await buildApp(logger), "/backend/%%32%65env");
+
+    expect(result).toEqual({ status: 400, body: "Bad Request." });
+    expect(logger.warn).toHaveBeenCalledWith("client_request_error", expect.objectContaining({
+      event: "client_request_error",
+      statusCode: 400,
+      errorType: "URIError",
+    }));
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it("should answer 400 JSON for a malformed route param under /api", async () => {
+    const logger = { warn: vi.fn() };
+
+    const result = await requestThrough(await buildApp(logger), "/api/item/%E0%A4%A");
+
+    expect(result).toEqual({ status: 400, body: JSON.stringify({ message: "Bad Request." }) });
+  });
+
+  it("should answer 400 JSON for a malformed JSON body", async () => {
+    const logger = { warn: vi.fn() };
+
+    const result = await requestThrough(await buildApp(logger), "/api/json");
+
+    expect(result.status).toBe(400);
+    expect(logger.warn).toHaveBeenCalledOnce();
+  });
+
+  it("should keep 503 and log an error alert with statusCode for an upstream 4xx under /api", async () => {
+    const logger = { warn: vi.fn() };
+    const errorSpy = vi.spyOn(winstonLogger, "error").mockImplementation(() => {});
+
+    const result = await requestThrough(await buildApp(logger), "/api/upstream");
+
+    expect(result.status).toBe(503);
+    expect(logger.warn).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith("unhandled_request_error", expect.objectContaining({
+      event: "unhandled_request_error",
+      error: "Google said no",
+      errorType: "Error",
+      statusCode: 503,
+    }));
+    errorSpy.mockRestore();
+  });
+
+  it("should delegate to next when headers were already sent", () => {
+    const logger = { warn: vi.fn() };
+    const next = vi.fn();
+    const error = new URIError("bad");
+    error.status = 400;
+    const res = { headersSent: true, status: vi.fn() };
+
+    createErrorHandler({ logger })(error, { path: "/x" }, res, next);
+
+    expect(next).toHaveBeenCalledWith(error);
+    expect(res.status).not.toHaveBeenCalled();
   });
 });
 

@@ -58,6 +58,7 @@ import {
 import {
   checkDatabaseHealth,
   createGracefulShutdown,
+  createErrorHandler,
   createRequireAuthenticatedUser,
   createRequireIdentityAuthenticatedUser,
   createShutdownGuard,
@@ -99,7 +100,8 @@ import { startAnalyticsDelivery, triggerAnalyticsDelivery } from "./analytics.js
 import logger, { startWarningDigestScheduler, listLogFiles, readLogEntries, logRouteError } from "./logger.js";
 import pool from "./db.js";
 import { injectPosthogKey, serializeError } from "./utils.js";
-import { getContext, runWithContext } from "./request-context.js";
+import { getContext, runWithContext, requestSummary } from "./request-context.js";
+import { createBlockedPathGuard } from "./blocked-paths.js";
 import {
   cleanupUsageTracking,
   endUsageSession,
@@ -198,13 +200,11 @@ await validateServiceAccountKey();
 // Override via EXPENSE_RECENT_MONTHS env var if needed.
 const RECENT_MONTHS = Number.parseInt(process.env.EXPENSE_RECENT_MONTHS ?? "24", 10);
 
-app.use("/api", express.json({ limit: maxApiJsonBodySize }));
-
 app.use((req, res, next) => {
   const requestId = crypto.randomUUID();
   const startedAt = process.hrtime.bigint();
 
-  return runWithContext({ requestId, userId: 0, ownerUserId: null }, () => {
+  return runWithContext({ requestId, userId: 0, ownerUserId: null, request: requestSummary(req) }, () => {
     req.requestId = requestId;
     res.setHeader("X-Request-Id", requestId);
 
@@ -224,6 +224,10 @@ app.use((req, res, next) => {
     next();
   });
 });
+
+app.use(createBlockedPathGuard({ logger }));
+// Mounted after the request context so body-parse errors carry a requestId and request details.
+app.use("/api", express.json({ limit: maxApiJsonBodySize }));
 
 app.get("/api/health", async (_req, res) => {
   const health = await checkDatabaseHealth(pool);
@@ -1575,21 +1579,7 @@ if (isProduction) {
   });
 }
 
-app.use((error, req, res, next) => {
-  logRouteError(req, "unhandled_request_error", error);
-
-  if (res.headersSent) {
-    next(error);
-    return;
-  }
-
-  if (req.path.startsWith("/api/")) {
-    res.status(503).json({ message: "Service temporarily unavailable. Please try again." });
-    return;
-  }
-
-  res.status(500).send("Unexpected server error.");
-});
+app.use(createErrorHandler({ logger }));
 
 const shutdownServer = createGracefulShutdown({
   getServer: () => server,

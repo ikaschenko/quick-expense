@@ -91,7 +91,9 @@ quick-expense/
 │   ├── email-templates.js     ← HTML + plain-text email templates for share/revoke notifications + error-alert/warning-digest alerts
 │   ├── analytics.js           ← server-side PostHog delivery of queued `analytics_outbox` events (retry/backoff, fire-and-forget)
 │   ├── logger.js               ← winston logger (console + rotating file transports), size-cap sweep, error-alert/warning-digest scheduling, admin log file listing/tailing
-│   ├── resilience.js          ← auth middleware (createRequireAuthenticatedUser, requireOwner, requireGuest, requireEditAccess, requireAppAdmin), health check, and graceful shutdown
+│   ├── resilience.js          ← auth middleware (createRequireAuthenticatedUser, requireOwner, requireGuest, requireEditAccess, requireAppAdmin), final error handler (4xx for malformed client input), health check, and graceful shutdown
+│   ├── blocked-paths.js       ← server-only list of scanner-probe path patterns (`.env`, `.php`, `wp-*`…) + 404 guard middleware
+│   ├── request-context.js     ← AsyncLocalStorage request context (requestId, userId, request summary for logs)
 │   ├── validation.js          ← server-side expense input validation
 │   ├── utils.js               ← shared backend utilities
 │   │
@@ -764,6 +766,14 @@ The backend validates all required env vars at startup and fails fast if any are
 ### Logging Context
 
 Every Winston log entry receives `requestId` from the request context, plus numeric `userId`. Anonymous and unauthenticated entries use `userId: 0`. Shared-setup requests also receive `ownerUserId` for the configured setup owner; the field is omitted when the acting user owns their own setup. The same fields are included in error alerts and warning-digest samples. Email remains available for authentication and API response contracts, but is not used as a log identity.
+
+Warn and error entries additionally receive the request's `method`, `path` (never the query string, so OAuth codes are not logged), `clientIp` (`Fly-Client-IP`, falling back to `req.ip`) and `userAgent` (each truncated to 200 chars). Route errors logged via `logRouteError` also carry `errorType` (e.g. `URIError`) and, for the final error handler, the response `statusCode`.
+
+### Error Handling & Alerts
+
+- **Scanner probes:** `createBlockedPathGuard` (`app-server/blocked-paths.js`) runs right after the request-context middleware, before static files, sessions and body parsing. Paths matching `BLOCKED_PATH_PATTERNS` (secret dotfiles like `.env`/`.git` incl. encoded and double-encoded dots, `.php`/backup extensions, CMS/admin panels) get a plain `404` and an `info`-level `blocked_path` log entry (no alert, not in the digest). Extend the array to block new probes; the module is server-only and never bundled or served, so clients cannot read the list.
+- **Final error handler:** `createErrorHandler` (`app-server/resilience.js`). Malformed client input — Express URI-decoding `URIError`s and body-parser errors marked `expose` (bad JSON, oversized body) — gets its 4xx status and a `warn`-level `client_request_error` entry (warning digest, no alert email). Other 4xx-carrying errors (e.g. Google API 403) are treated as server failures. Everything else is logged as `unhandled_request_error` (error alert) and answered with `503` JSON under `/api/` or `500` text otherwise.
+- **Alert emails:** subject `Error: <event> — <METHOD> <path> (<errorType>)`; body shows error type + detail, request line with status, request ID, user ID (`anonymous (not signed in)` for `0`), client IP, user agent and stack. Error alerts are throttled by `ALERT_ERROR_THROTTLE_MS`; the next alert reports how many errors were suppressed in between.
 
 ### Main App (`q-expense-app`)
 
